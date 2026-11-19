@@ -2,6 +2,7 @@ package app.genkan.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,9 +44,16 @@ fun ActionRow(label: String, focused: Boolean?, onClick: () -> Unit, modifier: M
     val interaction = remember { MutableInteractionSource() }
     val composeFocused by interaction.collectIsFocusedAsState()
     val focused = focused ?: composeFocused
+    // Screens that own focus in a ViewModel never move Compose focus, so a scrolling parent
+    // wouldn't follow the controller on its own; bring the focused row into view instead.
+    val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    androidx.compose.runtime.LaunchedEffect(focused) {
+        if (focused) bringIntoView.bringIntoView()
+    }
     Box(
         modifier
             .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoView)
             .background(if (focused) colors.primary.copy(alpha = 0.2f) else colors.surface, shape)
             .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
