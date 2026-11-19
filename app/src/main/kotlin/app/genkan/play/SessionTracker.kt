@@ -14,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
@@ -52,6 +55,13 @@ class SessionTracker @Inject constructor(
             AppOpsManager.MODE_ALLOWED
     }
 
+    /** A play that just ended: which game, in which emulator. */
+    data class Ended(val romId: Long, val emulatorPackage: String)
+
+    private val _ended = MutableSharedFlow<Ended>(extraBufferCapacity = 8)
+    /** Each play that just ended, for the save sync and the bottom-screen check. */
+    val ended: SharedFlow<Ended> = _ended.asSharedFlow()
+
     private suspend fun endOpenSession(): Boolean {
         val open = dao.open() ?: return false
         val now = System.currentTimeMillis()
@@ -62,6 +72,7 @@ class SessionTracker @Inject constructor(
             Log.i(TAG, "Dropped a ${measured.durationMs} ms session of rom ${open.romId}")
         } else {
             dao.close(open.id, measured.endedAt, measured.durationMs)
+            _ended.tryEmit(Ended(open.romId, open.emulatorPackage))
             Log.i(TAG, "Session of rom ${open.romId} in ${open.emulatorPackage}: ${measured.durationMs / 1000} s")
         }
         return true

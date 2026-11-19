@@ -68,6 +68,9 @@ interface LibraryDao {
     @Query("SELECT * FROM games WHERE platformId = :platformId ORDER BY sortTitle")
     fun games(platformId: Long): Flow<List<GameEntity>>
 
+    @Query("SELECT * FROM games WHERE id = :id")
+    suspend fun game(id: Long): GameEntity?
+
     @Query("SELECT COUNT(*) FROM games")
     suspend fun gameCount(): Int
 

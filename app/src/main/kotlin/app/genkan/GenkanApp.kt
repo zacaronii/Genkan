@@ -4,6 +4,7 @@ import android.app.Application
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
 import app.genkan.stats.ReadingLogPusher
+import app.genkan.saves.SaveSync
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
 import coil3.ImageLoader
@@ -22,6 +23,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var readerSession: ReaderSession
     @Inject lateinit var ankiMiner: AnkiMiner
     @Inject lateinit var readingLog: ReadingLogPusher
+    @Inject lateinit var saveSync: SaveSync
 
     override fun onCreate() {
         super.onCreate()
@@ -31,6 +33,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         // Cards made offline go to Anki once it answers.
         ankiMiner.start()
         readingLog.start()
+        saveSync.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

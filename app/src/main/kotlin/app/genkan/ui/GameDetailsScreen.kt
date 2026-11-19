@@ -25,6 +25,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.saves.SaveStatus
 import coil3.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
@@ -97,6 +98,13 @@ private fun historyLines(details: GameDetails): List<String> = buildList {
     details.play?.takeIf { it.plays > 0 }?.let { play ->
         val last = play.lastPlayed?.let { "  ·  last ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it))}" }.orEmpty()
         add("Played ${duration(play.totalMs)}$last")
+    }
+    val time = { at: Long -> DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at)) }
+    when (val save = details.save) {
+        is SaveStatus.Synced -> add("Save: in step with RomM (${save.what}, ${time(save.at)})")
+        is SaveStatus.Conflict -> add("Save: changed here and in RomM; this copy kept and archived in RomM")
+        is SaveStatus.Failed -> add("Save sync failed: ${save.reason}")
+        null -> {}
     }
     details.reading.takeIf { it.characters > 0 }?.let {
         add("Read ${"%,d".format(it.characters)} characters in ${duration(it.activeMs)}")

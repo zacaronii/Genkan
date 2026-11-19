@@ -10,6 +10,8 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.Multipart
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
@@ -85,4 +87,38 @@ interface RomMApi {
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0
     ): Response<List<RomMPlaySession>>
+
+    // Device sync (saves). Negotiate once per play session, never in a loop.
+
+    @GET("api/saves")
+    suspend fun getSaves(@Query("rom_id") romId: Long, @Query("slot") slot: String? = null): Response<List<RomMSave>>
+
+    @POST("api/sync/negotiate")
+    suspend fun negotiateSync(@Body body: RomMNegotiatePayload): Response<RomMNegotiateResponse>
+
+    @POST("api/sync/sessions/{session_id}/complete")
+    suspend fun completeSync(@Path("session_id") sessionId: Long, @Body body: RomMSyncCompletePayload): Response<ResponseBody>
+
+    @Multipart
+    @POST("api/saves")
+    suspend fun uploadSave(
+        @Query("rom_id") romId: Long,
+        @Query("emulator") emulator: String?,
+        @Query("slot") slot: String?,
+        @Query("device_id") deviceId: String?,
+        @Query("content_hash") contentHash: String?,
+        @Query("session_id") sessionId: Long?,
+        @Part saveFile: okhttp3.MultipartBody.Part,
+    ): Response<RomMSave>
+
+    @Streaming
+    @GET("api/saves/{id}/content")
+    suspend fun downloadSave(
+        @Path("id") saveId: Long,
+        @Query("device_id") deviceId: String?,
+        @Query("session_id") sessionId: Long?,
+    ): Response<ResponseBody>
+
+    @POST("api/saves/{id}/downloaded")
+    suspend fun confirmSaveDownloaded(@Path("id") saveId: Long, @Body body: RomMDownloadedPayload): Response<ResponseBody>
 }

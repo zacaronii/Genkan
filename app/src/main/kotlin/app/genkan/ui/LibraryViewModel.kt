@@ -7,6 +7,11 @@ import app.genkan.download.DownloadQueue
 import app.genkan.download.DownloadState
 import app.genkan.input.PadKey
 import app.genkan.launch.GameLauncher
+import app.genkan.launch.EmulatorCatalog
+import app.genkan.launch.EmulatorDef
+import android.app.ActivityManager
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
 import app.genkan.play.SessionTracker
@@ -17,6 +22,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import app.genkan.library.FocusedGame
+import app.genkan.saves.SaveSync
+import kotlinx.coroutines.withTimeoutOrNull
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryFocus
@@ -52,6 +59,7 @@ sealed class LibraryEvent {
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     dao: LibraryDao,
     private val session: RomMSession,
     private val librarySync: LibrarySync,
@@ -61,6 +69,7 @@ class LibraryViewModel @Inject constructor(
     private val sessionTracker: SessionTracker,
     private val nowPlaying: NowPlaying,
     private val focusedGame: FocusedGame,
+    private val saveSync: SaveSync,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -102,6 +111,7 @@ class LibraryViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
+        viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
         refreshLocal()
         // The bottom screen shows the focused game while the launcher is in front.
         viewModelScope.launch {
@@ -132,6 +142,9 @@ class LibraryViewModel @Inject constructor(
     fun onKey(key: PadKey): Boolean {
         if (key == PadKey.Y) {
             sync(); return true
+        }
+        if (key == PadKey.SELECT && lingering != null) {
+            closeLingering(); return true
         }
         val focusedGame = games.value.getOrNull(_focus.value.gameIndex).takeIf { _focus.value.pane == LibraryPane.GAMES }
         if (focusedGame != null && key == PadKey.A) {
@@ -191,6 +204,9 @@ class LibraryViewModel @Inject constructor(
     private fun launch(game: GameEntity) {
         val download = downloads.value[game.id] ?: return
         viewModelScope.launch {
+            // Pull a newer save from RomM first; a slow or absent server never holds the game up.
+            show("Checking ${game.name}'s save…")
+            withTimeoutOrNull(SAVE_SYNC_TIMEOUT_MS) { saveSync.sync(game.id) }
             when (val result = gameLauncher.launch(game, download)) {
                 is LaunchResult.Launched -> {
                     sessionTracker.begin(game.id, result.emulator.packageName)
@@ -218,7 +234,31 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * An emulator that draws on both screens (Azahar) keeps its bottom-screen window after Home,
+     * over the companion, until its process ends. Genkan can't close another app's window, and
+     * ending the process on its own could lose unsaved play, so it asks.
+     */
+    private var lingering: EmulatorDef? = null
+
+    private fun onPlayEnded(ended: SessionTracker.Ended) {
+        val emulator = EmulatorCatalog.emulators.firstOrNull { it.packageName == ended.emulatorPackage } ?: return
+        if (!emulator.drawsBothScreens) return
+        lingering = emulator
+        noticeJob?.cancel()
+        _notice.value = "Select: close ${emulator.displayName} (it still has the bottom screen)"
+    }
+
+    private fun closeLingering() {
+        val emulator = lingering ?: return
+        lingering = null
+        // Only a process in the background can be ended this way; a running game is never touched.
+        context.getSystemService(ActivityManager::class.java).killBackgroundProcesses(emulator.packageName)
+        show("Closed ${emulator.displayName}")
+    }
+
     private fun show(message: String) {
+        lingering = null
         noticeJob?.cancel()
         _notice.value = message
         noticeJob = viewModelScope.launch {
@@ -230,6 +270,7 @@ class LibraryViewModel @Inject constructor(
 
     private companion object {
         const val NOTICE_MS = 4_000L
+        const val SAVE_SYNC_TIMEOUT_MS = 15_000L
     }
 
     fun sync() {

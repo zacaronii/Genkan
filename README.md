@@ -53,6 +53,10 @@ a Yomitan dictionary popup. See
   the app (about 150 ms a line on the Thor); the chip next to *Area* switches to ML Kit's
   Japanese model (faster, but it misreads game fonts more often). The build downloads Meiki's
   pinned models from Hugging Face once into `.gradle/meiki`.
+- **Saves:** for Azahar (3DS) and RetroArch games downloaded from RomM, Genkan syncs the save
+  with RomM's device sync before the game starts and after it ends. A save about to be replaced
+  is copied to `Genkan/save-backups` first; when both sides changed, the device keeps its copy
+  and archives it in RomM; a delete on the server never removes a save from the device.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

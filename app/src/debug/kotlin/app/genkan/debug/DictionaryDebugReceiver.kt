@@ -7,6 +7,7 @@ import android.os.Environment
 import android.util.Log
 import app.genkan.dictionary.Dictionaries
 import app.genkan.library.LibraryDatabase
+import app.genkan.saves.SaveSync
 import app.genkan.reader.NowPlaying
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,9 @@ import javax.inject.Inject
  * (sets what's playing, as launching a game does, so the reader files lines under it)
  *   adb shell am broadcast -a app.genkan.debug.FORGET_GAME -n app.genkan/.debug.DictionaryDebugReceiver [--es game KEY]
  * (deletes one game's backlog, thread choice and reading stats; without a key, logs the keys)
+ *   adb shell am broadcast -a app.genkan.debug.SAVE_SYNC -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID [--ez dry true]
+ * (syncs one game's save with RomM, logged under "SaveSync"; dry only negotiates and logs the plan;
+ * --es copy_to DIR instead downloads RomM's newest Genkan save into DIR, leaving the real one alone)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -32,6 +36,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var dictionaries: Dictionaries
     @Inject lateinit var nowPlaying: NowPlaying
     @Inject lateinit var database: LibraryDatabase
+    @Inject lateinit var saveSync: SaveSync
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -44,6 +49,17 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         intent.getStringExtra("title").orEmpty(),
                         intent.getStringExtra("platform"),
                     )
+                    "app.genkan.debug.SAVE_SYNC" -> {
+                        intent.getStringExtra("copy_to")?.let { dir ->
+                            Log.i(TAG, "Save copy: " + saveSync.downloadCopy(intent.getLongExtra("rom", 0), File(dir)))
+                            return@launch
+                        }
+                        val dry = intent.getBooleanExtra("dry", false)
+                        val rom = intent.getLongExtra("rom", 0)
+                        // Without a rom, every downloaded game.
+                        val roms = if (rom != 0L) listOf(rom) else database.downloads().all().first().map { it.romId }
+                        roms.forEach { Log.i(TAG, "Save sync of rom $it ran: ${saveSync.sync(it, dryRun = dry)}") }
+                    }
                     "app.genkan.debug.FORGET_GAME" -> forgetGame(intent.getStringExtra("game"))
                     "app.genkan.debug.IMPORT_DICTIONARIES" -> {
                         if (intent.getBooleanExtra("fresh", false)) dictionaries.all.first().forEach { dictionaries.remove(it) }

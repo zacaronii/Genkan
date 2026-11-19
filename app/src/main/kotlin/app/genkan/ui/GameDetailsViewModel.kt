@@ -9,6 +9,8 @@ import app.genkan.launch.LocalShelves
 import app.genkan.library.FocusedGame
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlayTotals
+import app.genkan.saves.SaveStatus
+import app.genkan.saves.SaveSync
 import app.genkan.stats.ReadingDao
 import app.genkan.stats.ReadingGameTotals
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +35,7 @@ data class GameDetails(
     val play: PlayTotals?,
     val reading: ReadingGameTotals,
     val download: DownloadEntity?,
+    val save: SaveStatus? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -43,6 +46,7 @@ class GameDetailsViewModel @Inject constructor(
     playSessions: PlaySessionDao,
     readingDao: ReadingDao,
     downloadQueue: DownloadQueue,
+    saveSync: SaveSync,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
@@ -64,9 +68,12 @@ class GameDetailsViewModel @Inject constructor(
             val game = focus.game
             // Play sessions and downloads exist only for RomM games; reading is kept per game key.
             val play = if (LocalShelves.isLocal(game)) flowOf(null) else playSessions.totals(game.id)
-            combine(play, readingDao.gameTotals("game:${game.id}"), downloadQueue.downloads.map { it[game.id] }) { p, r, d ->
-                GameDetails(focus, p, r, d)
-            }
+            combine(
+                play,
+                readingDao.gameTotals("game:${game.id}"),
+                downloadQueue.downloads.map { it[game.id] },
+                saveSync.status.map { it[game.id] },
+            ) { p, r, d, s -> GameDetails(focus, p, r, d, s) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
