@@ -22,6 +22,8 @@ data class OutboxCard(
     /** Media file in Genkan's anki-media folder, attached as the Picture field. */
     val pictureFile: String?,
     val createdAt: Long,
+    /** The sentence audio (.m4a) in the same folder. */
+    val audioFile: String? = null,
     val error: String? = null,
 )
 

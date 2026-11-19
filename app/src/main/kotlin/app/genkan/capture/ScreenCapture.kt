@@ -14,6 +14,7 @@ import android.os.HandlerThread
 import android.util.Log
 import android.view.Display
 import androidx.core.graphics.createBitmap
+import app.genkan.audio.GameAudioRecorder
 import app.genkan.display.DisplayRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,7 @@ import javax.inject.Singleton
 class ScreenCapture @Inject constructor(
     @ApplicationContext private val context: Context,
     private val displays: DisplayRepository,
+    private val audio: GameAudioRecorder,
 ) {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
@@ -68,9 +70,17 @@ class ScreenCapture @Inject constructor(
         thread = handlerThread
         _running.value = true
         Log.i(TAG, "Capturing the top screen at ${size.width}x${size.height}")
+        // Game audio for sentence clips rides on the same consent, when recording is allowed.
+        audio.start(mp)
+    }
+
+    /** Starts recording game audio after the permission arrives mid-capture. */
+    fun startAudio() {
+        projection?.let { audio.start(it) }
     }
 
     fun stop() {
+        audio.stop()
         virtualDisplay?.release()
         virtualDisplay = null
         reader?.close()

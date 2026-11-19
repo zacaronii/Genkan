@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
+import app.genkan.audio.AacEncoder
+import app.genkan.audio.GameAudioRecorder
 import androidx.core.graphics.scale
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -81,16 +83,21 @@ class AnkiMiner @Inject constructor(
         }
     }
 
-    /** Queues a card for [source], with [picture] (the top screen) when there is one. */
-    suspend fun mine(source: MineSource, picture: Bitmap?) = withContext(Dispatchers.IO) {
+    /**
+     * Queues a card for [source], with [picture] (the top screen) and [audio] (the line's voice,
+     * mono PCM at [GameAudioRecorder.SAMPLE_RATE]) when there are any.
+     */
+    suspend fun mine(source: MineSource, picture: Bitmap?, audio: ShortArray? = null) = withContext(Dispatchers.IO) {
         val pictureFile = picture?.let { savePicture(it) }
-        val fields = CardFields.lapis(source.copy(pictureFile = pictureFile))
+        val audioFile = audio?.let { saveAudio(it) }
+        val fields = CardFields.lapis(source.copy(pictureFile = pictureFile, sentenceAudioFile = audioFile))
         dao.enqueue(
             OutboxCard(
                 expression = source.hit.expression,
                 fieldsJson = fieldsAdapter.toJson(fields),
                 pictureFile = pictureFile,
                 createdAt = System.currentTimeMillis(),
+                audioFile = audioFile,
             ),
         )
         Log.i(TAG, "Queued a card for ${source.hit.expression}")
@@ -140,7 +147,8 @@ class AnkiMiner @Inject constructor(
             for (card in batch) {
                 try {
                     val fields = CardFields.forNoteType(fieldsAdapter.fromJson(card.fieldsJson).orEmpty(), fieldsOf(config))
-                    storePicture(config, card)
+                    storeMedia(config, card.pictureFile)
+                    storeMedia(config, card.audioFile)
                     anki.addNote(config, fields, TAGS)
                     onDelivered(card)
                     sent++
@@ -166,6 +174,7 @@ class AnkiMiner @Inject constructor(
         dao.mined(MinedWord(card.expression, System.currentTimeMillis()))
         dao.sent(card.id)
         card.pictureFile?.let { File(mediaDir, it).delete() }
+        card.audioFile?.let { File(mediaDir, it).delete() }
         _deliveries.tryEmit(card.expression)
     }
 
@@ -175,11 +184,20 @@ class AnkiMiner @Inject constructor(
         return anki.modelFieldNames(config, config.noteType).also { noteFields = config.noteType to it }
     }
 
-    /** The Picture field already holds the <img>; Anki only needs the file. */
-    private suspend fun storePicture(config: AnkiConfig, card: OutboxCard) {
-        val name = card.pictureFile ?: return
+    /** The fields already point at the file ([sound:…], <img>); Anki only needs it stored. */
+    private suspend fun storeMedia(config: AnkiConfig, name: String?) {
+        if (name == null) return
         val file = File(mediaDir, name)
         if (file.exists()) anki.storeMediaFile(config, name, Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
+    }
+
+    private fun saveAudio(samples: ShortArray): String? = try {
+        val name = "genkan_${System.currentTimeMillis()}.m4a"
+        AacEncoder.encode(samples, GameAudioRecorder.SAMPLE_RATE, File(mediaDir, name))
+        name
+    } catch (e: Exception) {
+        Log.w(TAG, "Sentence audio couldn't be encoded: $e")
+        null
     }
 
     private fun savePicture(frame: Bitmap): String {

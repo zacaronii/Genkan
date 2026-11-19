@@ -17,6 +17,7 @@ data class MineSource(
     val furiganaPlain: String,
     val gameTitle: String,
     val pictureFile: String? = null,
+    val sentenceAudioFile: String? = null,
 )
 
 /**
@@ -42,6 +43,7 @@ object CardFields {
             put("FreqSort", harmonicRank(hit).toString())
             put("MiscInfo", source.gameTitle)
             source.pictureFile?.let { put("Picture", "<img src=\"$it\">") }
+            source.sentenceAudioFile?.let { put("SentenceAudio", "[sound:$it]") }
         }
     }
 

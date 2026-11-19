@@ -1,6 +1,8 @@
 package app.genkan.debug
 
+import android.media.AudioAttributes
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -25,23 +27,34 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 /**
  * Debug builds only: a stand-in game for OCR tests, the way tools/hookbridge/test/fake_host.py
  * stands in for a hooked one. A VN-style dialogue box in the lower third types each line a
- * character at a time, holds it, then clears.
+ * character at a time, holds it, then clears. Each line is also spoken with text-to-speech,
+ * which plays from the TTS engine's process, so playback capture can record it as game audio.
  *   adb shell am start --display 0 -n app.genkan/.debug.OcrTestCardActivity
  */
 class OcrTestCardActivity : ComponentActivity() {
 
+    private var tts: TextToSpeech? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.JAPANESE
+                tts?.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).build())
+            }
+        }
         setContent {
             var shown by remember { mutableStateOf("") }
             LaunchedEffect(Unit) {
                 var i = 0
                 while (true) {
                     val line = LINES[i++ % LINES.size]
+                    tts?.speak(line, TextToSpeech.QUEUE_FLUSH, null, "line$i")
                     for (end in 1..line.length) {
                         shown = line.substring(0, end)
                         delay(TYPE_MS)
@@ -68,6 +81,11 @@ class OcrTestCardActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        tts?.shutdown()
+        super.onDestroy()
     }
 
     private companion object {

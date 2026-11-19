@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.MineSource
 import app.genkan.anki.MinedState
+import app.genkan.audio.GameAudioRecorder
 import app.genkan.capture.ScreenCapture
 import app.genkan.dictionary.Dictionaries
 import app.genkan.ocr.OcrReader
@@ -35,6 +36,7 @@ class ReaderViewModel @Inject constructor(
     val ocr: OcrReader,
     val capture: ScreenCapture,
     private val miner: AnkiMiner,
+    val audio: GameAudioRecorder,
 ) : ViewModel(), PopupActions {
 
     /** The entries the popup shows now (a link can replace the tapped word's). */
@@ -138,6 +140,7 @@ class ReaderViewModel @Inject constructor(
         val hit = shownResult?.hits?.getOrNull(index) ?: return
         // The top screen as it is now: the game's scene for the card.
         val picture = if (capture.running.value) capture.frame() else null
+        val voice = sentenceAudio(lookup.lineId)
         viewModelScope.launch {
             miner.mine(
                 MineSource(
@@ -151,6 +154,7 @@ class ReaderViewModel @Inject constructor(
                     gameTitle = session.game.value.title,
                 ),
                 picture,
+                voice,
             )
             refreshStates()
         }
@@ -169,6 +173,26 @@ class ReaderViewModel @Inject constructor(
         if (_lookup.value == null) return
         lookupJob?.cancel()
         lookupJob = viewModelScope.launch { show(dictionaries.lookup(text)) }
+    }
+
+    /**
+     * The line's voice: from a moment before it arrived (OCR reads a line once it stops
+     * changing, after the voice began) until the next line did, or now, at most
+     * [MAX_CLIP_MS]; silence trimmed off both ends.
+     */
+    private fun sentenceAudio(lineId: Long): ShortArray? {
+        if (!audio.running.value) return null
+        val lines = session.lines.value
+        val i = lines.indexOfFirst { it.id == lineId }
+        if (i < 0) return null
+        val from = lines[i].at - LEAD_MS
+        val to = minOf(lines.getOrNull(i + 1)?.at ?: System.currentTimeMillis(), from + MAX_CLIP_MS)
+        return audio.clip(from, to)
+    }
+
+    /** Starts recording game audio once the permission is granted (capture must be on). */
+    fun onAudioPermission(granted: Boolean) {
+        if (granted) capture.startAudio()
     }
 
     fun closeLookup() {
@@ -191,5 +215,10 @@ class ReaderViewModel @Inject constructor(
             session.choose(sample)
             _picking.value = false
         }
+    }
+
+    private companion object {
+        const val LEAD_MS = 2_500L
+        const val MAX_CLIP_MS = 20_000L
     }
 }

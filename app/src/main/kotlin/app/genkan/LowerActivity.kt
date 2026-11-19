@@ -2,6 +2,7 @@
 // app/src/main/kotlin/com/nendo/argosy/hardware/SecondaryHomeActivity.kt
 package app.genkan
 
+import android.Manifest
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -12,6 +13,7 @@ import android.view.Display
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import app.genkan.capture.CaptureConsentActivity
 import app.genkan.hardware.FocusDirectorActivity
@@ -45,6 +47,9 @@ class LowerActivity : ComponentActivity() {
     @Inject lateinit var dualScreen: DualScreenState
 
     private val reader: ReaderViewModel by viewModels()
+    private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        reader.onAudioPermission(granted)
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val refocusGate = RefocusGate()
@@ -65,6 +70,7 @@ class LowerActivity : ComponentActivity() {
                 ReaderScreen(
                     viewModel = reader,
                     onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
+                    onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
                 )
             }
         }

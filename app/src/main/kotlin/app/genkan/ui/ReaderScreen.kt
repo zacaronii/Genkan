@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -43,7 +45,7 @@ import app.genkan.reader.ThreadSample
 
 /** The bottom screen: the current game's backlog, tap a word to look it up. */
 @Composable
-fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit) {
+fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit, onAskAudioPermission: () -> Unit) {
     val lines by viewModel.session.lines.collectAsStateWithLifecycle()
     val status by viewModel.session.status.collectAsStateWithLifecycle()
     val game by viewModel.session.game.collectAsStateWithLifecycle()
@@ -57,6 +59,7 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit) {
     val ocrMs by viewModel.ocr.lastReadMs.collectAsStateWithLifecycle()
     val region by viewModel.ocr.region.collectAsStateWithLifecycle()
     val editing by viewModel.editingArea.collectAsStateWithLifecycle()
+    val recording by viewModel.audio.running.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -70,7 +73,7 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit) {
                 Text(
                     when {
                         ocrOn && !capturing -> "OCR: waiting for capture"
-                        ocrOn -> "OCR" + (ocrMs?.let { "  ·  $it ms" } ?: "")
+                        ocrOn -> "OCR" + (ocrMs?.let { "  ·  $it ms" } ?: "") + if (recording) "  ·  audio" else ""
                         else -> when (status) {
                             is HookStatus.Connected -> "Texthooker connected"
                             is HookStatus.Waiting -> "Waiting for a texthooker"
@@ -81,10 +84,18 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit) {
                     color = colors.onSurfaceVariant,
                 )
             }
-            Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
-            if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
-            if (threads.isNotEmpty() || chosen != null) {
-                Chip("Thread: ${chosen?.thread ?: "choose"}") { viewModel.openPicker() }
+            // The chips scroll sideways rather than squeeze the game's title out.
+            Row(
+                Modifier.weight(2f, fill = false).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
+                if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
+                // Sentence audio rides on the capture; it needs the recording permission once.
+                if (capturing && !recording) Chip("Audio") { onAskAudioPermission() }
+                if (threads.isNotEmpty() || chosen != null) {
+                    Chip("Thread: ${chosen?.thread ?: "choose"}") { viewModel.openPicker() }
+                }
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -136,8 +147,9 @@ private fun Backlog(
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
     val lookupLine = lookup?.lineId
-    // Follow new lines as they arrive, unless a word is being looked up.
-    LaunchedEffect(lines.size) {
+    // Follow new lines as they arrive, unless a word is being looked up. Keyed on the newest
+    // line, not the count: the backlog holds a fixed number, so a full one stays the same size.
+    LaunchedEffect(lines.lastOrNull()?.id) {
         if (lines.isNotEmpty() && lookupLine == null) listState.animateScrollToItem(lines.lastIndex)
     }
     // Keep the looked-up line in view above the panel.

@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The OCR test card speaks its lines; the TTS engine must be visible to bind to it. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
     <application>
         <!-- Debug builds only: dictionary checks from adb (DUMP is held by the shell). -->
         <receiver

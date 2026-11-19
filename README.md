@@ -52,7 +52,9 @@ a Yomitan dictionary popup. See
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,
-  and a picture of the top screen while OCR is on. Cards wait in an outbox when Anki can't be
+  a picture of the top screen while OCR is on, and the line's voice once *Audio* on the
+  reader's bar has the recording permission (what the game plays, cut from when the line
+  appeared to when the next one did, silence trimmed). Cards wait in an outbox when Anki can't be
   reached and are sent when it answers; the badge shows *Queued* or *In Anki*. To try it
   without Anki: `python3 scripts/fake_ankiconnect.py` and `adb reverse tcp:8765 tcp:8765`.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
