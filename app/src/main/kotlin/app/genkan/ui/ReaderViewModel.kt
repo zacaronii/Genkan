@@ -2,11 +2,14 @@ package app.genkan.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import android.graphics.Bitmap
+import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.MineSource
 import app.genkan.anki.MinedState
 import app.genkan.audio.GameAudioRecorder
+import app.genkan.capture.CaptureService
 import app.genkan.capture.ScreenCapture
 import app.genkan.stats.ReadingStats
 import app.genkan.dictionary.Dictionaries
@@ -32,6 +35,7 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, v
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     val session: ReaderSession,
     val dictionaries: Dictionaries,
     val ocr: OcrReader,
@@ -59,7 +63,9 @@ class ReaderViewModel @Inject constructor(
      */
     fun toggleOcr(askConsent: () -> Unit) {
         if (ocr.enabled.value) {
+            // Capture only ever starts for OCR, so it stops with it: no cast icon left behind.
             ocr.setEnabled(false)
+            if (capture.running.value) CaptureService.stop(context)
             return
         }
         ocr.setEnabled(true)
