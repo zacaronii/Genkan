@@ -45,7 +45,13 @@ import app.genkan.reader.ThreadSample
 
 /** The bottom screen: the current game's backlog, tap a word to look it up. */
 @Composable
-fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit, onAskAudioPermission: () -> Unit) {
+fun ReaderScreen(
+    viewModel: ReaderViewModel,
+    onAskCaptureConsent: () -> Unit,
+    onAskAudioPermission: () -> Unit,
+    /** Set while browsing the library: back to the focused game's details. */
+    onShowGame: (() -> Unit)? = null,
+) {
     val lines by viewModel.session.lines.collectAsStateWithLifecycle()
     val status by viewModel.session.status.collectAsStateWithLifecycle()
     val game by viewModel.session.game.collectAsStateWithLifecycle()
@@ -91,6 +97,7 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit, on
                 Modifier.weight(2f, fill = false).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                onShowGame?.let { Chip("Game", it) }
                 Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
                 if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
                 // Sentence audio rides on the capture; it needs the recording permission once.

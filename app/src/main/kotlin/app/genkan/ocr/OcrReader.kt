@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import app.genkan.capture.ScreenCapture
 import app.genkan.reader.HookMessage
+import app.genkan.home.LauncherPresence
 import app.genkan.reader.NowPlaying
 import app.genkan.reader.ReaderSession
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ class OcrReader @Inject constructor(
     private val session: ReaderSession,
     private val nowPlaying: NowPlaying,
     private val regions: OcrRegionDao,
+    private val launcher: LauncherPresence,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val latch = FrameLatch()
@@ -53,9 +55,6 @@ class OcrReader @Inject constructor(
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
-
-    /** Set while Genkan's own launcher is on the top screen: there is no game text to read. */
-    @Volatile var launcherInFront = false
 
     fun setEnabled(on: Boolean) {
         _enabled.value = on
@@ -78,7 +77,8 @@ class OcrReader @Inject constructor(
         job = scope.launch {
             while (isActive) {
                 delay(INTERVAL_MS)
-                if (!capture.running.value || launcherInFront) continue
+                // Nothing to read while Genkan's own launcher is on the top screen.
+                if (!capture.running.value || launcher.inFront.value) continue
                 val frame = capture.frame() ?: continue
                 val box = crop(frame, region.value) ?: continue
                 val pixels = IntArray(box.width * box.height)

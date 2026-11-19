@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 /**
  * One play of a RomM game. Open (no [endedAt]) while the game is running; kept in Room so a
@@ -20,6 +21,8 @@ data class PlaySessionEntity(
     val durationMs: Long? = null,
     val uploaded: Boolean = false,
 )
+
+data class PlayTotals(val plays: Int, val totalMs: Long, val lastPlayed: Long?)
 
 @Dao
 interface PlaySessionDao {
@@ -38,6 +41,13 @@ interface PlaySessionDao {
 
     @Query("UPDATE play_sessions SET uploaded = 1 WHERE id IN (:ids)")
     suspend fun markUploaded(ids: List<Long>)
+
+    /** Every finished play of one game, for the bottom screen's details. */
+    @Query(
+        """SELECT COUNT(*) AS plays, COALESCE(SUM(durationMs), 0) AS totalMs, MAX(startedAt) AS lastPlayed
+           FROM play_sessions WHERE romId = :romId AND endedAt IS NOT NULL""",
+    )
+    fun totals(romId: Long): Flow<PlayTotals>
 
     @Query("DELETE FROM play_sessions WHERE id = :id")
     suspend fun delete(id: Long)

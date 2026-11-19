@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryFocus
@@ -59,6 +60,7 @@ class LibraryViewModel @Inject constructor(
     private val localShelves: LocalShelves,
     private val sessionTracker: SessionTracker,
     private val nowPlaying: NowPlaying,
+    private val focusedGame: FocusedGame,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -101,6 +103,13 @@ class LibraryViewModel @Inject constructor(
 
     init {
         refreshLocal()
+        // The bottom screen shows the focused game while the launcher is in front.
+        viewModelScope.launch {
+            combine(_focus, games, platforms) { focus, list, shelves ->
+                val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
+                game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
+            }.distinctUntilChanged().collect(focusedGame::set)
+        }
     }
 
     /** Re-reads GameNative's export and the app list; cheap, so it runs on every resume. */

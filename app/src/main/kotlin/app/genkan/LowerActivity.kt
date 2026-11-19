@@ -15,11 +15,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import app.genkan.capture.CaptureConsentActivity
 import app.genkan.hardware.FocusDirectorActivity
 import app.genkan.hardware.RefocusGate
 import app.genkan.home.DualScreenState
 import app.genkan.ui.GenkanTheme
+import app.genkan.ui.CompanionMode
+import app.genkan.ui.GameDetailsScreen
+import app.genkan.ui.GameDetailsViewModel
 import app.genkan.ui.ReaderScreen
 import app.genkan.ui.ReaderViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,6 +52,7 @@ class LowerActivity : ComponentActivity() {
     @Inject lateinit var dualScreen: DualScreenState
 
     private val reader: ReaderViewModel by viewModels()
+    private val details: GameDetailsViewModel by viewModels()
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         reader.onAudioPermission(granted)
     }
@@ -68,11 +74,17 @@ class LowerActivity : ComponentActivity() {
 
         setContent {
             GenkanTheme {
-                ReaderScreen(
-                    viewModel = reader,
-                    onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
-                    onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                )
+                val mode by details.mode.collectAsStateWithLifecycle()
+                val canShowDetails by details.canShowDetails.collectAsStateWithLifecycle()
+                when (mode) {
+                    CompanionMode.DETAILS -> GameDetailsScreen(details, onShowReader = details::showReader)
+                    CompanionMode.READER -> ReaderScreen(
+                        viewModel = reader,
+                        onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
+                        onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                        onShowGame = details::showDetails.takeIf { canShowDetails },
+                    )
+                }
             }
         }
     }

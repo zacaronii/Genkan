@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.time.Instant
+import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -118,6 +120,10 @@ class LibrarySync @Inject constructor(
             fsSizeBytes = rom.fileSize,
             coverPath = rom.coverSmall ?: rom.coverUrl,
             hasMultipleFiles = rom.hasMultipleFiles,
+            summary = rom.summary?.trim()?.takeIf { it.isNotEmpty() },
+            genres = rom.genres?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+            releaseYear = rom.firstReleaseDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).year },
+            developer = rom.developerName,
         )
     }
 }

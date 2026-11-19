@@ -2,8 +2,9 @@
 
 A dual-screen launcher and Japanese reading companion for Android handhelds with two
 screens (built for the AYN Thor). The top screen runs the launcher and the games it starts;
-the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
-later phases, one-tap Anki cards and reading stats.
+the bottom screen shows the focused game's details while you browse, and turns into a
+reading companion once a game is running: a text backlog with tap-to-look-up, one-tap Anki
+cards and reading stats.
 
 Status: **Phases 1 and 2** done; **Phase 3** (OCR) works with ML Kit; **Phase 4** (Anki
 cards with picture and sentence audio) and **Phase 5** (reading stats) work: RomM sign-in, library, downloads, launching and play

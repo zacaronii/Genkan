@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 /** A reading session of one game, as [ActivityTracker] keeps it. */
 @Entity(tableName = "reading_sessions", indices = [Index("game")])
@@ -56,6 +57,9 @@ data class ReadingSessionTotals(
     val characters: Long,
 )
 
+/** All reading of one game. */
+data class ReadingGameTotals(val activeMs: Long, val characters: Long)
+
 /** Blocking on purpose: [ActivityTracker] runs on the reader's own background thread. */
 @Dao
 interface ReadingDao {
@@ -92,6 +96,9 @@ interface ReadingDao {
            GROUP BY s.id ORDER BY s.started DESC LIMIT :limit""",
     )
     suspend fun recentTotals(limit: Int): List<ReadingSessionTotals>
+
+    @Query("SELECT COALESCE(SUM(activeMs), 0) AS activeMs, COALESCE(SUM(characters), 0) AS characters FROM reading_daily WHERE game = :game")
+    fun gameTotals(game: String): Flow<ReadingGameTotals>
 
     @Query("UPDATE reading_sessions SET pushed = :pushed WHERE id = :id")
     suspend fun markPushed(id: Long, pushed: String)

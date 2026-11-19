@@ -1,6 +1,7 @@
 package app.genkan.library
 
 import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import app.genkan.anki.AnkiDao
 import app.genkan.anki.MinedWord
@@ -51,6 +52,11 @@ data class GameEntity(
     val fsSizeBytes: Long,
     val coverPath: String?,
     val hasMultipleFiles: Boolean,
+    /** RomM's metadata, for the bottom screen's details while browsing. */
+    @ColumnInfo(defaultValue = "NULL") val summary: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val genres: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val releaseYear: Int? = null,
+    @ColumnInfo(defaultValue = "NULL") val developer: String? = null,
 )
 
 @Dao
@@ -99,12 +105,12 @@ interface LibraryDao {
         ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class,
         OutboxCard::class, MinedWord::class,
         ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class],
-    version = 9,
+    version = 10,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
-        AutoMigration(from = 8, to = 9)],
+        AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
