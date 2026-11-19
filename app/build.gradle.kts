@@ -66,6 +66,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.zxing.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

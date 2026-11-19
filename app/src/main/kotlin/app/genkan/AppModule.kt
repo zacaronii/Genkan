@@ -2,6 +2,7 @@ package app.genkan
 
 import android.content.Context
 import androidx.room.Room
+import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
 import dagger.Module
@@ -28,4 +29,7 @@ object AppModule {
 
     @Provides
     fun libraryDao(db: LibraryDatabase): LibraryDao = db.library()
+
+    @Provides
+    fun downloadDao(db: LibraryDatabase): DownloadDao = db.downloads()
 }

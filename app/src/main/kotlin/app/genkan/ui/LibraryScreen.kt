@@ -39,6 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import app.genkan.download.DownloadEntity
+import app.genkan.download.DownloadState
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryPane
 import app.genkan.library.SyncStatus
@@ -53,6 +58,8 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val games by viewModel.games.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Row(
@@ -69,16 +76,18 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
             onSelect = viewModel::selectPlatform,
         )
         Column(Modifier.fillMaxSize()) {
+            val focusedGame = games.getOrNull(focus.gameIndex)?.takeIf { focus.pane == LibraryPane.GAMES }
             Header(
                 title = platforms.getOrNull(focus.platformIndex)?.name ?: "Library",
                 sync = sync,
-                focusedGame = games.getOrNull(focus.gameIndex)?.takeIf { focus.pane == LibraryPane.GAMES },
+                subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id]) },
             )
             if (platforms.isEmpty()) {
                 EmptyLibrary(sync)
             } else {
                 GameGrid(
                     games = games,
+                    downloads = downloads,
                     focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
                     coverUrl = viewModel::coverUrl,
                     onColumns = { viewModel.columns = it },
@@ -117,13 +126,13 @@ private fun PlatformRail(names: List<String>, selected: Int, railFocused: Boolea
 }
 
 @Composable
-private fun Header(title: String, sync: SyncStatus, focusedGame: GameEntity?) {
+private fun Header(title: String, sync: SyncStatus, subtitle: String?) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.headlineMedium, color = colors.primary)
             Text(
-                focusedGame?.let { "${it.name}  ·  ${formatSize(it.fsSizeBytes)}" } ?: " ",
+                subtitle ?: " ",
                 style = MaterialTheme.typography.bodyLarge,
                 color = colors.onBackground,
                 maxLines = 1,
@@ -137,6 +146,7 @@ private fun Header(title: String, sync: SyncStatus, focusedGame: GameEntity?) {
 @Composable
 private fun GameGrid(
     games: List<GameEntity>,
+    downloads: Map<Long, DownloadEntity>,
     focusedIndex: Int?,
     coverUrl: (GameEntity) -> String?,
     onColumns: (Int) -> Unit,
@@ -160,14 +170,14 @@ private fun GameGrid(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             itemsIndexed(games, key = { _, game -> game.id }) { index, game ->
-                GameCard(game, coverUrl(game), focused = index == focusedIndex, onClick = { onSelect(index) })
+                GameCard(game, coverUrl(game), downloads[game.id], focused = index == focusedIndex, onClick = { onSelect(index) })
             }
         }
     }
 }
 
 @Composable
-private fun GameCard(game: GameEntity, cover: String?, focused: Boolean, onClick: () -> Unit) {
+private fun GameCard(game: GameEntity, cover: String?, download: DownloadEntity?, focused: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     Column(
@@ -192,6 +202,7 @@ private fun GameCard(game: GameEntity, cover: String?, focused: Boolean, onClick
             if (cover != null) {
                 AsyncImage(model = cover, contentDescription = game.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
+            DownloadBadge(download, Modifier.align(Alignment.BottomCenter))
         }
         Text(
             game.name,
@@ -201,6 +212,44 @@ private fun GameCard(game: GameEntity, cover: String?, focused: Boolean, onClick
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+}
+
+/** Progress bar while queued or downloading, a check mark once the game is on the device. */
+@Composable
+private fun DownloadBadge(download: DownloadEntity?, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    when (download?.state) {
+        null -> Unit
+        DownloadState.INSTALLED -> Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.TopEnd) {
+            Box(
+                Modifier.size(28.dp).clip(CircleShape).background(colors.primary),
+                contentAlignment = Alignment.Center,
+            ) { Text("✓", color = Color.Black, style = MaterialTheme.typography.titleSmall) }
+        }
+        DownloadState.FAILED -> Box(modifier.fillMaxWidth().background(Color(0xCC8B1A1A)).padding(6.dp)) {
+            Text("Failed", color = Color.White, style = MaterialTheme.typography.labelMedium)
+        }
+        DownloadState.QUEUED, DownloadState.RUNNING -> {
+            val fraction = if (download.bytesTotal > 0) download.bytesDone.toFloat() / download.bytesTotal else 0f
+            Box(modifier.fillMaxWidth().height(8.dp).background(Color(0x99000000))) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(colors.primary))
+            }
+        }
+    }
+}
+
+private fun gameLine(game: GameEntity, download: DownloadEntity?): String {
+    val size = formatSize(game.fsSizeBytes)
+    return when (download?.state) {
+        null -> "${game.name}  ·  $size  ·  A: download"
+        DownloadState.QUEUED -> "${game.name}  ·  queued  ·  A: cancel"
+        DownloadState.RUNNING -> {
+            val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
+            "${game.name}  ·  downloading $percent% of $size  ·  A: cancel"
+        }
+        DownloadState.INSTALLED -> "${game.name}  ·  $size on this device  ·  X: delete"
+        DownloadState.FAILED -> "${game.name}  ·  failed: ${download.error ?: "unknown error"}  ·  A: retry"
     }
 }
 

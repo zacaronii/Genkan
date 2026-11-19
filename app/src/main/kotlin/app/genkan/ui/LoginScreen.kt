@@ -3,6 +3,9 @@ package app.genkan.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -86,14 +89,20 @@ fun LoginScreen(viewModel: LoginViewModel) {
 
 @Composable
 private fun AwaitingApproval(state: RomMState.AwaitingApproval, onCancel: () -> Unit) {
-    Text("On your phone or computer, open", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-    Text(state.verificationUrl, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-    Text("and approve this code:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-    Text(
-        state.userCode.chunked(4).joinToString("-"),
-        style = MaterialTheme.typography.displayMedium,
-        color = MaterialTheme.colorScheme.onBackground,
-    )
-    Text("Waiting for approval…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The link already carries the code, so scanning it is the whole approval.
+        QrCode(state.verificationUrl, Modifier.size(240.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Scan with your phone, or open", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+            Text(state.verificationUrl, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("and approve this code:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+            Text(
+                state.userCode.chunked(4).joinToString("-"),
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text("Waiting for approval…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
     ActionRow("Cancel", focused = null, onClick = onCancel)
 }

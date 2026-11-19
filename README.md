@@ -5,8 +5,18 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phase 0**, the project skeleton and the dual-screen home plumbing. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+Status: **Phase 1** in progress: RomM sign-in, the library grid and downloads work;
+launching games is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Using it
+
+- **Sign in:** enter your RomM server's address, then scan the QR code (or open the link)
+  and approve the code in RomM's web UI. A pairing code from RomM's *Client API tokens*
+  page works too.
+- **Library:** D-pad moves, L1/R1 switch platform, Y re-syncs, Start opens settings.
+- **Downloads:** A downloads the focused game (A again cancels), X twice deletes it. Games
+  go to `ROMs/<platform>/` on internal storage, so the first download asks for
+  *All files access*. Downloads resume after a crash or a dropped connection.
 
 ## How the two screens work
 

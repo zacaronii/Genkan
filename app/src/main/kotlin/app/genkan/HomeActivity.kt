@@ -1,6 +1,11 @@
 package app.genkan
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.core.net.toUri
+import android.os.Environment
+import app.genkan.ui.LibraryEvent
 import android.app.ActivityOptions
 import android.app.role.RoleManager
 import android.content.Intent
@@ -54,8 +59,27 @@ class HomeActivity : ComponentActivity() {
         startCompanionIfMissing()
     }
 
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private var askedForNotifications = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        libraryViewModel.hasStorageAccess = { Environment.isExternalStorageManager() }
+        lifecycleScope.launch {
+            libraryViewModel.events.collect { event ->
+                when (event) {
+                    LibraryEvent.NeedStorageAccess -> startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, "package:$packageName".toUri())
+                    )
+                    LibraryEvent.NeedNotifications -> if (!askedForNotifications &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        askedForNotifications = true
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
+        }
         setContent {
             GenkanTheme {
                 val screen by appViewModel.screen.collectAsStateWithLifecycle()
