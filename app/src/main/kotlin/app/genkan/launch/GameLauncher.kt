@@ -52,24 +52,31 @@ class GameLauncher @Inject constructor(
         Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${rom.name}")
         try {
             command.grantReads(context)
-            when (command.method) {
-                LaunchMethod.INTENT -> withContext(Dispatchers.Main) {
-                    context.startActivity(command.toIntent(), topScreenOptions())
-                }
-                LaunchMethod.SHELL -> {
-                    val process = ProcessBuilder(*command.toShellArgv()).redirectErrorStream(true).start()
-                    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-                    if (process.waitFor() != 0 || output.contains("Error", ignoreCase = true)) {
-                        Log.w(TAG, "am start failed: $output")
-                        return@withContext LaunchResult.Failed("${emulator.displayName} refused the launch")
-                    }
-                }
+            if (command.method == LaunchMethod.INTENT || !launchViaShell(command)) {
+                withContext(Dispatchers.Main) { context.startActivity(command.toIntent(), topScreenOptions()) }
             }
             LaunchResult.Launched(emulator)
         } catch (e: Exception) {
             Log.w(TAG, "Launch failed", e)
             LaunchResult.Failed(e.message ?: "Launch failed")
         }
+    }
+
+    /**
+     * Runs `am start` for recipes that prefer it. Some builds (the Thor's among them) refuse `am`
+     * from an app process with exit 255 and no output; false tells the caller to fall back to a
+     * plain intent, as Argosy does.
+     */
+    private fun launchViaShell(command: LaunchCommand): Boolean = try {
+        val process = ProcessBuilder(*command.toShellArgv()).redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+        val exit = process.waitFor()
+        (exit == 0 && !output.contains("Error", ignoreCase = true)).also { ok ->
+            if (!ok) Log.i(TAG, "am start refused (exit $exit: $output), launching via intent")
+        }
+    } catch (e: Exception) {
+        Log.i(TAG, "am start unavailable (${e.message}), launching via intent")
+        false
     }
 
     private fun installedVersion(packageName: String): String? = try {
