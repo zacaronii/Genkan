@@ -19,6 +19,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import app.genkan.home.DualScreenState
+import android.view.Display
+import app.genkan.hardware.FocusDirectorActivity
+import app.genkan.play.SessionTracker
 import app.genkan.home.HomeAppComponent
 import app.genkan.home.SecondaryHomeComponent
 import androidx.compose.runtime.getValue
@@ -41,12 +44,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 private const val TAG = "HomeActivity"
+private const val REFOCUS_DELAY_MS = 600L
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
 class HomeActivity : ComponentActivity() {
 
     @Inject lateinit var dualScreen: DualScreenState
+    @Inject lateinit var sessionTracker: SessionTracker
 
     private val viewModel: SetupViewModel by viewModels()
     private val appViewModel: AppViewModel by viewModels()
@@ -110,7 +115,26 @@ class HomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         dualScreen.refresh()
+        viewModel.refresh()
         startCompanionIfMissing()
+        lifecycleScope.launch {
+            if (sessionTracker.onLauncherResumed()) reclaimFocusAfterGame()
+        }
+    }
+
+    /**
+     * When a game closes, Android can hand input focus to the bottom screen, the other display
+     * still showing something, so the controller stops driving the library. Pull it back once
+     * the window settles. The wait also keeps the FocusDirector window clear of the emulator's
+     * removal (the Thor's 400 ms add/remove crash, T5).
+     */
+    private fun reclaimFocusAfterGame() {
+        window.decorView.postDelayed({
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) && !hasWindowFocus()) {
+                Log.d(TAG, "Back from a game without focus; reclaiming it")
+                FocusDirectorActivity.launchOnDisplay(this, Display.DEFAULT_DISPLAY)
+            }
+        }, REFOCUS_DELAY_MS)
     }
 
     /**
@@ -169,6 +193,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.ENABLE_HOME -> enableHome()
             SetupAction.DISABLE_HOME -> disableHome()
             SetupAction.SYNC_LIBRARY -> lifecycleScope.launch { viewModel.librarySync.sync() }
+            SetupAction.USAGE_ACCESS -> startActivity(
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
+            )
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

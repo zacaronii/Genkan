@@ -9,6 +9,7 @@ import app.genkan.input.PadKey
 import app.genkan.launch.GameLauncher
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
+import app.genkan.play.SessionTracker
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -55,6 +56,7 @@ class LibraryViewModel @Inject constructor(
     private val downloadQueue: DownloadQueue,
     private val gameLauncher: GameLauncher,
     private val localShelves: LocalShelves,
+    private val sessionTracker: SessionTracker,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -174,7 +176,10 @@ class LibraryViewModel @Inject constructor(
         val download = downloads.value[game.id] ?: return
         viewModelScope.launch {
             when (val result = gameLauncher.launch(game, download)) {
-                is LaunchResult.Launched -> show("Starting ${game.name} in ${result.emulator.displayName}…")
+                is LaunchResult.Launched -> {
+                    sessionTracker.begin(game.id, result.emulator.packageName)
+                    show("Starting ${game.name} in ${result.emulator.displayName}…")
+                }
                 is LaunchResult.NoEmulator -> show(
                     if (result.suggestions.isEmpty()) "Genkan can't launch this platform yet"
                     else "Install ${result.suggestions.map { it.displayName.substringBefore(" (") }.distinct().joinToString(" or ")} to play this"

@@ -3,6 +3,7 @@ package app.genkan.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.genkan.library.LibrarySync
+import app.genkan.play.SessionTracker
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +24,7 @@ enum class Screen { LOADING, LOGIN, LIBRARY, SETTINGS }
 class AppViewModel @Inject constructor(
     session: RomMSession,
     private val librarySync: LibrarySync,
+    private val sessionTracker: SessionTracker,
 ) : ViewModel() {
 
     private val settingsOpen = MutableStateFlow(false)
@@ -44,7 +46,11 @@ class AppViewModel @Inject constructor(
                 .map { (it as? RomMState.SignedIn)?.account?.let { a -> a.baseUrl + a.userId } }
                 .distinctUntilChanged()
                 .collect { accountKey ->
-                    if (accountKey != null) librarySync.sync() else if (session.state.value is RomMState.SignedOut) librarySync.clear()
+                    if (accountKey != null) {
+                        // Sessions that ended while RomM was unreachable go up now.
+                        launch { sessionTracker.upload() }
+                        librarySync.sync()
+                    } else if (session.state.value is RomMState.SignedOut) librarySync.clear()
                 }
         }
     }

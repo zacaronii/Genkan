@@ -7,6 +7,7 @@ import app.genkan.romm.RomMRom
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMUnauthorizedException
 import app.genkan.romm.RomMUtils
+import app.genkan.romm.describeFailure
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,8 +45,8 @@ class LibrarySync @Inject constructor(
                 _status.value = SyncStatus.Failed("Signed out by RomM")
                 session.onUnauthorized()
             } catch (e: Exception) {
-                Log.w(TAG, "Library sync failed", e)
-                _status.value = SyncStatus.Failed(e.message ?: "Library sync failed")
+                Log.w(TAG, "Library sync failed: $e", e)
+                _status.value = SyncStatus.Failed(describeFailure(e, "Library sync failed"))
             }
         }
     }

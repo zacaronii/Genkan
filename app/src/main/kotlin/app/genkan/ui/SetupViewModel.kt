@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import app.genkan.home.DualScreenState
 import app.genkan.library.LibrarySync
+import app.genkan.play.SessionTracker
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ enum class SetupAction(val label: String) {
     ENABLE_HOME("Enable Genkan as Home"),
     DISABLE_HOME("Disable Genkan as Home"),
     SYNC_LIBRARY("Sync library now"),
+    USAGE_ACCESS("Usage access (exact play time)"),
     SIGN_OUT("Sign out of RomM"),
 }
 
@@ -24,7 +26,17 @@ class SetupViewModel @Inject constructor(
     val dualScreen: DualScreenState,
     val romm: RomMSession,
     val librarySync: LibrarySync,
+    private val sessionTracker: SessionTracker,
 ) : ViewModel() {
+
+    private val _usageAccess = MutableStateFlow(sessionTracker.hasUsageAccess())
+    /** Without it, play time runs from launch until Genkan is back in front, sleep included. */
+    val usageAccess: StateFlow<Boolean> = _usageAccess.asStateFlow()
+
+    /** The grant happens in system settings, so re-read it whenever Genkan resumes. */
+    fun refresh() {
+        _usageAccess.value = sessionTracker.hasUsageAccess()
+    }
 
     val actions: List<SetupAction> = SetupAction.entries
 

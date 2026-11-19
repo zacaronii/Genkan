@@ -5,6 +5,7 @@ import androidx.room.Room
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
+import app.genkan.play.PlaySessionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,4 +33,7 @@ object AppModule {
 
     @Provides
     fun downloadDao(db: LibraryDatabase): DownloadDao = db.downloads()
+
+    @Provides
+    fun playSessionDao(db: LibraryDatabase): PlaySessionDao = db.playSessions()
 }

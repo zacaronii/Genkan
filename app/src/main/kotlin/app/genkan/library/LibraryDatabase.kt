@@ -4,6 +4,8 @@ import androidx.room.AutoMigration
 import androidx.room.Dao
 import app.genkan.download.DownloadDao
 import app.genkan.download.DownloadEntity
+import app.genkan.play.PlaySessionDao
+import app.genkan.play.PlaySessionEntity
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Index
@@ -79,12 +81,13 @@ interface LibraryDao {
 }
 
 @Database(
-    entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class],
-    version = 2,
+    entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class],
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
     abstract fun downloads(): DownloadDao
+    abstract fun playSessions(): PlaySessionDao
 }

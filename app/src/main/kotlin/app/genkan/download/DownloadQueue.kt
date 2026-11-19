@@ -7,6 +7,7 @@ import app.genkan.library.GameEntity
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMUnauthorizedException
+import app.genkan.romm.describeFailure
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -140,8 +141,8 @@ class DownloadQueue @Inject constructor(
             dao.setState(row.romId, DownloadState.FAILED, "Sign in to RomM again")
             session.onUnauthorized()
         } catch (e: Exception) {
-            Log.w(TAG, "Download of ${row.name} failed", e)
-            dao.setState(row.romId, DownloadState.FAILED, e.message ?: "Download failed")
+            Log.w(TAG, "Download of ${row.name} failed: $e", e)
+            dao.setState(row.romId, DownloadState.FAILED, describeFailure(e, "Download failed"))
         }
     }
 

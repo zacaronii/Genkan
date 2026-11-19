@@ -5,8 +5,8 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phase 1** in progress: RomM sign-in, the library, downloads and launching work;
-session tracking and play-session upload are next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Status: **Phase 1** in progress: RomM sign-in, the library, downloads, launching and
+play-session upload work. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Using it
 
@@ -21,6 +21,10 @@ session tracking and play-session upload are next. See [docs/ROADMAP.md](docs/RO
   emulator for its platform: RetroArch (NES, SNES, GB/GBC/GBA, N64; install the FCEUmm,
   Snes9x, mGBA and Mupen64Plus-Next cores from RetroArch's Online Updater), DuckStation
   (PS1), ARMSX2 (PS2), Dolphin (GameCube/Wii) or Azahar (3DS).
+- **Play time:** each play of a RomM game is reported to RomM as a play session when you come
+  back to Genkan. For exact times (sleep and other apps left out), allow *Usage access* from
+  Genkan's settings; without it a session runs from launch until Genkan is back in front.
+  Sessions under 10 seconds (an emulator that closed straight away) aren't reported.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

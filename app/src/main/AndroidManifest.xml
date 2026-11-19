@@ -13,6 +13,12 @@
         xmlns:tools="http://schemas.android.com/tools"
         tools:ignore="ScopedStorage" />
 
+    <!-- Play time: when the emulator was actually in front (granted in system settings). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- Package visibility for the emulators Genkan launches (launch/EmulatorCatalog.kt). -->
     <queries>
         <package android:name="com.retroarch.aarch64" />

@@ -23,6 +23,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val focusIndex by viewModel.focusIndex.collectAsStateWithLifecycle()
     val romm by viewModel.romm.state.collectAsStateWithLifecycle()
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
+    val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -43,6 +44,11 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
                 is SyncStatus.Failed -> "sync failed (${s.message})"
                 SyncStatus.Idle -> "not synced"
             },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "Play time: " + if (usageAccess) "exact (usage access on)" else "approximate; allow usage access so sleep and other apps aren't counted",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

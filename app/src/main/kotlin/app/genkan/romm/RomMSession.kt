@@ -54,6 +54,21 @@ class RomMSession @Inject constructor(
     fun currentAccount(): RomMAccount? = account
 
     /**
+     * This install's RomM device id, which play sessions are filed under. Sign-ins that came back
+     * without one (a failed registration) register on first use.
+     */
+    suspend fun deviceId(): String? {
+        val current = account ?: return null
+        current.deviceId?.let { return it }
+        val api = api ?: return null
+        val id = registerDevice(api) ?: return null
+        val updated = current.copy(deviceId = id)
+        store.save(updated)
+        account = updated
+        return id
+    }
+
+    /**
      * Device-code login (RFC 8628): show [RomMState.AwaitingApproval]'s code, the user approves it
      * in the RomM web UI, and the poll loop picks up the token.
      */
