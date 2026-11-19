@@ -33,3 +33,17 @@ Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
     -> app/src/main/kotlin/app/genkan/LowerActivity.kt
   .github/workflows/build.yml
     -> .github/workflows/ci.yml
+  app/src/main/kotlin/com/nendo/argosy/data/remote/romm/
+    RomMApi.kt (trimmed), RomMModels.kt, RomMDeviceModels.kt,
+    RomMPlaySessionModels.kt, RomMCapabilities.kt (trimmed),
+    DeviceAuthPoller.kt (+ DeviceAuthPoll from RomMConnectionManager.kt),
+    RomMApiFactory.kt, RomMImageAuthInterceptor.kt
+    -> app/src/main/kotlin/app/genkan/romm/
+
+--------------------------------------------------------------------------
+RomM (AGPL-3.0)
+https://github.com/rommapp/romm
+
+  The OpenAPI document of RomM 5.4.0, used unmodified as test data for the
+  API contract test:
+    -> app/src/test/resources/romm/openapi-5.4.0.json

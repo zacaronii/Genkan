@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,7 +16,18 @@ import androidx.activity.viewModels
 import app.genkan.home.DualScreenState
 import app.genkan.home.HomeAppComponent
 import app.genkan.home.SecondaryHomeComponent
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import app.genkan.input.HomeKeys
+import app.genkan.input.PadKey
+import app.genkan.ui.AppViewModel
+import app.genkan.ui.LibraryScreen
+import app.genkan.ui.LibraryViewModel
+import app.genkan.ui.LoginScreen
+import app.genkan.ui.LoginViewModel
+import app.genkan.ui.Screen
+import kotlinx.coroutines.launch
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
@@ -32,6 +44,9 @@ class HomeActivity : ComponentActivity() {
     @Inject lateinit var dualScreen: DualScreenState
 
     private val viewModel: SetupViewModel by viewModels()
+    private val appViewModel: AppViewModel by viewModels()
+    private val libraryViewModel: LibraryViewModel by viewModels()
+    private val loginViewModel: LoginViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -43,9 +58,28 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             GenkanTheme {
-                SetupScreen(viewModel, onAction = ::run)
+                val screen by appViewModel.screen.collectAsStateWithLifecycle()
+                when (screen) {
+                    Screen.LOADING -> Unit
+                    Screen.LOGIN -> LoginScreen(loginViewModel)
+                    Screen.LIBRARY -> LibraryScreen(libraryViewModel)
+                    Screen.SETTINGS -> SetupScreen(viewModel, onAction = ::run)
+                }
             }
         }
+        holdFocusInTouchMode()
+    }
+
+    /**
+     * When a touch is followed by a D-pad press, ViewRootImpl leaves touch mode by moving focus to
+     * a focusable view and swallows that press before dispatchKeyEvent sees it. Keeping the root
+     * Compose view focused in touch mode leaves nothing to move, so the first press after a tap
+     * reaches the ViewModel like any other.
+     */
+    private fun holdFocusInTouchMode() {
+        val root = findViewById<ViewGroup>(android.R.id.content).getChildAt(0) ?: return
+        root.isFocusableInTouchMode = true
+        root.requestFocus()
     }
 
     override fun onResume() {
@@ -71,8 +105,9 @@ class HomeActivity : ComponentActivity() {
     }
 
     /**
-     * The only key sink on this screen. Navigation never goes through Compose focus; the
-     * ViewModel owns the focus index.
+     * The only key sink on this screen. The library and settings never use Compose focus; their
+     * ViewModels own the focus index. The login form is the exception and keeps Compose focus,
+     * so its keys fall through to the view hierarchy.
      *
      * RestrictedApi is a lint false positive: the restriction sits on androidx.core's
      * KeyEventDispatcher.Component, not on the public Activity.dispatchKeyEvent.
@@ -80,18 +115,39 @@ class HomeActivity : ComponentActivity() {
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (HomeKeys.isSystemHome(event)) return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            val result = viewModel.onKey(event.keyCode)
-            result.action?.let(::run)
-            if (result.consumed) return true
+        val pad = PadKey.from(event.keyCode)
+        val screen = appViewModel.screen.value
+        if (screen == Screen.LOGIN && pad != PadKey.START) return super.dispatchKeyEvent(event)
+        if (event.action != KeyEvent.ACTION_DOWN) return pad != null || super.dispatchKeyEvent(event)
+        when (screen) {
+            Screen.LIBRARY -> {
+                if (pad == PadKey.START) appViewModel.openSettings()
+                else if (pad == null || !libraryViewModel.onKey(pad)) return super.dispatchKeyEvent(event)
+            }
+            Screen.SETTINGS -> {
+                if (pad == PadKey.B || pad == PadKey.START) {
+                    appViewModel.closeSettings()
+                } else {
+                    val result = viewModel.onKey(event.keyCode)
+                    result.action?.let(::run)
+                    if (!result.consumed) return super.dispatchKeyEvent(event)
+                }
+            }
+            Screen.LOGIN -> appViewModel.openSettings()
+            Screen.LOADING -> return super.dispatchKeyEvent(event)
         }
-        return super.dispatchKeyEvent(event)
+        return true
     }
 
     private fun run(action: SetupAction) {
         when (action) {
             SetupAction.ENABLE_HOME -> enableHome()
             SetupAction.DISABLE_HOME -> disableHome()
+            SetupAction.SYNC_LIBRARY -> lifecycleScope.launch { viewModel.librarySync.sync() }
+            SetupAction.SIGN_OUT -> {
+                viewModel.romm.signOut()
+                appViewModel.closeSettings()
+            }
         }
     }
 

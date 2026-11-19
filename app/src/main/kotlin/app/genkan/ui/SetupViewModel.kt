@@ -3,6 +3,8 @@ package app.genkan.ui
 import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import app.genkan.home.DualScreenState
+import app.genkan.library.LibrarySync
+import app.genkan.romm.RomMSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,11 +15,15 @@ import javax.inject.Inject
 enum class SetupAction(val label: String) {
     ENABLE_HOME("Enable Genkan as Home"),
     DISABLE_HOME("Disable Genkan as Home"),
+    SYNC_LIBRARY("Sync library now"),
+    SIGN_OUT("Sign out of RomM"),
 }
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(
     val dualScreen: DualScreenState,
+    val romm: RomMSession,
+    val librarySync: LibrarySync,
 ) : ViewModel() {
 
     val actions: List<SetupAction> = SetupAction.entries

@@ -14,11 +14,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.home.DualScreenStatus
+import app.genkan.library.SyncStatus
+import app.genkan.romm.RomMState
 
 @Composable
 fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val status by viewModel.dualScreen.status.collectAsStateWithLifecycle()
     val focusIndex by viewModel.focusIndex.collectAsStateWithLifecycle()
+    val romm by viewModel.romm.state.collectAsStateWithLifecycle()
+    val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -27,9 +31,23 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Genkan", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+        Text("Genkan settings", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
         StatusLines(status)
+        Text(
+            "RomM: " + when (val r = romm) {
+                is RomMState.SignedIn -> "${r.account.username} on ${r.account.baseUrl.removeSuffix("/")} (RomM ${r.account.serverVersion})"
+                else -> "not signed in"
+            } + "  ·  Library: " + when (val s = sync) {
+                is SyncStatus.Done -> "${s.games} games"
+                is SyncStatus.Running -> "syncing ${s.platform}…"
+                is SyncStatus.Failed -> "sync failed (${s.message})"
+                SyncStatus.Idle -> "not synced"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
         Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("B: back", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             viewModel.actions.forEachIndexed { index, action ->
                 ActionRow(action.label, focused = index == focusIndex, onClick = {
                     viewModel.focus(action)
