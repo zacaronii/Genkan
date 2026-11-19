@@ -263,6 +263,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )
+            SetupAction.SHIZUKU -> viewModel.privileged.requestPermission()
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

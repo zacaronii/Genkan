@@ -8,6 +8,7 @@ import android.util.Log
 import app.genkan.dictionary.Dictionaries
 import app.genkan.library.LibraryDatabase
 import app.genkan.saves.SaveSync
+import app.genkan.privileged.Privileged
 import app.genkan.reader.NowPlaying
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,8 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.SAVE_SYNC -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID [--ez dry true]
  * (syncs one game's save with RomM, logged under "SaveSync"; dry only negotiates and logs the plan;
  * --es copy_to DIR instead downloads RomM's newest Genkan save into DIR, leaving the real one alone)
+ *   adb shell am broadcast -a app.genkan.debug.SHIZUKU_PROBE -n app.genkan/.debug.DictionaryDebugReceiver
+ * (writes, lists and deletes a probe file in DuckStation's memory card folder through Shizuku)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -37,6 +40,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var nowPlaying: NowPlaying
     @Inject lateinit var database: LibraryDatabase
     @Inject lateinit var saveSync: SaveSync
+    @Inject lateinit var privileged: Privileged
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -59,6 +63,20 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         // Without a rom, every downloaded game.
                         val roms = if (rom != 0L) listOf(rom) else database.downloads().all().first().map { it.romId }
                         roms.forEach { Log.i(TAG, "Save sync of rom $it ran: ${saveSync.sync(it, dryRun = dry)}") }
+                    }
+                    "app.genkan.debug.SHIZUKU_PROBE" -> {
+                        val files = privileged.files()
+                        Log.i(TAG, "Shizuku ${privileged.state()}, helper ${files != null}")
+                        if (files != null) {
+                            val storage = Environment.getExternalStorageDirectory().path
+                            val cards = "$storage/Android/data/com.github.stenzek.duckstation/files/memcards"
+                            val probe = File(storage, "Genkan/.staging/probe.txt").apply { parentFile?.mkdirs(); writeText("genkan") }
+                            Log.i(TAG, "write ${files.copy(probe.path, "$cards/genkan-probe.txt")}, list ${files.list(cards).toList()}")
+                            val back = File(storage, "Genkan/.staging/probe-back.txt")
+                            Log.i(TAG, "read ${files.copy("$cards/genkan-probe.txt", back.path)} -> ${back.readText()}")
+                            Log.i(TAG, "delete ${files.deleteRecursively("$cards/genkan-probe.txt")}, list ${files.list(cards).toList()}")
+                            probe.delete(); back.delete()
+                        }
                     }
                     "app.genkan.debug.FORGET_GAME" -> forgetGame(intent.getStringExtra("game"))
                     "app.genkan.debug.IMPORT_DICTIONARIES" -> {

@@ -206,7 +206,10 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             // Pull a newer save from RomM first; a slow or absent server never holds the game up.
             show("Checking ${game.name}'s save…")
-            withTimeoutOrNull(SAVE_SYNC_TIMEOUT_MS) { saveSync.sync(game.id) }
+            withTimeoutOrNull(SAVE_SYNC_TIMEOUT_MS) {
+                saveSync.sync(game.id)
+                saveSync.beforeLaunch(game.id, game.platformSlug)
+            }
             when (val result = gameLauncher.launch(game, download)) {
                 is LaunchResult.Launched -> {
                     sessionTracker.begin(game.id, result.emulator.packageName)

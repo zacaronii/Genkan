@@ -7,6 +7,7 @@ import app.genkan.dictionary.DictionaryDao
 import app.genkan.ocr.OcrRegionDao
 import app.genkan.reader.ReaderDao
 import app.genkan.stats.ReadingDao
+import app.genkan.saves.SaveFileDao
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
@@ -56,4 +57,7 @@ object AppModule {
 
     @Provides
     fun readingDao(db: LibraryDatabase): ReadingDao = db.reading()
+
+    @Provides
+    fun saveFileDao(db: LibraryDatabase): SaveFileDao = db.saveFiles()
 }

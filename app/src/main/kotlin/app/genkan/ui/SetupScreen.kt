@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import app.genkan.privileged.Privileged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +27,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val romm by viewModel.romm.state.collectAsStateWithLifecycle()
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
+    val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
 
     Column(
@@ -53,6 +55,16 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Text(
             "Play time: " + if (usageAccess) "exact (usage access on)" else "approximate; allow usage access so sleep and other apps aren't counted",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "Emulator saves (DuckStation, Dolphin): " + when (shizuku) {
+                Privileged.State.READY -> "reachable through Shizuku"
+                Privileged.State.NOT_ALLOWED -> "Shizuku is running; allow Genkan below"
+                Privileged.State.STOPPED -> "start Shizuku (it stops at every reboot)"
+                Privileged.State.MISSING -> "install Shizuku to sync them"
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

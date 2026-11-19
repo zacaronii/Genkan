@@ -41,6 +41,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
     }
 
     testOptions {
@@ -85,6 +86,8 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.mlkit.text.japanese)
     implementation(libs.onnxruntime.android)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
