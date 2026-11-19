@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Environment
 import android.util.Log
 import app.genkan.dictionary.Dictionaries
+import app.genkan.library.LibraryDatabase
 import app.genkan.reader.NowPlaying
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -22,12 +23,15 @@ import javax.inject.Inject
  * (fresh removes every dictionary first, to time a whole import)
  *   adb shell am broadcast -a app.genkan.debug.NOW_PLAYING -n app.genkan/.debug.DictionaryDebugReceiver --el id 1 --es title タイトル [--es platform genkan-pc]
  * (sets what's playing, as launching a game does, so the reader files lines under it)
+ *   adb shell am broadcast -a app.genkan.debug.FORGET_GAME -n app.genkan/.debug.DictionaryDebugReceiver [--es game KEY]
+ * (deletes one game's backlog, thread choice and reading stats; without a key, logs the keys)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
 
     @Inject lateinit var dictionaries: Dictionaries
     @Inject lateinit var nowPlaying: NowPlaying
+    @Inject lateinit var database: LibraryDatabase
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -40,6 +44,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         intent.getStringExtra("title").orEmpty(),
                         intent.getStringExtra("platform"),
                     )
+                    "app.genkan.debug.FORGET_GAME" -> forgetGame(intent.getStringExtra("game"))
                     "app.genkan.debug.IMPORT_DICTIONARIES" -> {
                         if (intent.getBooleanExtra("fresh", false)) dictionaries.all.first().forEach { dictionaries.remove(it) }
                         dictionaries.importFrom(
@@ -52,6 +57,22 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    private fun forgetGame(game: String?) {
+        val db = database.openHelper.writableDatabase
+        if (game == null) {
+            db.query("SELECT gameKey, COUNT(*) FROM reader_lines GROUP BY gameKey UNION ALL SELECT game, COUNT(*) FROM reading_sessions GROUP BY game").use {
+                while (it.moveToNext()) Log.i(TAG, "game ${it.getString(0)}: ${it.getInt(1)} rows")
+            }
+            return
+        }
+        db.execSQL("DELETE FROM reader_lines WHERE gameKey = ?", arrayOf(game))
+        db.execSQL("DELETE FROM hook_threads WHERE gameKey = ?", arrayOf(game))
+        db.execSQL("DELETE FROM reading_daily WHERE game = ?", arrayOf(game))
+        db.execSQL("DELETE FROM reading_seen WHERE game = ?", arrayOf(game))
+        db.execSQL("DELETE FROM reading_sessions WHERE game = ?", arrayOf(game))
+        Log.i(TAG, "Forgot $game")
     }
 
     private suspend fun lookup(text: String) {

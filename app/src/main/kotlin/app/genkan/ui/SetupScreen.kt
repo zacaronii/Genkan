@@ -58,7 +58,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Text(
             "Dictionaries: " + if (dictionaries.isEmpty()) "none imported" else
-                "${dictionaries.count { it.enabled }} on of ${dictionaries.size} (${dictionaries.filter { it.enabled }.joinToString { it.title }})",
+                "${dictionaries.count { it.enabled }} of ${dictionaries.size} on (${dictionaries.filter { it.enabled }.joinToString { it.title }})",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

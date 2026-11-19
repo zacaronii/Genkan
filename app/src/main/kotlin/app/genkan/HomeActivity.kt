@@ -10,6 +10,9 @@ import android.app.ActivityOptions
 import android.app.role.RoleManager
 import android.content.Intent
 import android.os.Bundle
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
@@ -52,6 +55,9 @@ import javax.inject.Inject
 
 private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
+
+/** Screens that are forms, driven by Compose focus rather than a ViewModel. */
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -123,6 +129,9 @@ class HomeActivity : ComponentActivity() {
     private fun holdFocusInTouchMode() {
         val root = findViewById<ViewGroup>(android.R.id.content).getChildAt(0) ?: return
         root.isFocusableInTouchMode = true
+        // A focused view with no focus style of its own gets Android's default highlight, a grey
+        // veil over the whole screen once the pad is used.
+        root.defaultFocusHighlightEnabled = false
         root.requestFocus()
     }
 
@@ -194,6 +203,8 @@ class HomeActivity : ComponentActivity() {
         if (HomeKeys.isSystemHome(event)) return super.dispatchKeyEvent(event)
         val pad = PadKey.from(event.keyCode)
         val screen = appViewModel.screen.value
+        // Forms use Compose focus, whose buttons and text fields answer DPAD_CENTER, not A.
+        if (pad == PadKey.A && screen in FORMS) return super.dispatchKeyEvent(asCenter(event))
         if (screen == Screen.LOGIN && pad != PadKey.START) return super.dispatchKeyEvent(event)
         if (event.action != KeyEvent.ACTION_DOWN) return pad != null || super.dispatchKeyEvent(event)
         when (screen) {
@@ -212,7 +223,8 @@ class HomeActivity : ComponentActivity() {
             }
             // A form: the D-pad moves Compose focus between its fields.
             Screen.ANKI, Screen.READING_LOG -> when (pad) {
-                PadKey.B -> appViewModel.closePage()
+                // B closes the keyboard first, and only then the page.
+                PadKey.B -> if (!hideKeyboard()) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
                 else -> return super.dispatchKeyEvent(event)
             }
@@ -226,6 +238,19 @@ class HomeActivity : ComponentActivity() {
         }
         return true
     }
+
+    /** True when the on-screen keyboard was up and is now hidden. */
+    private fun hideKeyboard(): Boolean {
+        val root = window.decorView
+        val visible = ViewCompat.getRootWindowInsets(root)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (visible) WindowCompat.getInsetsController(window, root).hide(WindowInsetsCompat.Type.ime())
+        return visible
+    }
+
+    private fun asCenter(event: KeyEvent) = KeyEvent(
+        event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_DPAD_CENTER,
+        event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source,
+    )
 
     private fun run(action: SetupAction) {
         when (action) {

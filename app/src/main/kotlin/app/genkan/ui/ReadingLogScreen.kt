@@ -11,6 +11,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -60,11 +66,18 @@ fun ReadingLogScreen(viewModel: ReadingLogViewModel) {
     val form by viewModel.form.collectAsStateWithLifecycle()
     val status by viewModel.pusher.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
+    // The pad needs somewhere to start: focus the first field.
+    val firstField = remember { FocusRequester() }
+    // The result lands below the button, where the pad can't scroll: bring it into view.
+    val scroll = rememberScrollState()
+    var opened by remember { mutableStateOf(false) }
+    LaunchedEffect(status) { if (opened) scroll.animateScrollTo(scroll.maxValue) else opened = true }
+    LaunchedEffect(Unit) { runCatching { firstField.requestFocus() } }
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -77,7 +90,7 @@ fun ReadingLogScreen(viewModel: ReadingLogViewModel) {
             color = colors.onSurfaceVariant,
         )
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "mochibridge address (host:port)")
+            GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "mochibridge address (host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.token, { v -> viewModel.edit { it.copy(token = v) } }, "API token (web.api_token, if set)", keyboardType = KeyboardType.Password)
             ActionRow("Save and send now", focused = null, onClick = viewModel::saveAndSend)
         }

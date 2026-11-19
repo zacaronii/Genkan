@@ -11,6 +11,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,12 +32,19 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
     val pending by viewModel.miner.pending.collectAsStateWithLifecycle(0)
     val refused by viewModel.miner.refused.collectAsStateWithLifecycle(emptyList())
     val colors = MaterialTheme.colorScheme
+    // The pad needs somewhere to start: focus the first field.
+    val firstField = remember { FocusRequester() }
+    // The result lands below the button, where the pad can't scroll: bring it into view.
+    val scroll = rememberScrollState()
+    var opened by remember { mutableStateOf(false) }
+    LaunchedEffect(check) { if (opened) scroll.animateScrollTo(scroll.maxValue) else opened = true }
+    LaunchedEffect(Unit) { runCatching { firstField.requestFocus() } }
 
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -43,7 +56,7 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
             color = colors.onSurfaceVariant,
         )
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)")
+            GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.apiKey, { v -> viewModel.edit { it.copy(apiKey = v) } }, "API key (if AnkiConnect has one)", keyboardType = KeyboardType.Password)
             GenkanTextField(form.deck, { v -> viewModel.edit { it.copy(deck = v) } }, "Deck", keyboardType = KeyboardType.Text)
             GenkanTextField(form.noteType, { v -> viewModel.edit { it.copy(noteType = v) } }, "Note type (Lapis or Kiku)", keyboardType = KeyboardType.Text)

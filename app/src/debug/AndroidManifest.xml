@@ -16,6 +16,7 @@
                 <action android:name="app.genkan.debug.LOOKUP" />
                 <action android:name="app.genkan.debug.IMPORT_DICTIONARIES" />
                 <action android:name="app.genkan.debug.NOW_PLAYING" />
+                <action android:name="app.genkan.debug.FORGET_GAME" />
             </intent-filter>
         </receiver>
         <!-- Debug builds only: a stand-in game screen for OCR tests. -->

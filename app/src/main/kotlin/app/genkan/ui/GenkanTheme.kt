@@ -14,6 +14,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.ViewCompat
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -63,7 +81,11 @@ fun ActionRow(label: String, focused: Boolean?, onClick: () -> Unit, modifier: M
     }
 }
 
-/** A single-line text field styled like [ActionRow]. */
+/**
+ * A single-line text field styled like [ActionRow]. The pad browses past it; A (or a tap) opens
+ * the keyboard and Done closes it. A field that opened the keyboard on focus would take over the
+ * screen as the D-pad passed, and the keyboard would then swallow the D-pad.
+ */
 @Composable
 fun GenkanTextField(
     value: String,
@@ -76,16 +98,29 @@ fun GenkanTextField(
     val shape = RoundedCornerShape(10.dp)
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    var editing by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(interaction) {
+        interaction.interactions.collect { if (it is PressInteraction.Release) editing = true }
+    }
+    LaunchedEffect(editing) { if (editing) keyboard?.show() }
+    val view = LocalView.current
     androidx.compose.foundation.layout.Column(modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
         androidx.compose.foundation.text.BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
+            readOnly = !editing,
             interactionSource = interaction,
             textStyle = MaterialTheme.typography.titleMedium.copy(color = colors.onSurface),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.primary),
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                editing = false
+                keyboard?.hide()
+            }),
             // API keys and tokens are shown as dots, like any password.
             visualTransformation = if (keyboardType == androidx.compose.ui.text.input.KeyboardType.Password) {
                 androidx.compose.ui.text.input.PasswordVisualTransformation()
@@ -94,6 +129,31 @@ fun GenkanTextField(
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .onFocusChanged { if (!it.isFocused) editing = false }
+                .onPreviewKeyEvent { event ->
+                    // However the keyboard closed (Done, B, Back), the field is back to browsing.
+                    if (editing && ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) != true) {
+                        editing = false
+                    }
+                    if (editing) return@onPreviewKeyEvent false
+                    // The field would spend Up and Down on its cursor; while browsing they move on.
+                    val direction = when (event.key) {
+                        Key.DirectionDown -> FocusDirection.Down
+                        Key.DirectionUp -> FocusDirection.Up
+                        else -> null
+                    }
+                    when {
+                        direction != null -> {
+                            if (event.type == KeyEventType.KeyDown) focusManager.moveFocus(direction)
+                            true
+                        }
+                        event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+                            if (event.type == KeyEventType.KeyUp) editing = true
+                            true
+                        }
+                        else -> false
+                    }
+                }
                 .padding(top = 6.dp)
                 .background(colors.surface, shape)
                 .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
