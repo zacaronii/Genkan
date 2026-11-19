@@ -1,0 +1,88 @@
+/*
+ * Genkan's lookup popup. The structured-content rules are adapted from Hoshi Reader's
+ * popup.css (HuangAntimony/Hoshi-Reader-Android @ 186c2a5), which copied them from Yomitan.
+ * Copyright © 2026 Manhhao. Copyright © 2023-2025 Yomitan Authors.
+ * Copyright © 2021-2022 Yomichan Authors.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+:root {
+    --background: #1c1c21;
+    --text: #e8e6ea;
+    --muted: #a09ca6;
+    --accent: #e8b04a;
+    --tag: rgba(255, 255, 255, 0.08);
+    --rule: rgba(255, 255, 255, 0.12);
+    --font-size-no-units: 18;
+    --line-height: 1.5;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family: sans-serif;
+    font-size: 18px;
+    line-height: var(--line-height);
+    -webkit-tap-highlight-color: transparent;
+}
+
+#entries { padding: 4px 20px 24px; }
+
+.entry { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.entry:last-child { border-bottom: none; }
+
+.headword { font-size: 34px; line-height: 1.3; }
+.headword rt { font-size: 15px; color: var(--muted); }
+.kanji-char { cursor: pointer; }
+.kanji-char:active { color: var(--accent); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.tag {
+    font-size: 14px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--tag);
+    color: var(--muted);
+    line-height: 1.4;
+}
+.tag.deinflection { color: var(--accent); }
+.tag .label { opacity: 0.7; margin-right: 4px; }
+
+.pitch { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 4px 0; color: var(--text); }
+.pitch svg { height: 1.4em; }
+
+.dictionary { margin-top: 10px; }
+.dictionary-name { font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
+.definition-tags { display: inline-flex; gap: 4px; margin-right: 6px; }
+.definition-tags .tag { font-size: 12px; padding: 1px 6px; }
+.glossary-item { margin: 2px 0; }
+.yomitan-glossary ul, .yomitan-glossary ol { padding-left: 1.3em; margin: 2px 0; }
+.yomitan-glossary li { margin: 1px 0; }
+ol.glossary-entries { padding-left: 1.4em; margin: 4px 0; }
+
+.kanji-entry .character { font-size: 64px; line-height: 1.1; }
+.kanji-entry dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0; }
+.kanji-entry dt { color: var(--muted); }
+.kanji-entry dd { margin: 0; }
+.back { color: var(--accent); font-size: 15px; cursor: pointer; padding: 6px 0; display: inline-block; }
+
+.empty { color: var(--muted); padding: 16px 0; }
+
+a { color: #7aa7ff; }
+hr { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+.gloss-image-link { display: inline-block; position: relative; max-width: 100%; line-height: 1; }
+.gloss-image { max-width: 100%; height: auto; vertical-align: top; }
+.gloss-image-link[data-appearance="monochrome"] img.gloss-image { filter: invert(1); }
+
+.gloss-sc-table-container { display: block; overflow-x: auto; }
+.gloss-sc-table { table-layout: auto; border-collapse: collapse; }
+.gloss-sc-thead, .gloss-sc-tfoot, .gloss-sc-th { font-weight: bold; background-color: rgba(255, 255, 255, 0.05); }
+.gloss-sc-th, .gloss-sc-td {
+    border: 1px solid var(--rule);
+    padding: 0.25em;
+    vertical-align: top;
+}
+.gloss-sc-ruby rt, ruby rt { font-size: 0.55em; }

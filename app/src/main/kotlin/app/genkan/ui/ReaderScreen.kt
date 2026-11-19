@@ -16,10 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,8 +37,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import app.genkan.dictionary.GlossaryText
-import app.genkan.dictionary.TermHit
 import app.genkan.reader.HookStatus
 import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ThreadSample
@@ -55,6 +51,7 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
     val chosen by viewModel.session.chosenThread.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
     val lookup by viewModel.lookup.collectAsStateWithLifecycle()
+    val popup by viewModel.popup.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -87,7 +84,13 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
                 Backlog(lines, lookup, panelHeight, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
             }
             lookup?.let { current ->
-                LookupPanel(current, onClose = viewModel::closeLookup, modifier = Modifier.align(Alignment.BottomCenter).height(panelHeight))
+                LookupPanel(
+                    current,
+                    popup,
+                    viewModel,
+                    onClose = viewModel::closeLookup,
+                    modifier = Modifier.align(Alignment.BottomCenter).height(panelHeight),
+                )
             }
         }
     }
@@ -215,16 +218,16 @@ private fun ThreadPicker(threads: List<ThreadSample>, chosen: String?, onChoose:
 }
 
 @Composable
-private fun LookupPanel(lookup: Lookup, onClose: () -> Unit, modifier: Modifier = Modifier) {
+private fun LookupPanel(lookup: Lookup, popup: PopupContent?, viewModel: ReaderViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             .background(colors.surface)
-            .padding(20.dp),
+            .padding(top = 12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 when {
                     lookup.result == null -> "Looking up…"
@@ -237,41 +240,7 @@ private fun LookupPanel(lookup: Lookup, onClose: () -> Unit, modifier: Modifier 
             )
             Chip("Close", onClose)
         }
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            lookup.result?.hits?.forEach { HitView(it) }
-        }
-    }
-}
-
-@Composable
-private fun HitView(hit: TermHit) {
-    val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(hit.expression, style = MaterialTheme.typography.headlineMedium, color = colors.onSurface)
-            if (hit.reading.isNotEmpty() && hit.reading != hit.expression) {
-                Text(hit.reading, style = MaterialTheme.typography.titleLarge, color = colors.onSurfaceVariant)
-            }
-        }
-        val notes = buildList {
-            if (hit.trace.isNotEmpty()) add(hit.trace.joinToString(" ← ") { it.name })
-            hit.frequencies.firstOrNull()?.let { f ->
-                f.values.firstOrNull()?.let { add("${f.dictionary} ${it.display.ifEmpty { it.value.toString() }}") }
-            }
-            hit.pitches.firstOrNull()?.pitches?.takeIf { it.isNotEmpty() }?.let { p -> add("pitch " + p.joinToString(" ") { "[${it.position}]" }) }
-        }
-        if (notes.isNotEmpty()) {
-            Text(notes.joinToString("  ·  "), style = MaterialTheme.typography.labelLarge, color = colors.primary)
-        }
-        hit.glossaries.groupBy { it.dictionary }.forEach { (dictionary, entries) ->
-            Text(dictionary, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
-            val definitions = entries.flatMap { GlossaryText.definitions(it.glossary) }
-            Text(
-                definitions.joinToString("; "),
-                style = MaterialTheme.typography.bodyLarge,
-                color = colors.onSurface,
-            )
-        }
+        DictionaryPopup(popup, viewModel.dictionaries, viewModel, Modifier.fillMaxSize())
     }
 }
 

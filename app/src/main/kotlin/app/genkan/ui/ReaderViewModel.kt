@@ -24,11 +24,15 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?) {
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     val session: ReaderSession,
-    private val dictionaries: Dictionaries,
-) : ViewModel() {
+    val dictionaries: Dictionaries,
+) : ViewModel(), PopupActions {
 
     private val _lookup = MutableStateFlow<Lookup?>(null)
     val lookup: StateFlow<Lookup?> = _lookup.asStateFlow()
+
+    private val _popup = MutableStateFlow<PopupContent?>(null)
+    /** What the popup shows; a kanji or a dictionary link can replace the tapped word's entries. */
+    val popup: StateFlow<PopupContent?> = _popup.asStateFlow()
 
     private val _picking = MutableStateFlow(false)
     /** The thread picker is open by choice (it also shows while no thread is chosen). */
@@ -43,15 +47,35 @@ class ReaderViewModel @Inject constructor(
         val start = if (offset > 0 && line.text[offset].isLowSurrogate()) offset - 1 else offset
         lookupJob?.cancel()
         _lookup.value = Lookup(line.id, start, null)
+        _popup.value = null
         lookupJob = viewModelScope.launch {
             val result = dictionaries.lookup(line.text.substring(start))
             _lookup.value = Lookup(line.id, start, result)
+            _popup.value = PopupContent.Terms(result.json, dictionaries.stylesJson())
+        }
+    }
+
+    override fun lookUpKanji(character: String) {
+        if (_lookup.value == null) return
+        lookupJob?.cancel()
+        lookupJob = viewModelScope.launch {
+            _popup.value = PopupContent.Kanji(character, dictionaries.kanjiJson(character))
+        }
+    }
+
+    /** A dictionary's link to another word: its entries replace the popup's, the highlight stays. */
+    override fun lookUp(text: String) {
+        if (_lookup.value == null) return
+        lookupJob?.cancel()
+        lookupJob = viewModelScope.launch {
+            _popup.value = PopupContent.Terms(dictionaries.lookup(text).json, dictionaries.stylesJson())
         }
     }
 
     fun closeLookup() {
         lookupJob?.cancel()
         _lookup.value = null
+        _popup.value = null
     }
 
     fun openPicker() {

@@ -62,6 +62,17 @@ Pinned commit: 738ccf5c70342b0aed17a9b6b5c56805785ab9fe
     -> app/src/test/kotlin/app/genkan/reader/LineFeedTest.kt
 
 --------------------------------------------------------------------------
+Hoshi Reader Android (GPL-3.0-or-later; parts derived from Yomitan and Yomichan)
+https://github.com/HuangAntimony/Hoshi-Reader-Android
+Pinned commit: 186c2a596b56d04c980767e46c7b0cf847cbc2d8
+
+  app/src/main/assets/hoshi-web/popup/popup.js (furigana segmentation,
+    dictionary CSS scoping, structured content, pitch graphs)
+    -> app/src/main/assets/popup/popup.js
+  app/src/main/assets/hoshi-web/popup/popup.css (structured-content rules)
+    -> app/src/main/assets/popup/popup.css
+
+--------------------------------------------------------------------------
 hoshidicts, bee-san's fork (GPL-3.0)
 https://github.com/bee-san/hoshidicts
 Pinned commit: 088ac5ded9e4de62a0c3f434f3f72350945459a3

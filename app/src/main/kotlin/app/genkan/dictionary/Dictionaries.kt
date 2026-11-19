@@ -146,17 +146,23 @@ class Dictionaries @Inject constructor(
         }
     }
 
-    suspend fun kanji(character: String): List<KanjiEntry> = withContext(native) {
+    suspend fun kanji(character: String): List<KanjiEntry> = kanjiAdapter.fromJson(kanjiJson(character)).orEmpty()
+
+    /** The kanji dictionaries' entries for [character], as JSON for the popup page. */
+    suspend fun kanjiJson(character: String): String = withContext(native) {
         lock.withLock {
-            val session = session() ?: return@withLock emptyList()
-            kanjiAdapter.fromJson(String(NativeDictionaries.kanji(session, character.encodeToByteArray()))).orEmpty()
+            val session = session() ?: return@withLock "[]"
+            String(NativeDictionaries.kanji(session, character.encodeToByteArray()))
         }
     }
 
-    suspend fun styles(): List<DictionaryStyle> = withContext(native) {
+    suspend fun styles(): List<DictionaryStyle> = stylesAdapter.fromJson(stylesJson()).orEmpty()
+
+    /** Each dictionary's own CSS, as JSON for the popup page. */
+    suspend fun stylesJson(): String = withContext(native) {
         lock.withLock {
-            val session = session() ?: return@withLock emptyList()
-            stylesAdapter.fromJson(String(NativeDictionaries.styles(session))).orEmpty()
+            val session = session() ?: return@withLock "[]"
+            String(NativeDictionaries.styles(session))
         }
     }
 

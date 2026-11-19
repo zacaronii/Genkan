@@ -36,7 +36,9 @@ the thread picker and tap-to-look-up work. See
 - **Reader:** the bottom screen connects to a texthooker on `ws://127.0.0.1:6677`
   ([hookbridge](tools/hookbridge), or anything that sends plain-text or `{"sentence": …}`
   frames) and shows the current game's lines. When the frames name their threads, it asks
-  once per game which thread is the dialogue. Tap a word to look it up. To try it without a
+  once per game which thread is the dialogue. Tap a word to look it up: the popup renders
+  each dictionary's own formatting, with furigana and pitch graphs; tap a kanji in the
+  headword for its kanji-dictionary entry. To try it without a
   game: `python3 tools/hookbridge/test/fake_host.py` on a computer and
   `adb reverse tcp:6677 tcp:6677`.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
