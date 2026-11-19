@@ -11,5 +11,9 @@
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimEnabled">false</item>
+        <!-- No starting window either: it is a second surface flashing up on the top screen. -->
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 </resources>
