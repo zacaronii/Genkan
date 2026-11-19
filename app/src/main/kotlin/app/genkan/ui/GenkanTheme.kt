@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.ViewCompat
 import androidx.compose.ui.platform.LocalView
@@ -159,5 +161,48 @@ fun GenkanTextField(
                 .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
                 .padding(horizontal = 20.dp, vertical = 14.dp),
         )
+    }
+}
+
+/**
+ * A choice from a known list, like a drop-down: A opens the options under it with the current one
+ * focused, and A on an option picks it and closes them again.
+ */
+@Composable
+fun ChoiceField(label: String, value: String, options: List<String>, onChoose: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    val header = remember { FocusRequester() }
+    val current = remember { FocusRequester() }
+    var opened by remember { mutableStateOf(false) }
+    LaunchedEffect(open) {
+        // Focus follows: into the list on opening, back to the field on closing.
+        if (open) runCatching { current.requestFocus() } else if (opened) runCatching { header.requestFocus() }
+        opened = true
+    }
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+        ActionRow(
+            (value.ifEmpty { "Choose…" }) + if (open) "  ▴" else "  ▾",
+            focused = null,
+            onClick = { open = !open },
+            modifier = Modifier.padding(top = 6.dp).focusRequester(header),
+        )
+        if (open) {
+            val selected = options.indexOf(value).coerceAtLeast(0)
+            options.forEachIndexed { i, option ->
+                ActionRow(
+                    (if (option == value) "✓  " else "     ") + option,
+                    focused = null,
+                    onClick = {
+                        onChoose(option)
+                        open = false
+                    },
+                    modifier = Modifier
+                        .padding(start = 24.dp, top = 6.dp)
+                        .then(if (i == selected) Modifier.focusRequester(current) else Modifier),
+                )
+            }
+        }
     }
 }

@@ -77,9 +77,11 @@ class CardFieldsTest {
     }
 
     @Test
-    fun `addresses get a scheme and AnkiConnect's port`() {
+    fun `bare hosts get http and AnkiConnect's port, full URLs are kept`() {
         assertEquals("http://192.0.2.10:8765", AnkiConfig(address = "192.0.2.10").url)
         assertEquals("http://anki.local:9000", AnkiConfig(address = "anki.local:9000").url)
-        assertEquals("https://anki.example.com:8765", AnkiConfig(address = "https://anki.example.com/").url)
+        // Behind a reverse proxy the scheme's own port is the right one.
+        assertEquals("https://anki.example.com", AnkiConfig(address = "https://anki.example.com/").url)
+        assertEquals("http://192.0.2.10:8765", AnkiConfig(address = "http://192.0.2.10:8765").url)
     }
 }

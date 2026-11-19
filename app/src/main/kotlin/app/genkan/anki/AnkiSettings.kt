@@ -22,13 +22,15 @@ data class AnkiConfig(
 ) {
     val configured: Boolean get() = address.isNotBlank()
 
-    /** The address as AnkiConnect expects it: a scheme, and its default port when none is given. */
+    /**
+     * The address as AnkiConnect expects it. A bare host gets http and AnkiConnect's port 8765; a
+     * full URL is used as written, since one behind a reverse proxy has the scheme's own port.
+     */
     val url: String
         get() {
             val trimmed = address.trim().removeSuffix("/")
-            val withScheme = if ("://" in trimmed) trimmed else "http://$trimmed"
-            val afterScheme = withScheme.substringAfter("://")
-            return if (':' in afterScheme.substringBefore('/')) withScheme else "$withScheme:8765"
+            if ("://" in trimmed) return trimmed
+            return if (':' in trimmed.substringBefore('/')) "http://$trimmed" else "http://$trimmed:8765"
         }
 }
 

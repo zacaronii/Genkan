@@ -28,6 +28,7 @@ import app.genkan.anki.AnkiStatus
 fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
     val form by viewModel.form.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
+    val choices by viewModel.choices.collectAsStateWithLifecycle()
     val status by viewModel.miner.status.collectAsStateWithLifecycle()
     val pending by viewModel.miner.pending.collectAsStateWithLifecycle(0)
     val refused by viewModel.miner.refused.collectAsStateWithLifecycle(emptyList())
@@ -58,8 +59,18 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.apiKey, { v -> viewModel.edit { it.copy(apiKey = v) } }, "API key (if AnkiConnect has one)", keyboardType = KeyboardType.Password)
-            GenkanTextField(form.deck, { v -> viewModel.edit { it.copy(deck = v) } }, "Deck", keyboardType = KeyboardType.Text)
-            GenkanTextField(form.noteType, { v -> viewModel.edit { it.copy(noteType = v) } }, "Note type (Lapis or Kiku)", keyboardType = KeyboardType.Text)
+            // Picked from what Anki has: cards can't be sent without reaching it anyway.
+            val known = choices
+            if (known != null) {
+                ChoiceField("Deck", form.deck, known.decks) { v -> viewModel.edit { it.copy(deck = v) } }
+                ChoiceField("Note type (Lapis or Kiku)", form.noteType, known.noteTypes) { v -> viewModel.edit { it.copy(noteType = v) } }
+            } else {
+                Text(
+                    "Deck and note type: chosen from your Anki once it answers (Save and test).",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = colors.onSurfaceVariant,
+                )
+            }
             ActionRow("Save and test", focused = null, onClick = viewModel::saveAndTest)
         }
         check?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }

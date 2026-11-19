@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** The decks and note types the connected Anki has, for the pickers. */
+data class AnkiChoices(val decks: List<String>, val noteTypes: List<String>)
+
 @HiltViewModel
 class AnkiSettingsViewModel @Inject constructor(
     private val settings: AnkiSettings,
@@ -28,9 +31,20 @@ class AnkiSettingsViewModel @Inject constructor(
     /** What the last Save and test found. */
     val check: StateFlow<String?> = _check.asStateFlow()
 
+    private val _choices = MutableStateFlow<AnkiChoices?>(null)
+    /** Null until Anki answers; the deck and note type are typed in until then. */
+    val choices: StateFlow<AnkiChoices?> = _choices.asStateFlow()
+
     init {
-        viewModelScope.launch { _form.value = settings.config.first() }
+        viewModelScope.launch {
+            val saved = settings.config.first()
+            _form.value = saved
+            if (saved.configured) runCatching { loadChoices(saved) }
+        }
     }
+
+    private suspend fun loadChoices(config: AnkiConfig): AnkiChoices =
+        AnkiChoices(anki.deckNames(config).sorted(), anki.modelNames(config).sorted()).also { _choices.value = it }
 
     fun edit(change: (AnkiConfig) -> AnkiConfig) {
         _form.value = change(_form.value)
@@ -48,11 +62,10 @@ class AnkiSettingsViewModel @Inject constructor(
             _check.value = "Checking ${config.url}…"
             _check.value = try {
                 val version = anki.version(config)
-                val decks = anki.deckNames(config)
-                val models = anki.modelNames(config)
+                val choices = loadChoices(config)
                 val problems = buildList {
-                    if (config.deck !in decks) add("no deck named \"${config.deck}\"")
-                    if (config.noteType !in models) add("no note type named \"${config.noteType}\"")
+                    if (config.deck !in choices.decks) add("no deck named \"${config.deck}\"; choose one above")
+                    if (config.noteType !in choices.noteTypes) add("no note type named \"${config.noteType}\"; choose one above")
                 }
                 if (problems.isEmpty()) {
                     val fields = anki.modelFieldNames(config, config.noteType)
