@@ -1,5 +1,6 @@
 package app.genkan.stats
 
+import app.genkan.home.LauncherPresence
 import app.genkan.reader.Lines
 import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,7 @@ import javax.inject.Singleton
 class ReadingStats @Inject constructor(
     private val dao: ReadingDao,
     private val nowPlaying: NowPlaying,
+    private val launcher: LauncherPresence,
 ) {
     private val thread = Dispatchers.IO.limitedParallelism(1)
     private val scope = CoroutineScope(SupervisorJob() + thread)
@@ -42,8 +44,9 @@ class ReadingStats @Inject constructor(
                 delay(HEARTBEAT_MS)
                 val now = System.currentTimeMillis()
                 // The tracker credits time only within its idle timeout of the last line or
-                // lookup, so a game left running unread stops counting by itself.
-                tracker?.onHeartbeat(now, reading = true)
+                // lookup, so a game left running unread stops counting by itself; and none at
+                // all while Genkan's own launcher has the top screen: the game isn't being read.
+                tracker?.onHeartbeat(now, reading = !launcher.inFront.value)
                 if (++ticks % FLUSH_EVERY == 0) tracker?.flush()
                 publish()
             }
