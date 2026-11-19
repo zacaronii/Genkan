@@ -8,6 +8,9 @@ import app.genkan.download.DownloadDao
 import app.genkan.download.DownloadEntity
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlaySessionEntity
+import app.genkan.reader.HookThreadEntity
+import app.genkan.reader.ReaderDao
+import app.genkan.reader.ReaderLineEntity
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Index
@@ -83,14 +86,17 @@ interface LibraryDao {
 }
 
 @Database(
-    entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class, DictionaryEntity::class],
-    version = 4,
+    entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class, DictionaryEntity::class,
+        ReaderLineEntity::class, HookThreadEntity::class],
+    version = 5,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
     abstract fun downloads(): DownloadDao
     abstract fun playSessions(): PlaySessionDao
     abstract fun dictionaries(): DictionaryDao
+    abstract fun reader(): ReaderDao
 }

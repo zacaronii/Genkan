@@ -6,7 +6,8 @@ the bottom screen is a reading companion: a text backlog with tap-to-look-up, an
 later phases, one-tap Anki cards and reading stats.
 
 Status: **Phase 1** done (RomM sign-in, library, downloads, launching, play sessions).
-**Phase 2** (the reader) in progress: dictionaries import and look up. See
+**Phase 2** (the reader) in progress: dictionaries, the texthooker connection, the backlog,
+the thread picker and tap-to-look-up work. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Using it
@@ -32,6 +33,12 @@ Status: **Phase 1** done (RomM sign-in, library, downloads, launching, play sess
   are already there and replaces ones with a new revision. Lookups use
   [hoshidicts](https://github.com/bee-san/hoshidicts), so conjugated forms find their
   dictionary entries (眺めた → 眺める).
+- **Reader:** the bottom screen connects to a texthooker on `ws://127.0.0.1:6677`
+  ([hookbridge](tools/hookbridge), or anything that sends plain-text or `{"sentence": …}`
+  frames) and shows the current game's lines. When the frames name their threads, it asks
+  once per game which thread is the dialogue. Tap a word to look it up. To try it without a
+  game: `python3 tools/hookbridge/test/fake_host.py` on a computer and
+  `adb reverse tcp:6677 tcp:6677`.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

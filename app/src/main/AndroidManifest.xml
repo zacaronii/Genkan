@@ -39,6 +39,7 @@
     </queries>
 
     <application
+        android:networkSecurityConfig="@xml/network_security_config"
         android:name=".GenkanApp"
         android:allowBackup="false"
         android:icon="@android:drawable/sym_def_app_icon"

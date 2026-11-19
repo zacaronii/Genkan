@@ -11,16 +11,13 @@ import android.view.Display
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import app.genkan.audio.AudioFocusHelper
-import app.genkan.display.DisplayRepository
+import androidx.activity.viewModels
 import app.genkan.hardware.FocusDirectorActivity
 import app.genkan.hardware.RefocusGate
 import app.genkan.home.DualScreenState
-import app.genkan.ui.CompanionScreen
 import app.genkan.ui.GenkanTheme
+import app.genkan.ui.ReaderScreen
+import app.genkan.ui.ReaderViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -38,8 +35,8 @@ private const val REFOCUS_DEBOUNCE_MS = 120L
 class LowerActivity : ComponentActivity() {
 
     @Inject lateinit var dualScreen: DualScreenState
-    @Inject lateinit var displays: DisplayRepository
-    @Inject lateinit var audioFocus: AudioFocusHelper
+
+    private val reader: ReaderViewModel by viewModels()
 
     private val handler = Handler(Looper.getMainLooper())
     private val refocusGate = RefocusGate()
@@ -48,8 +45,6 @@ class LowerActivity : ComponentActivity() {
         FocusDirectorActivity.launchOnDisplay(this, Display.DEFAULT_DISPLAY)
     }
 
-    private var toneResult by mutableStateOf<String?>(null)
-
     private val ownDisplayId: Int get() = display.displayId
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,21 +52,9 @@ class LowerActivity : ComponentActivity() {
         if (releaseIfOnDefaultDisplay()) return
         dualScreen.onLowerPlaced(ownDisplayId)
 
-        val size = displays.sizeOf(ownDisplayId)
-        val label = "Display $ownDisplayId" + (size?.let { ", ${it.width}x${it.height}" } ?: "")
         setContent {
             GenkanTheme {
-                CompanionScreen(
-                    displayLabel = label,
-                    lastToneResult = toneResult,
-                    onPlayTestTone = {
-                        toneResult = if (audioFocus.playTestTone()) "Tone played with audio focus" else "Audio focus denied"
-                    },
-                    onRelease = {
-                        dualScreen.releaseLower()
-                        finish()
-                    },
-                )
+                ReaderScreen(viewModel = reader)
             }
         }
     }

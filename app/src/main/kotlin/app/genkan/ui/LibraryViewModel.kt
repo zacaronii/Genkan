@@ -10,6 +10,7 @@ import app.genkan.launch.GameLauncher
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
 import app.genkan.play.SessionTracker
+import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,6 +58,7 @@ class LibraryViewModel @Inject constructor(
     private val gameLauncher: GameLauncher,
     private val localShelves: LocalShelves,
     private val sessionTracker: SessionTracker,
+    private val nowPlaying: NowPlaying,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -149,7 +151,12 @@ class LibraryViewModel @Inject constructor(
 
     private fun primaryAction(game: GameEntity) {
         if (LocalShelves.isLocal(game)) {
-            if (localShelves.launch(game)) show("Opening ${game.name}…") else show("Couldn't open ${game.name}")
+            if (localShelves.launch(game)) {
+                nowPlaying.started(game.id, game.name)
+                show("Opening ${game.name}…")
+            } else {
+                show("Couldn't open ${game.name}")
+            }
             return
         }
         when (downloads.value[game.id]?.state) {
@@ -178,6 +185,7 @@ class LibraryViewModel @Inject constructor(
             when (val result = gameLauncher.launch(game, download)) {
                 is LaunchResult.Launched -> {
                     sessionTracker.begin(game.id, result.emulator.packageName)
+                    nowPlaying.started(game.id, game.name)
                     show("Starting ${game.name} in ${result.emulator.displayName}…")
                 }
                 is LaunchResult.NoEmulator -> show(
