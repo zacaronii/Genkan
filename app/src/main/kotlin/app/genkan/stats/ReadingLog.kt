@@ -39,7 +39,7 @@ data class ReadingLogConfig(val address: String = "", val token: String = "") {
     val endpoint: String
         get() {
             val base = address.trim().removeSuffix("/")
-            return (if ("://" in base) base else "http://$base") + "/api/genkan/session"
+            return (if ("://" in base) base else "http://$base") + "/api/sessions"
         }
 }
 
@@ -73,8 +73,8 @@ sealed interface ReadingLogStatus {
 
 /**
  * Sends reading sessions to mochibridge, which logs them into kechimochi with minutes and
- * characters (`POST /api/genkan/session`). A session is sent again whenever its numbers move,
- * and mochibridge keeps the largest it has seen, so a late or repeated send never shrinks a
+ * characters (`POST /api/sessions`, its generic push API). A session is sent again whenever its
+ * numbers move, and mochibridge keeps the largest it has seen, so a late or repeated send never shrinks a
  * log. A session is final once it closed or has been idle for four hours.
  */
 @Singleton
@@ -118,49 +118,78 @@ class ReadingLogPusher @Inject constructor(
             val body = payload(session, now)
             val fingerprint = "${body["seconds"]}/${body["characters"]}/${body["final"]}"
             if (fingerprint == session.pushed) continue
-            val error = send(config, body)
-            if (error != null) {
-                _status.value = ReadingLogStatus.Failed(error)
-                return@withLock
+            when (val result = send(config, body)) {
+                Sent.Ok -> sent++
+                // The server refused this body; sending it again won't help, so it counts as sent.
+                is Sent.Refused -> Log.w(TAG, "mochibridge refused session ${session.id}: ${result.detail}")
+                is Sent.Later -> {
+                    _status.value = ReadingLogStatus.Failed(result.reason)
+                    return@withLock
+                }
             }
             dao.markPushed(session.id, fingerprint)
-            sent++
         }
         _status.value = if (sent > 0) ReadingLogStatus.Sent(sent) else ReadingLogStatus.UpToDate
         if (sent > 0) Log.i(TAG, "Sent $sent reading sessions")
     }
 
-    private fun payload(s: ReadingSessionTotals, now: Long): Map<String, Any?> = buildMap {
-        put("session_id", "genkan-${s.id}-${s.started}")
-        put("kind", if (s.platform == LocalShelves.PC_SLUG) "vn" else "game")
-        put("title", s.title)
-        s.rommRomId?.let { put("romm_rom_id", it) }
-        s.platform?.let { put("platform", it) }
-        put("started_at", Instant.ofEpochMilli(s.started).toString())
-        put("seconds", s.activeMs / 1000)
-        put("characters", s.characters)
-        put("final", s.ended != null || now - s.lastActivity > ReadingRules.SESSION_GAP_MS)
-        put("language", "ja")
-        put("quality", "measured")
+    private sealed class Sent {
+        data object Ok : Sent()
+        data class Refused(val detail: String) : Sent()
+        data class Later(val reason: String) : Sent()
     }
 
-    /** Null when it was taken, else why not. */
-    private fun send(config: ReadingLogConfig, body: Map<String, Any?>): String? = try {
+    private fun send(config: ReadingLogConfig, body: Map<String, Any?>): Sent = try {
         val request = Request.Builder()
             .url(config.endpoint)
             .apply { if (config.token.isNotBlank()) header("Authorization", "Bearer ${config.token}") }
             .post(adapter.toJson(body).toRequestBody(JSON))
             .build()
-        client.newCall(request).execute().use { if (it.isSuccessful) null else "HTTP ${it.code}" }
+        client.newCall(request).execute().use {
+            when {
+                it.isSuccessful -> Sent.Ok
+                it.code == 400 -> Sent.Refused(it.body?.string().orEmpty().take(300))
+                it.code == 401 -> Sent.Later("mochibridge refused the API token")
+                it.code == 503 -> Sent.Later("mochibridge has its session source switched off")
+                else -> Sent.Later("HTTP ${it.code}")
+            }
+        }
     } catch (e: Exception) {
-        e.message ?: e.javaClass.simpleName
+        Sent.Later(e.message ?: e.javaClass.simpleName)
     }
 
-    private companion object {
-        const val TAG = "ReadingLogPusher"
-        const val PUSH_MS = 60_000L
+    companion object {
+        private const val TAG = "ReadingLogPusher"
+
+        /**
+         * One session in mochibridge's generic push format (POST /api/sessions). A PC game is a
+         * visual novel, read; anything else is a game, played. Re-posted as it grows; the server
+         * keeps the larger seconds and characters.
+         */
+        fun payload(s: ReadingSessionTotals, now: Long): Map<String, Any?> = buildMap {
+            val novel = s.platform == LocalShelves.PC_SLUG
+            put("client", "genkan")
+            put("session_id", "genkan-${s.id}-${s.started}")
+            put("started_at", Instant.ofEpochMilli(s.started).toString())
+            put("seconds", s.activeMs / 1000)
+            put("characters", s.characters)
+            put("final", s.ended != null || now - s.lastActivity > ReadingRules.SESSION_GAP_MS)
+            put("content_type", if (novel) "Visual Novel" else "Videogame")
+            put("activity_type", if (novel) "Reading" else "Playing")
+            put("language", "ja")
+            put(
+                "entry",
+                buildMap {
+                    put("title", s.title)
+                    s.rommRomId?.let { put("ids", mapOf("romm.rom_id" to it)) }
+                    s.platform?.let { put("fields", mapOf("Platform" to if (novel) "PC" else it)) }
+                },
+            )
+        }
+
+        private const val PUSH_MS = 60_000L
         /** Sessions older than the most recent ones are settled already. */
-        const val RECENT = 50
-        val JSON = "application/json; charset=utf-8".toMediaType()
+        private const val RECENT = 50
+        private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
