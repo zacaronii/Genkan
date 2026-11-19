@@ -1,9 +1,7 @@
 package app.genkan.ui
 
-import android.os.Environment
 import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import app.genkan.dictionary.Dictionaries
 import app.genkan.home.DualScreenState
 import app.genkan.library.LibrarySync
@@ -14,14 +12,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class SetupAction(val label: String) {
     ENABLE_HOME("Enable Genkan as Home"),
     DISABLE_HOME("Disable Genkan as Home"),
     SYNC_LIBRARY("Sync library now"),
-    IMPORT_DICTIONARIES("Import dictionaries from Download"),
+    DICTIONARIES("Dictionaries"),
     USAGE_ACCESS("Usage access (exact play time)"),
     SIGN_OUT("Sign out of RomM"),
 }
@@ -35,12 +32,6 @@ class SetupViewModel @Inject constructor(
     private val sessionTracker: SessionTracker,
 ) : ViewModel() {
 
-    /** Yomitan zips in Download or a folder directly inside it. Runs on past leaving settings. */
-    fun importDictionaries() {
-        viewModelScope.launch {
-            dictionaries.importFrom(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS))
-        }
-    }
 
     private val _usageAccess = MutableStateFlow(sessionTracker.hasUsageAccess())
     /** Without it, play time runs from launch until Genkan is back in front, sleep included. */

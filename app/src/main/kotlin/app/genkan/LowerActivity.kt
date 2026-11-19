@@ -27,6 +27,12 @@ private const val TAG = "LowerActivity"
 private const val REFOCUS_DEBOUNCE_MS = 120L
 
 /**
+ * Wait after the companion comes to the front before handing focus back: its window was just
+ * added, and removing FocusDirector's within ~400 ms of that crashes the Thor (T5).
+ */
+private const val RESUME_REFOCUS_MS = 600L
+
+/**
  * Bottom screen: the reading companion. Started by the OS through SECONDARY_HOME once Genkan
  * is the default home. Never finish() it to get rid of it; [DualScreenState.releaseLower]
  * disables the component instead (T1).
@@ -57,6 +63,17 @@ class LowerActivity : ComponentActivity() {
                 ReaderScreen(viewModel = reader)
             }
         }
+    }
+
+    /**
+     * A companion that comes to the front (started after Genkan restarts, or respawned) takes
+     * input focus with it, and the controller would then drive the bottom screen until the top
+     * one is touched. It never wants the pad, so hand focus back.
+     */
+    override fun onResume() {
+        super.onResume()
+        handler.removeCallbacks(refocus)
+        handler.postDelayed(refocus, maxOf(RESUME_REFOCUS_MS, refocusGate.delayFor(SystemClock.uptimeMillis())))
     }
 
     /**

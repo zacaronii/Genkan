@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import app.genkan.dictionary.ImportStatus
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
 import app.genkan.romm.RomMState
@@ -28,7 +27,6 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
-    val dictionaryImport by viewModel.dictionaries.importStatus.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -59,13 +57,8 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
             color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            "Dictionaries: " + (dictionaries.takeIf { it.isNotEmpty() }?.joinToString { it.title } ?: "none") +
-                when (val i = dictionaryImport) {
-                    is ImportStatus.Running -> "  ·  importing ${i.current} (${i.done + 1} of ${i.total})…"
-                    is ImportStatus.Done -> "  ·  last import: ${i.imported} new, ${i.skipped} already there" +
-                        (if (i.failed.isEmpty()) "" else ", failed: ${i.failed.joinToString()}")
-                    ImportStatus.Idle -> ""
-                },
+            "Dictionaries: " + if (dictionaries.isEmpty()) "none imported" else
+                "${dictionaries.count { it.enabled }} on of ${dictionaries.size} (${dictionaries.filter { it.enabled }.joinToString { it.title }})",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

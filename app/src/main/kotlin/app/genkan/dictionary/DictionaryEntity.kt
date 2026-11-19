@@ -48,4 +48,10 @@ interface DictionaryDao {
 
     @Query("DELETE FROM dictionaries WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE dictionaries SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
+
+    @Query("UPDATE dictionaries SET position = :position WHERE id = :id")
+    suspend fun setPosition(id: Long, position: Int)
 }

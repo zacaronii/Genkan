@@ -129,6 +129,26 @@ class Dictionaries @Inject constructor(
         }
     }
 
+    suspend fun setEnabled(dictionary: DictionaryEntity, enabled: Boolean) = withContext(native) {
+        lock.withLock {
+            dao.setEnabled(dictionary.id, enabled)
+            loaded = false
+        }
+    }
+
+    /** Moves a dictionary [delta] places in the popup's order (negative: up). */
+    suspend fun move(dictionary: DictionaryEntity, delta: Int) = withContext(native) {
+        lock.withLock {
+            val order = dao.list().toMutableList()
+            val from = order.indexOfFirst { it.id == dictionary.id }
+            val to = (from + delta).coerceIn(0, order.lastIndex)
+            if (from < 0 || from == to) return@withLock
+            order.add(to, order.removeAt(from))
+            order.forEachIndexed { i, d -> if (d.position != i) dao.setPosition(d.id, i) }
+            loaded = false
+        }
+    }
+
     /** Looks up the start of [text]: the longest dictionary words it begins with, deinflected. */
     suspend fun lookup(text: String, maxResults: Int = MAX_RESULTS): LookupResult = withContext(native) {
         lock.withLock {
