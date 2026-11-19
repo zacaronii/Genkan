@@ -1,0 +1,35 @@
+Genkan
+Copyright (C) 2026 Genkan contributors
+
+Genkan is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See LICENSE.
+
+Genkan includes code adapted from the projects below. Each adapted file
+carries an "Adapted from" line naming its original path.
+
+--------------------------------------------------------------------------
+Argosy Launcher (GPL-3.0)
+https://github.com/rommapp/argosy-launcher
+Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
+
+  app/src/main/kotlin/com/nendo/argosy/util/AynThor.kt
+    -> app/src/main/kotlin/app/genkan/hardware/AynThor.kt
+  app/src/main/kotlin/com/nendo/argosy/core/input/HomeKeys.kt
+    -> app/src/main/kotlin/app/genkan/input/HomeKeys.kt
+  app/src/test/kotlin/com/nendo/argosy/core/input/HomeKeysTest.kt
+    -> app/src/test/kotlin/app/genkan/input/HomeKeysTest.kt
+  app/src/main/kotlin/com/nendo/argosy/hardware/FocusDirectorActivity.kt
+    -> app/src/main/kotlin/app/genkan/hardware/FocusDirectorActivity.kt
+  app/src/main/kotlin/com/nendo/argosy/util/HomeAppComponent.kt
+    -> app/src/main/kotlin/app/genkan/home/HomeAppComponent.kt
+  app/src/main/kotlin/com/nendo/argosy/util/SecondaryHomeComponent.kt
+    -> app/src/main/kotlin/app/genkan/home/SecondaryHomeComponent.kt
+  app/src/main/kotlin/com/nendo/argosy/util/DisplayAffinityHelper.kt
+    (display-type filter only) -> app/src/main/kotlin/app/genkan/display/DisplayFilter.kt
+  app/src/main/kotlin/com/nendo/argosy/hardware/SecondaryHomeActivity.kt
+    (default-display placement check only)
+    -> app/src/main/kotlin/app/genkan/LowerActivity.kt
+  .github/workflows/build.yml
+    -> .github/workflows/ci.yml

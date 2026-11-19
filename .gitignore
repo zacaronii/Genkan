@@ -1,0 +1,29 @@
+# Gradle / Android
+.gradle/
+build/
+/captures/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+local.properties
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Signing and secrets
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+
+# Claude Code per-user settings
+.claude/settings.local.json
+
+# Personal notes: kept locally, never published
+/Genkan initial buildout plan.md
+/private/
