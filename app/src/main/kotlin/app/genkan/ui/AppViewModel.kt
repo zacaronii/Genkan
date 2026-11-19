@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class Screen { LOADING, LOGIN, LIBRARY, SETTINGS, DICTIONARIES }
+enum class Screen { LOADING, LOGIN, LIBRARY, SETTINGS, DICTIONARIES, ANKI }
 
 /** Top-screen navigation: the library when signed in, the login otherwise, settings on Start. */
 @HiltViewModel
@@ -28,11 +28,12 @@ class AppViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val settingsOpen = MutableStateFlow(false)
-    private val dictionariesOpen = MutableStateFlow(false)
+    /** The settings page open over settings, if any (Dictionaries, Anki). */
+    private val page = MutableStateFlow<Screen?>(null)
 
-    val screen: StateFlow<Screen> = combine(session.state, settingsOpen, dictionariesOpen) { state, settings, dictionaries ->
+    val screen: StateFlow<Screen> = combine(session.state, settingsOpen, page) { state, settings, page ->
         when {
-            settings && dictionaries -> Screen.DICTIONARIES
+            settings && page != null -> page
             settings -> Screen.SETTINGS
             state is RomMState.Loading -> Screen.LOADING
             state is RomMState.SignedIn -> Screen.LIBRARY
@@ -63,15 +64,15 @@ class AppViewModel @Inject constructor(
 
     fun closeSettings() {
         settingsOpen.value = false
-        dictionariesOpen.value = false
+        page.value = null
     }
 
-    /** A page of settings: B goes back to settings, not out of them. */
-    fun openDictionaries() {
-        dictionariesOpen.value = true
+    /** A page of settings (Dictionaries, Anki): B goes back to settings, not out of them. */
+    fun openPage(screen: Screen) {
+        page.value = screen
     }
 
-    fun closeDictionaries() {
-        dictionariesOpen.value = false
+    fun closePage() {
+        page.value = null
     }
 }

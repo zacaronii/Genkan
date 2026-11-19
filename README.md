@@ -5,7 +5,8 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phases 1 and 2** done, **Phase 3** (OCR) in progress: RomM sign-in, library, downloads, launching and play
+Status: **Phases 1 and 2** done; **Phase 3** (OCR) works with ML Kit; **Phase 4** (Anki
+cards) in progress: RomM sign-in, library, downloads, launching and play
 sessions; the bottom-screen reader with a texthooker connection, backlog, thread picker and
 a Yomitan dictionary popup. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -48,6 +49,12 @@ a Yomitan dictionary popup. See
   screen to read for each game, drawn over a picture of the top screen; by default it's the
   lower third. A line is read once its text stops changing, with ML Kit's on-device
   Japanese model.
+- **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
+  settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
+  word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,
+  and a picture of the top screen while OCR is on. Cards wait in an outbox when Anki can't be
+  reached and are sent when it answers; the badge shows *Queued* or *In Anki*. To try it
+  without Anki: `python3 scripts/fake_ankiconnect.py` and `adb reverse tcp:8765 tcp:8765`.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

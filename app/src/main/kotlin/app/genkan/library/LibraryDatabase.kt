@@ -2,6 +2,9 @@ package app.genkan.library
 
 import androidx.room.AutoMigration
 import androidx.room.Dao
+import app.genkan.anki.AnkiDao
+import app.genkan.anki.MinedWord
+import app.genkan.anki.OutboxCard
 import app.genkan.dictionary.DictionaryDao
 import app.genkan.dictionary.DictionaryEntity
 import app.genkan.download.DownloadDao
@@ -89,11 +92,13 @@ interface LibraryDao {
 
 @Database(
     entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class, DictionaryEntity::class,
-        ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class],
-    version = 6,
+        ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class,
+        OutboxCard::class, MinedWord::class],
+    version = 7,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
-        AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6)],
+        AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
@@ -102,4 +107,5 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dictionaries(): DictionaryDao
     abstract fun reader(): ReaderDao
     abstract fun ocrRegions(): OcrRegionDao
+    abstract fun anki(): AnkiDao
 }

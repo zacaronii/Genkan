@@ -19,6 +19,9 @@ const SMALL_KANA_SET = new Set('ぁぃぅぇぉゃゅょゎァィゥェォャュ
 
 let lastTerms = null;
 let lastStyles = null;
+let lastStates = null;
+
+const STATE_LABELS = { NEW: '＋ Anki', QUEUED: 'Queued', MINED: 'In Anki' };
 
 function el(tag, props = {}, children = []) {
     const element = document.createElement(tag);
@@ -137,6 +140,15 @@ function buildFurigana(parent, expression, reading) {
             parent.append(...wrapKanji(text));
         }
     }
+}
+
+/** Furigana as Anki's {furigana-plain}: 漢字[かんじ], a space before each bracketed group. */
+function furiganaPlain(expression, reading) {
+    let out = '';
+    for (const [text, furigana] of segmentFurigana(expression, reading)) {
+        out += furigana ? ` ${text}[${furigana}]` : text;
+    }
+    return out.trim();
 }
 
 /** Scopes a dictionary's own CSS to its glossaries (Hoshi's preprocessor). */
@@ -363,11 +375,52 @@ function parseGlossary(text) {
     }
 }
 
-function renderTerm(hit) {
+/** One glossary's definitions as HTML, as Yomitan writes them into a card. */
+function glossaryItemHtml(g) {
+    const item = document.createElement('span');
+    renderStructuredContent(item, parseGlossary(g.glossary), g.dictionary);
+    const tags = (g.definitionTags || '').split(' ').filter(Boolean);
+    const label = [...tags, g.dictionary].join(', ');
+    return `<li data-dictionary="${escapeAttr(g.dictionary)}"><i>(${escapeText(label)})</i> ${item.innerHTML}</li>`;
+}
+
+/** Yomitan's {glossary}: every definition; {glossary-first}: the first dictionary's. */
+function cardGlossaries(hit) {
+    const glossaries = hit.glossaries || [];
+    const wrap = items => `<div style="text-align: left;" class="yomitan-glossary"><ol>${items.join('')}</ol></div>`;
+    const first = glossaries.length ? glossaries.filter(g => g.dictionary === glossaries[0].dictionary) : [];
+    return { all: wrap(glossaries.map(glossaryItemHtml)), first: wrap(first.map(glossaryItemHtml)) };
+}
+
+function escapeText(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(text) {
+    return escapeText(text).replace(/"/g, '&quot;');
+}
+
+function mineButton(index, state) {
+    const button = el('span', { className: `mine mine-${(state || 'NEW').toLowerCase()}`, textContent: STATE_LABELS[state || 'NEW'] });
+    button.dataset.index = index;
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        const hit = lastTerms && lastTerms[index];
+        if (!hit || !button.classList.contains('mine-new')) return;
+        const glossary = cardGlossaries(hit);
+        window.GenkanPopup?.mine(index, glossary.all, glossary.first, furiganaPlain(hit.expression, hit.reading));
+    });
+    return button;
+}
+
+function renderTerm(hit, index, state) {
     const entry = el('div', { className: 'entry' });
+    const top = el('div', { className: 'entry-top' });
     const headword = el('div', { className: 'headword', lang: 'ja' });
     buildFurigana(headword, hit.expression, hit.reading);
-    entry.appendChild(headword);
+    top.appendChild(headword);
+    top.appendChild(mineButton(index, state));
+    entry.appendChild(top);
 
     const tags = el('div', { className: 'tags' });
     if (hit.trace && hit.trace.length) {
@@ -427,16 +480,17 @@ function setStyles(styles) {
         (styles || []).map(s => constructDictCss(s.css, s.dictionary)).join('\n');
 }
 
-window.genkanShow = function (hits, styles) {
+window.genkanShow = function (hits, styles, states) {
     setStyles(styles);
     lastTerms = hits;
     lastStyles = styles;
+    lastStates = states || [];
     const root = document.getElementById('entries');
     root.replaceChildren();
     if (!hits || !hits.length) {
         root.appendChild(el('div', { className: 'empty', textContent: 'Nothing found.' }));
     } else {
-        hits.forEach(hit => root.appendChild(renderTerm(hit)));
+        hits.forEach((hit, i) => root.appendChild(renderTerm(hit, i, lastStates[i])));
     }
     window.scrollTo(0, 0);
 };
@@ -446,7 +500,7 @@ window.genkanShowKanji = function (character, entries) {
     root.replaceChildren();
     if (lastTerms) {
         const back = el('span', { className: 'back', textContent: '← Back' });
-        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles));
+        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles, lastStates));
         root.appendChild(back);
     }
     const entry = el('div', { className: 'entry kanji-entry' });
@@ -470,4 +524,14 @@ window.genkanShowKanji = function (character, entries) {
     }
     root.appendChild(entry);
     window.scrollTo(0, 0);
+};
+
+/** Updates the Anki buttons without re-rendering (and losing the scroll position). */
+window.genkanSetStates = function (states) {
+    lastStates = states || [];
+    document.querySelectorAll('.mine').forEach(button => {
+        const state = lastStates[Number(button.dataset.index)] || 'NEW';
+        button.className = `mine mine-${state.toLowerCase()}`;
+        button.textContent = STATE_LABELS[state];
+    });
 };

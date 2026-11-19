@@ -3,6 +3,9 @@ package app.genkan.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.graphics.Bitmap
+import app.genkan.anki.AnkiMiner
+import app.genkan.anki.MineSource
+import app.genkan.anki.MinedState
 import app.genkan.capture.ScreenCapture
 import app.genkan.dictionary.Dictionaries
 import app.genkan.ocr.OcrReader
@@ -20,7 +23,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** A word looked up in the backlog: where it starts, and what the dictionaries found there. */
-data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?) {
+data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, val lineText: String = "") {
     /** The characters the longest match covers, for the highlight. */
     val end: Int get() = start + (result?.matchedLength ?: 0)
 }
@@ -31,7 +34,16 @@ class ReaderViewModel @Inject constructor(
     val dictionaries: Dictionaries,
     val ocr: OcrReader,
     val capture: ScreenCapture,
+    private val miner: AnkiMiner,
 ) : ViewModel(), PopupActions {
+
+    /** The entries the popup shows now (a link can replace the tapped word's). */
+    private var shownResult: LookupResult? = null
+
+    init {
+        // A card queued offline reaching Anki later turns its badge to "In Anki".
+        viewModelScope.launch { miner.deliveries.collect { refreshStates() } }
+    }
 
     private val _editingArea = MutableStateFlow<Bitmap?>(null)
     /** The top-screen snapshot the reading area is being drawn on, while the editor is open. */
@@ -88,12 +100,59 @@ class ReaderViewModel @Inject constructor(
         // Start on a whole character: never between the halves of a surrogate pair (𠮟).
         val start = if (offset > 0 && line.text[offset].isLowSurrogate()) offset - 1 else offset
         lookupJob?.cancel()
-        _lookup.value = Lookup(line.id, start, null)
+        _lookup.value = Lookup(line.id, start, null, line.text)
         _popup.value = null
         lookupJob = viewModelScope.launch {
             val result = dictionaries.lookup(line.text.substring(start))
-            _lookup.value = Lookup(line.id, start, result)
-            _popup.value = PopupContent.Terms(result.json, dictionaries.stylesJson())
+            _lookup.value = Lookup(line.id, start, result, line.text)
+            show(result)
+        }
+    }
+
+    /** Shows [result] with each entry's Anki badge, then checks Anki itself for them. */
+    private suspend fun show(result: LookupResult) {
+        shownResult = result
+        val styles = dictionaries.stylesJson()
+        val expressions = result.hits.map { it.expression }
+        _popup.value = PopupContent.Terms(result.json, styles, statesJson(expressions))
+        viewModelScope.launch {
+            miner.refreshFromAnki(expressions)
+            refreshStates()
+        }
+    }
+
+    private suspend fun statesJson(expressions: List<String>): String {
+        val states = miner.states(expressions)
+        return expressions.joinToString(",", "[", "]") { "\"${states[it] ?: MinedState.NEW}\"" }
+    }
+
+    private suspend fun refreshStates() {
+        val current = _popup.value as? PopupContent.Terms ?: return
+        val result = shownResult ?: return
+        if (current.hitsJson != result.json) return
+        _popup.value = current.copy(statesJson = statesJson(result.hits.map { it.expression }))
+    }
+
+    override fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
+        val lookup = _lookup.value ?: return
+        val hit = shownResult?.hits?.getOrNull(index) ?: return
+        // The top screen as it is now: the game's scene for the card.
+        val picture = if (capture.running.value) capture.frame() else null
+        viewModelScope.launch {
+            miner.mine(
+                MineSource(
+                    hit = hit,
+                    sentence = lookup.lineText,
+                    matchStart = lookup.start,
+                    matchLength = if (shownResult == lookup.result) hit.matched.length else 0,
+                    glossaryHtml = glossaryHtml,
+                    firstGlossaryHtml = firstGlossaryHtml,
+                    furiganaPlain = furiganaPlain,
+                    gameTitle = session.game.value.title,
+                ),
+                picture,
+            )
+            refreshStates()
         }
     }
 
@@ -109,9 +168,7 @@ class ReaderViewModel @Inject constructor(
     override fun lookUp(text: String) {
         if (_lookup.value == null) return
         lookupJob?.cancel()
-        lookupJob = viewModelScope.launch {
-            _popup.value = PopupContent.Terms(dictionaries.lookup(text).json, dictionaries.stylesJson())
-        }
+        lookupJob = viewModelScope.launch { show(dictionaries.lookup(text)) }
     }
 
     fun closeLookup() {

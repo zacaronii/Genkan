@@ -1,6 +1,7 @@
 package app.genkan
 
 import android.app.Application
+import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
@@ -18,12 +19,15 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var rommSession: RomMSession
     @Inject lateinit var readerSession: ReaderSession
+    @Inject lateinit var ankiMiner: AnkiMiner
 
     override fun onCreate() {
         super.onCreate()
         // The reader listens for a texthooker from the start: a game's lines can arrive while
         // the bottom screen is released or not yet placed.
         readerSession.start()
+        // Cards made offline go to Anki once it answers.
+        ankiMiner.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

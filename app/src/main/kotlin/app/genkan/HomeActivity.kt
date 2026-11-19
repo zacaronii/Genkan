@@ -29,6 +29,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import app.genkan.input.HomeKeys
 import app.genkan.input.PadKey
+import app.genkan.ui.AnkiSettingsScreen
+import app.genkan.ui.AnkiSettingsViewModel
 import app.genkan.ui.AppViewModel
 import app.genkan.ui.DictionariesScreen
 import app.genkan.ui.DictionariesViewModel
@@ -60,6 +62,7 @@ class HomeActivity : ComponentActivity() {
     private val libraryViewModel: LibraryViewModel by viewModels()
     private val loginViewModel: LoginViewModel by viewModels()
     private val dictionariesViewModel: DictionariesViewModel by viewModels()
+    private val ankiSettingsViewModel: AnkiSettingsViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -98,6 +101,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.LIBRARY -> LibraryScreen(libraryViewModel)
                     Screen.SETTINGS -> SetupScreen(viewModel, onAction = ::run)
                     Screen.DICTIONARIES -> DictionariesScreen(dictionariesViewModel)
+                    Screen.ANKI -> AnkiSettingsScreen(ankiSettingsViewModel)
                 }
             }
         }
@@ -186,8 +190,14 @@ class HomeActivity : ComponentActivity() {
                     if (!result.consumed) return super.dispatchKeyEvent(event)
                 }
             }
+            // A form: the D-pad moves Compose focus between its fields.
+            Screen.ANKI -> when (pad) {
+                PadKey.B -> appViewModel.closePage()
+                PadKey.START -> appViewModel.closeSettings()
+                else -> return super.dispatchKeyEvent(event)
+            }
             Screen.DICTIONARIES -> when {
-                pad == PadKey.B -> appViewModel.closeDictionaries()
+                pad == PadKey.B -> appViewModel.closePage()
                 pad == PadKey.START -> appViewModel.closeSettings()
                 pad == null || !dictionariesViewModel.onKey(pad) -> return super.dispatchKeyEvent(event)
             }
@@ -202,7 +212,8 @@ class HomeActivity : ComponentActivity() {
             SetupAction.ENABLE_HOME -> enableHome()
             SetupAction.DISABLE_HOME -> disableHome()
             SetupAction.SYNC_LIBRARY -> lifecycleScope.launch { viewModel.librarySync.sync() }
-            SetupAction.DICTIONARIES -> appViewModel.openDictionaries()
+            SetupAction.DICTIONARIES -> appViewModel.openPage(Screen.DICTIONARIES)
+            SetupAction.ANKI -> appViewModel.openPage(Screen.ANKI)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

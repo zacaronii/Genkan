@@ -2,6 +2,7 @@ package app.genkan
 
 import android.content.Context
 import androidx.room.Room
+import app.genkan.anki.AnkiDao
 import app.genkan.dictionary.DictionaryDao
 import app.genkan.ocr.OcrRegionDao
 import app.genkan.reader.ReaderDao
@@ -48,4 +49,7 @@ object AppModule {
 
     @Provides
     fun ocrRegionDao(db: LibraryDatabase): OcrRegionDao = db.ocrRegions()
+
+    @Provides
+    fun ankiDao(db: LibraryDatabase): AnkiDao = db.anki()
 }
