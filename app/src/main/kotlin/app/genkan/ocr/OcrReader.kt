@@ -54,6 +54,9 @@ class OcrReader @Inject constructor(
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
 
+    /** Set while Genkan's own launcher is on the top screen: there is no game text to read. */
+    @Volatile var launcherInFront = false
+
     fun setEnabled(on: Boolean) {
         _enabled.value = on
         if (on) start() else job?.cancel()
@@ -75,7 +78,7 @@ class OcrReader @Inject constructor(
         job = scope.launch {
             while (isActive) {
                 delay(INTERVAL_MS)
-                if (!capture.running.value) continue
+                if (!capture.running.value || launcherInFront) continue
                 val frame = capture.frame() ?: continue
                 val box = crop(frame, region.value) ?: continue
                 val pixels = IntArray(box.width * box.height)

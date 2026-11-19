@@ -21,6 +21,7 @@ import androidx.activity.viewModels
 import app.genkan.home.DualScreenState
 import android.view.Display
 import app.genkan.hardware.FocusDirectorActivity
+import app.genkan.ocr.OcrReader
 import app.genkan.play.SessionTracker
 import app.genkan.home.HomeAppComponent
 import app.genkan.home.SecondaryHomeComponent
@@ -58,6 +59,7 @@ class HomeActivity : ComponentActivity() {
 
     @Inject lateinit var dualScreen: DualScreenState
     @Inject lateinit var sessionTracker: SessionTracker
+    @Inject lateinit var ocrReader: OcrReader
 
     private val viewModel: SetupViewModel by viewModels()
     private val appViewModel: AppViewModel by viewModels()
@@ -126,12 +128,18 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ocrReader.launcherInFront = true
         dualScreen.refresh()
         viewModel.refresh()
         startCompanionIfMissing()
         lifecycleScope.launch {
             if (sessionTracker.onLauncherResumed()) reclaimFocusAfterGame()
         }
+    }
+
+    override fun onPause() {
+        ocrReader.launcherInFront = false
+        super.onPause()
     }
 
     /**

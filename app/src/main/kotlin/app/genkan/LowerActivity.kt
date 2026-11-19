@@ -54,6 +54,7 @@ class LowerActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val refocusGate = RefocusGate()
     private val refocus = Runnable {
+        if (!hasWindowFocus()) return@Runnable
         refocusGate.markLaunched(SystemClock.uptimeMillis())
         FocusDirectorActivity.launchOnDisplay(this, Display.DEFAULT_DISPLAY)
     }
@@ -77,14 +78,25 @@ class LowerActivity : ComponentActivity() {
     }
 
     /**
-     * A companion that comes to the front (started after Genkan restarts, or respawned) takes
-     * input focus with it, and the controller would then drive the bottom screen until the top
-     * one is touched. It never wants the pad, so hand focus back.
+     * Re-reported on every resume, not only in onCreate: when the screens sleep the bottom
+     * display reads as off and [DualScreenState.refresh] forgets the companion, and the launcher
+     * then restarts it on wake. That brings this same instance back, so onCreate never runs.
      */
     override fun onResume() {
         super.onResume()
+        if (!isFinishing) dualScreen.onLowerPlaced(ownDisplayId)
+    }
+
+    /**
+     * A companion that comes to the front (started after Genkan restarts, or respawned) takes
+     * input focus with it, and the controller would then drive the bottom screen until the top
+     * one is touched. It never wants the pad, so hand focus back, but only while it really holds
+     * focus: refocusing on every resume ping-ponged with the launcher's resume forever.
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
         handler.removeCallbacks(refocus)
-        handler.postDelayed(refocus, maxOf(RESUME_REFOCUS_MS, refocusGate.delayFor(SystemClock.uptimeMillis())))
+        if (hasFocus) handler.postDelayed(refocus, maxOf(RESUME_REFOCUS_MS, refocusGate.delayFor(SystemClock.uptimeMillis())))
     }
 
     /**

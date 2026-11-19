@@ -71,14 +71,14 @@ fun ReadingLogScreen(viewModel: ReadingLogViewModel) {
         Text("Reading log", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "Genkan counts reading time and characters (kana and kanji, each line once) per game. " +
-                "With a mochibridge address and its API token, each session is logged in kechimochi " +
+                "With a mochibridge address (and its API token, if it has one), each session is logged in kechimochi " +
                 "with both. B: back",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
         )
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "mochibridge address (host:port)")
-            GenkanTextField(form.token, { v -> viewModel.edit { it.copy(token = v) } }, "API token (web.api_token)", keyboardType = KeyboardType.Password)
+            GenkanTextField(form.token, { v -> viewModel.edit { it.copy(token = v) } }, "API token (web.api_token, if set)", keyboardType = KeyboardType.Password)
             ActionRow("Save and send now", focused = null, onClick = viewModel::saveAndSend)
         }
         Text(

@@ -32,9 +32,9 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Where reading sessions are sent: a mochibridge server and its API token. */
+/** Where reading sessions are sent: a mochibridge server and its API token, if it has one. */
 data class ReadingLogConfig(val address: String = "", val token: String = "") {
-    val configured: Boolean get() = address.isNotBlank() && token.isNotBlank()
+    val configured: Boolean get() = address.isNotBlank()
 
     val endpoint: String
         get() {
@@ -148,7 +148,7 @@ class ReadingLogPusher @Inject constructor(
     private fun send(config: ReadingLogConfig, body: Map<String, Any?>): String? = try {
         val request = Request.Builder()
             .url(config.endpoint)
-            .header("Authorization", "Bearer ${config.token}")
+            .apply { if (config.token.isNotBlank()) header("Authorization", "Bearer ${config.token}") }
             .post(adapter.toJson(body).toRequestBody(JSON))
             .build()
         client.newCall(request).execute().use { if (it.isSuccessful) null else "HTTP ${it.code}" }
