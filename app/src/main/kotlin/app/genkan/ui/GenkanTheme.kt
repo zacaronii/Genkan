@@ -86,6 +86,12 @@ fun GenkanTextField(
             textStyle = MaterialTheme.typography.titleMedium.copy(color = colors.onSurface),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.primary),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
+            // API keys and tokens are shown as dots, like any password.
+            visualTransformation = if (keyboardType == androidx.compose.ui.text.input.KeyboardType.Password) {
+                androidx.compose.ui.text.input.PasswordVisualTransformation()
+            } else {
+                androidx.compose.ui.text.input.VisualTransformation.None
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 6.dp)

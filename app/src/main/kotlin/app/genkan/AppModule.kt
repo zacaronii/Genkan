@@ -6,6 +6,7 @@ import app.genkan.anki.AnkiDao
 import app.genkan.dictionary.DictionaryDao
 import app.genkan.ocr.OcrRegionDao
 import app.genkan.reader.ReaderDao
+import app.genkan.stats.ReadingDao
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
@@ -52,4 +53,7 @@ object AppModule {
 
     @Provides
     fun ankiDao(db: LibraryDatabase): AnkiDao = db.anki()
+
+    @Provides
+    fun readingDao(db: LibraryDatabase): ReadingDao = db.reading()
 }

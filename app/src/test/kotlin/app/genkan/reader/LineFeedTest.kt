@@ -39,6 +39,13 @@ class LineFeedTest {
     }
 
     @Test
+    fun `a line's source id ignores spaces and punctuation`() {
+        assertEquals(Lines.sourceId("はい、行こう"), Lines.sourceId("はい行こう。"))
+        assertEquals(18, Lines.sourceId("はい").length)
+        assertTrue(Lines.sourceId("はい") != Lines.sourceId("いいえ"))
+    }
+
+    @Test
     fun `message text reads plain frames and texthooker json`() {
         assertEquals("ただの行", Lines.messageText("ただの行"))
         assertEquals("文です", Lines.messageText("""{"sentence":"文です","process_path":"C:/game.exe"}"""))

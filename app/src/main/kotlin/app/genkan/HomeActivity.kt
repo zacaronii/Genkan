@@ -32,6 +32,8 @@ import app.genkan.input.PadKey
 import app.genkan.ui.AnkiSettingsScreen
 import app.genkan.ui.AnkiSettingsViewModel
 import app.genkan.ui.AppViewModel
+import app.genkan.ui.ReadingLogScreen
+import app.genkan.ui.ReadingLogViewModel
 import app.genkan.ui.DictionariesScreen
 import app.genkan.ui.DictionariesViewModel
 import app.genkan.ui.LibraryScreen
@@ -63,6 +65,7 @@ class HomeActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val dictionariesViewModel: DictionariesViewModel by viewModels()
     private val ankiSettingsViewModel: AnkiSettingsViewModel by viewModels()
+    private val readingLogViewModel: ReadingLogViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -102,6 +105,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.SETTINGS -> SetupScreen(viewModel, onAction = ::run)
                     Screen.DICTIONARIES -> DictionariesScreen(dictionariesViewModel)
                     Screen.ANKI -> AnkiSettingsScreen(ankiSettingsViewModel)
+                    Screen.READING_LOG -> ReadingLogScreen(readingLogViewModel)
                 }
             }
         }
@@ -191,7 +195,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG -> when (pad) {
                 PadKey.B -> appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
                 else -> return super.dispatchKeyEvent(event)
@@ -214,6 +218,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.SYNC_LIBRARY -> lifecycleScope.launch { viewModel.librarySync.sync() }
             SetupAction.DICTIONARIES -> appViewModel.openPage(Screen.DICTIONARIES)
             SetupAction.ANKI -> appViewModel.openPage(Screen.ANKI)
+            SetupAction.READING_LOG -> appViewModel.openPage(Screen.READING_LOG)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

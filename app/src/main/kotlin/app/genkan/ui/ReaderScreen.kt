@@ -60,6 +60,7 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit, on
     val region by viewModel.ocr.region.collectAsStateWithLifecycle()
     val editing by viewModel.editingArea.collectAsStateWithLifecycle()
     val recording by viewModel.audio.running.collectAsStateWithLifecycle()
+    val reading by viewModel.stats.session.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -71,7 +72,8 @@ fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit, on
             Column(Modifier.weight(1f)) {
                 Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1)
                 Text(
-                    when {
+                    // This session's reading, then where the text comes from.
+                    (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                         ocrOn && !capturing -> "OCR: waiting for capture"
                         ocrOn -> "OCR" + (ocrMs?.let { "  ·  $it ms" } ?: "") + if (recording) "  ·  audio" else ""
                         else -> when (status) {

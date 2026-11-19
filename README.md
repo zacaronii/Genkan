@@ -6,7 +6,7 @@ the bottom screen is a reading companion: a text backlog with tap-to-look-up, an
 later phases, one-tap Anki cards and reading stats.
 
 Status: **Phases 1 and 2** done; **Phase 3** (OCR) works with ML Kit; **Phase 4** (Anki
-cards) in progress: RomM sign-in, library, downloads, launching and play
+cards with picture and sentence audio) and **Phase 5** (reading stats) work: RomM sign-in, library, downloads, launching and play
 sessions; the bottom-screen reader with a texthooker connection, backlog, thread picker and
 a Yomitan dictionary popup. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -57,6 +57,11 @@ a Yomitan dictionary popup. See
   appeared to when the next one did, silence trimmed). Cards wait in an outbox when Anki can't be
   reached and are sent when it answers; the badge shows *Queued* or *In Anki*. To try it
   without Anki: `python3 scripts/fake_ankiconnect.py` and `adb reverse tcp:8765 tcp:8765`.
+- **Reading stats:** while a game started from Genkan is being read, the reader counts its
+  characters (kana and kanji, each line once; Furoshiki's rules) and active reading time
+  (needs a line or a lookup in the last five minutes), shown on the reader's bar. Under
+  *Reading log* in settings, a mochibridge address and API token send each session to
+  kechimochi with minutes and characters; sessions are re-sent as they grow.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

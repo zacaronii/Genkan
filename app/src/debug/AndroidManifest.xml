@@ -15,6 +15,7 @@
             <intent-filter>
                 <action android:name="app.genkan.debug.LOOKUP" />
                 <action android:name="app.genkan.debug.IMPORT_DICTIONARIES" />
+                <action android:name="app.genkan.debug.NOW_PLAYING" />
             </intent-filter>
         </receiver>
         <!-- Debug builds only: a stand-in game screen for OCR tests. -->

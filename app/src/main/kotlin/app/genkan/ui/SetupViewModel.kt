@@ -20,6 +20,7 @@ enum class SetupAction(val label: String) {
     SYNC_LIBRARY("Sync library now"),
     DICTIONARIES("Dictionaries"),
     ANKI("Anki"),
+    READING_LOG("Reading log"),
     USAGE_ACCESS("Usage access (exact play time)"),
     SIGN_OUT("Sign out of RomM"),
 }

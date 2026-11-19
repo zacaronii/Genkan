@@ -85,6 +85,16 @@ object Lines {
     }
 
     /**
+     * A line's identity within its game: the same text again (spaces and punctuation aside)
+     * is a line shown again, not a new one. Furoshiki's SourceId: "l:" and 16 hex digits of
+     * the SHA-1 of [key].
+     */
+    fun sourceId(text: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-1").digest(key(text).toByteArray())
+        return "l:" + digest.take(8).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
      * The text of one WebSocket message: the frame itself, or the "sentence" (else "text") of
      * a frame that is a JSON object. A JSON object without either is no line ("").
      */

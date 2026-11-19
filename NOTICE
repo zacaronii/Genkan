@@ -60,6 +60,12 @@ Pinned commit: 738ccf5c70342b0aed17a9b6b5c56805785ab9fe
     -> app/src/main/kotlin/app/genkan/reader/LineFeed.kt
   home/tests/tests.cpp (the Lines cases)
     -> app/src/test/kotlin/app/genkan/reader/LineFeedTest.kt
+  shared/android/kotlin/org/readers/app/reader/stats/
+    ReadingRules.kt, ActivityModels.kt, ActivityTracker.kt
+    -> app/src/main/kotlin/app/genkan/stats/
+  shared/android/test/org/readers/app/reader/
+    ReadingRulesTest.kt, ActivityTrackerTest.kt
+    -> app/src/test/kotlin/app/genkan/stats/
 
 --------------------------------------------------------------------------
 Hoshi Reader Android (GPL-3.0-or-later; parts derived from Yomitan and Yomichan)

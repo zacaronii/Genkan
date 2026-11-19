@@ -152,7 +152,7 @@ class LibraryViewModel @Inject constructor(
     private fun primaryAction(game: GameEntity) {
         if (LocalShelves.isLocal(game)) {
             if (localShelves.launch(game)) {
-                nowPlaying.started(game.id, game.name)
+                nowPlaying.started(game.id, game.name, game.platformSlug)
                 show("Opening ${game.name}…")
             } else {
                 show("Couldn't open ${game.name}")
@@ -185,7 +185,7 @@ class LibraryViewModel @Inject constructor(
             when (val result = gameLauncher.launch(game, download)) {
                 is LaunchResult.Launched -> {
                     sessionTracker.begin(game.id, result.emulator.packageName)
-                    nowPlaying.started(game.id, game.name)
+                    nowPlaying.started(game.id, game.name, game.platformSlug)
                     show("Starting ${game.name} in ${result.emulator.displayName}…")
                 }
                 is LaunchResult.NoEmulator -> show(

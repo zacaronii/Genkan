@@ -1,5 +1,6 @@
 package app.genkan.reader
 
+import app.genkan.stats.ReadingStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +36,7 @@ class ReaderSession @Inject constructor(
     private val client: TextHookClient,
     private val nowPlaying: NowPlaying,
     private val dao: ReaderDao,
+    private val stats: ReadingStats,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
@@ -61,6 +63,7 @@ class ReaderSession @Inject constructor(
         if (started) return
         started = true
         client.start(scope)
+        stats.start()
         scope.launch { client.messages.collect { lock.withLock { onMessage(it) } } }
         scope.launch {
             var previous = nowPlaying.game.value.key
@@ -107,6 +110,10 @@ class ReaderSession @Inject constructor(
         } else {
             dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now))
         }
+        // A line that carries on one already counted adds only its new part to the stats.
+        val takenBack = out.takesBack
+        val counted = if (takenBack != null && out.text.startsWith(takenBack)) out.text.removePrefix(takenBack) else out.text
+        stats.onLine(out.text, counted)
     }
 
     private fun noteThread(message: HookMessage) {

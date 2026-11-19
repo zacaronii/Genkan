@@ -8,6 +8,7 @@ import app.genkan.anki.MineSource
 import app.genkan.anki.MinedState
 import app.genkan.audio.GameAudioRecorder
 import app.genkan.capture.ScreenCapture
+import app.genkan.stats.ReadingStats
 import app.genkan.dictionary.Dictionaries
 import app.genkan.ocr.OcrReader
 import app.genkan.ocr.OcrRegion
@@ -37,6 +38,7 @@ class ReaderViewModel @Inject constructor(
     val capture: ScreenCapture,
     private val miner: AnkiMiner,
     val audio: GameAudioRecorder,
+    val stats: ReadingStats,
 ) : ViewModel(), PopupActions {
 
     /** The entries the popup shows now (a link can replace the tapped word's). */
@@ -104,6 +106,7 @@ class ReaderViewModel @Inject constructor(
         lookupJob?.cancel()
         _lookup.value = Lookup(line.id, start, null, line.text)
         _popup.value = null
+        stats.onInteraction()
         lookupJob = viewModelScope.launch {
             val result = dictionaries.lookup(line.text.substring(start))
             _lookup.value = Lookup(line.id, start, result, line.text)

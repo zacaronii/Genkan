@@ -10,14 +10,15 @@ import javax.inject.Singleton
 @Singleton
 class NowPlaying @Inject constructor() {
 
-    data class Game(val key: String, val title: String)
+    /** [platform] is the library's platform slug; [rommRomId] is set for RomM games. */
+    data class Game(val key: String, val title: String, val platform: String? = null, val rommRomId: Long? = null)
 
     private val _game = MutableStateFlow(NONE)
     val game: StateFlow<Game> = _game.asStateFlow()
 
     /** [id] is the library id: a RomM rom id, or the PC and Apps shelves' negative ids. */
-    fun started(id: Long, title: String) {
-        _game.value = Game("game:$id", title)
+    fun started(id: Long, title: String, platform: String? = null) {
+        _game.value = Game("game:$id", title, platform, id.takeIf { it > 0 })
     }
 
     companion object {

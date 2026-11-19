@@ -12,6 +12,10 @@ import app.genkan.download.DownloadEntity
 import app.genkan.ocr.OcrRegion
 import app.genkan.ocr.OcrRegionDao
 import app.genkan.play.PlaySessionDao
+import app.genkan.stats.ReadingDailyEntity
+import app.genkan.stats.ReadingDao
+import app.genkan.stats.ReadingSeenEntity
+import app.genkan.stats.ReadingSessionEntity
 import app.genkan.play.PlaySessionEntity
 import app.genkan.reader.HookThreadEntity
 import app.genkan.reader.ReaderDao
@@ -93,12 +97,14 @@ interface LibraryDao {
 @Database(
     entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class, DictionaryEntity::class,
         ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class,
-        OutboxCard::class, MinedWord::class],
-    version = 8,
+        OutboxCard::class, MinedWord::class,
+        ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class],
+    version = 9,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
-        AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
+        AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
@@ -108,4 +114,5 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun reader(): ReaderDao
     abstract fun ocrRegions(): OcrRegionDao
     abstract fun anki(): AnkiDao
+    abstract fun reading(): ReadingDao
 }
