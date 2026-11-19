@@ -15,8 +15,11 @@ Each phase ends with a check that takes minutes to run.
 | **8** | Built-in libretro cores with memory, audio and frame access | Card audio and frames come from the core directly |
 | **9** | Sync with [Hachidori](https://github.com/bee-san/hachidori): backup import, then lookup counts and known words both ways | A lookup made offline shows up in Hachidori after the next sync |
 
-A separate spike, run alongside phases 0–2, checks whether a Windows text hooker survives
-x86 translation on ARM. If it doesn't, OCR (phase 3) is the fallback.
+A separate spike (phase H, [tools/hookbridge](../tools/hookbridge)) gets a Windows game's
+text out of Wine: a `version.dll` proxy loads [LunaHook](https://github.com/HIllya51/LunaTranslator)
+inside the game and a small host sends each line over a WebSocket. It works under x86 Wine;
+whether it survives x86 translation on ARM (FEX/Box64, as in GameNative) is still untested.
+If it doesn't, OCR (phase 3) is the fallback.
 
 ## Device requirements carried from earlier research
 
