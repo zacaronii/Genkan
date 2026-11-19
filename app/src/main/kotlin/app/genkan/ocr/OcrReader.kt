@@ -33,7 +33,9 @@ import javax.inject.Singleton
 @Singleton
 class OcrReader @Inject constructor(
     private val capture: ScreenCapture,
-    private val engine: MlKitJapaneseOcr,
+    private val mlKit: MlKitJapaneseOcr,
+    private val meiki: MeikiOcr,
+    private val settings: OcrSettings,
     private val session: ReaderSession,
     private val nowPlaying: NowPlaying,
     private val regions: OcrRegionDao,
@@ -51,6 +53,21 @@ class OcrReader @Inject constructor(
     val region: StateFlow<OcrRegion> = nowPlaying.game
         .flatMapLatest { game -> regions.region(game.key).map { it ?: OcrRegion.default(game.key) } }
         .stateIn(scope, SharingStarted.Eagerly, OcrRegion.default(nowPlaying.game.value.key))
+
+    /** The engine in use: Meiki when chosen and bundled, else ML Kit. */
+    val engine: StateFlow<OcrEngine> = settings.engine
+        .map { if (it == OcrEngineChoice.MEIKI && meiki.available) meiki else mlKit }
+        .stateIn(scope, SharingStarted.Eagerly, mlKit)
+
+    /** Switches between Meiki and ML Kit (when Meiki is bundled). */
+    fun nextEngine() {
+        if (!meiki.available) return
+        scope.launch {
+            settings.setEngine(if (engine.value === meiki) OcrEngineChoice.ML_KIT else OcrEngineChoice.MEIKI)
+            lastText = ""
+            latch.reset()
+        }
+    }
 
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
@@ -90,6 +107,7 @@ class OcrReader @Inject constructor(
     }
 
     private suspend fun read(box: Bitmap) {
+        val engine = engine.value
         val started = System.nanoTime()
         val text = try {
             OcrText.join(engine.read(box))

@@ -30,6 +30,14 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      # Meiki's OCR models (45 MB) are fetched by Gradle; keep them between runs.
+      - name: Cache Meiki models
+        uses: actions/cache@v4
+        with:
+          path: .gradle/meiki
+          key: meiki-${{ hashFiles('app/build.gradle.kts') }}
+          restore-keys: meiki-
+
       - name: Build, test and lint
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug
 

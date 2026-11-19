@@ -63,6 +63,7 @@ fun ReaderScreen(
     val ocrOn by viewModel.ocr.enabled.collectAsStateWithLifecycle()
     val capturing by viewModel.capture.running.collectAsStateWithLifecycle()
     val ocrMs by viewModel.ocr.lastReadMs.collectAsStateWithLifecycle()
+    val engine by viewModel.ocr.engine.collectAsStateWithLifecycle()
     val region by viewModel.ocr.region.collectAsStateWithLifecycle()
     val editing by viewModel.editingArea.collectAsStateWithLifecycle()
     val recording by viewModel.audio.running.collectAsStateWithLifecycle()
@@ -81,7 +82,7 @@ fun ReaderScreen(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                         ocrOn && !capturing -> "OCR: waiting for capture"
-                        ocrOn -> "OCR" + (ocrMs?.let { "  ·  $it ms" } ?: "") + if (recording) "  ·  audio" else ""
+                        ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + if (recording) "  ·  audio" else ""
                         else -> when (status) {
                             is HookStatus.Connected -> "Texthooker connected"
                             is HookStatus.Waiting -> "Waiting for a texthooker"
@@ -100,6 +101,7 @@ fun ReaderScreen(
                 onShowGame?.let { Chip("Game", it) }
                 Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
                 if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
+                if (ocrOn) Chip(engine.name) { viewModel.ocr.nextEngine() }
                 // Sentence audio rides on the capture; it needs the recording permission once.
                 if (capturing && !recording) Chip("Audio") { onAskAudioPermission() }
                 if (threads.isNotEmpty() || chosen != null) {

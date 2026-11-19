@@ -6,7 +6,7 @@ the bottom screen shows the focused game's details while you browse, and turns i
 reading companion once a game is running: a text backlog with tap-to-look-up, one-tap Anki
 cards and reading stats.
 
-Status: **Phases 1 and 2** done; **Phase 3** (OCR) works with ML Kit; **Phase 4** (Anki
+Status: **Phases 1 and 2** done; **Phase 3** (OCR) works with Meiki and ML Kit; **Phase 4** (Anki
 cards with picture and sentence audio) and **Phase 5** (reading stats) work: RomM sign-in, library, downloads, launching and play
 sessions; the bottom-screen reader with a texthooker connection, backlog, thread picker and
 a Yomitan dictionary popup. See
@@ -48,8 +48,11 @@ a Yomitan dictionary popup. See
 - **OCR:** for games without a texthooker, *OCR* on the reader's bar reads the top screen
   (Android asks once per session to allow screen capture). *Area* sets the part of the
   screen to read for each game, drawn over a picture of the top screen; by default it's the
-  lower third. A line is read once its text stops changing, with ML Kit's on-device
-  Japanese model.
+  lower third. A line is read once its text stops changing, with
+  [Meiki OCR](https://github.com/rtr46/meikiocr), trained on Japanese games and bundled with
+  the app (about 150 ms a line on the Thor); the chip next to *Area* switches to ML Kit's
+  Japanese model (faster, but it misreads game fonts more often). The build downloads Meiki's
+  pinned models from Hugging Face once into `.gradle/meiki`.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

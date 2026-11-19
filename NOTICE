@@ -102,3 +102,32 @@ https://github.com/rommapp/romm
   The OpenAPI document of RomM 5.4.0, used unmodified as test data for the
   API contract test:
     -> app/src/test/resources/romm/openapi-5.4.0.json
+
+--------------------------------------------------------------------------
+PlayTranslate (GPL-3.0)
+https://github.com/dominostars/playtranslate
+Pinned commit: 343c74f1a9e6918e1b7382bd11bb193357656741
+
+  app/src/main/java/com/playtranslate/ocr/meiki/MeikiSession.kt
+    (letterboxed detection, line dedup, recogniser canvases, character
+    dedup; rewritten without OpenCV or MNN)
+    -> app/src/main/kotlin/app/genkan/ocr/MeikiPipeline.kt
+
+--------------------------------------------------------------------------
+Meiki OCR models (LGPL-3.0)
+https://github.com/rtr46/meikiocr
+https://huggingface.co/rtr46/meiki.text.detect.v0 (revision a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6)
+https://huggingface.co/rtr46/meiki.txt.recognition.v0 (revision a28cf5874dc2438ebb1c86336be26bcec51e3375)
+
+  meiki.text.detect.v0.1.960x544.onnx, meiki.text.rec.v0.960x32.onnx and
+  meiki.text.rec.v0.vertical.32x480.onnx, unmodified, are bundled in the APK
+  as assets/meiki/{detect,rec_horizontal,rec_vertical}.onnx. They are
+  downloaded at build time by the downloadMeikiModels task in
+  app/build.gradle.kts and are not committed here. They are loaded as data by
+  ONNX Runtime and can be replaced with other versions of the same models.
+
+--------------------------------------------------------------------------
+ONNX Runtime (MIT)
+https://github.com/microsoft/onnxruntime
+
+  com.microsoft.onnxruntime:onnxruntime-android, used unmodified as a library.
