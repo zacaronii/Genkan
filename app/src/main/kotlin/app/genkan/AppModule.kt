@@ -3,6 +3,7 @@ package app.genkan
 import android.content.Context
 import androidx.room.Room
 import app.genkan.dictionary.DictionaryDao
+import app.genkan.ocr.OcrRegionDao
 import app.genkan.reader.ReaderDao
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
@@ -44,4 +45,7 @@ object AppModule {
 
     @Provides
     fun readerDao(db: LibraryDatabase): ReaderDao = db.reader()
+
+    @Provides
+    fun ocrRegionDao(db: LibraryDatabase): OcrRegionDao = db.ocrRegions()
 }

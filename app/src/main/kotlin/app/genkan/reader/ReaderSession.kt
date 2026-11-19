@@ -71,6 +71,11 @@ class ReaderSession @Inject constructor(
         }
     }
 
+    /** A line from another source (OCR): it goes through the same cleaning as hooked text. */
+    fun submit(message: HookMessage) {
+        scope.launch { lock.withLock { onMessage(message) } }
+    }
+
     suspend fun choose(sample: ThreadSample) = dao.chooseThread(HookThreadEntity(nowPlaying.game.value.key, sample.thread, sample.hookCode))
 
     suspend fun forgetChoice() = dao.forgetThread(nowPlaying.game.value.key)

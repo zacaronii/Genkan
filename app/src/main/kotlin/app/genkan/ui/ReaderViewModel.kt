@@ -2,7 +2,11 @@ package app.genkan.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.graphics.Bitmap
+import app.genkan.capture.ScreenCapture
 import app.genkan.dictionary.Dictionaries
+import app.genkan.ocr.OcrReader
+import app.genkan.ocr.OcrRegion
 import app.genkan.dictionary.LookupResult
 import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ReaderSession
@@ -25,7 +29,45 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?) {
 class ReaderViewModel @Inject constructor(
     val session: ReaderSession,
     val dictionaries: Dictionaries,
+    val ocr: OcrReader,
+    val capture: ScreenCapture,
 ) : ViewModel(), PopupActions {
+
+    private val _editingArea = MutableStateFlow<Bitmap?>(null)
+    /** The top-screen snapshot the reading area is being drawn on, while the editor is open. */
+    val editingArea: StateFlow<Bitmap?> = _editingArea.asStateFlow()
+
+    /**
+     * Switches OCR on or off. On needs screen capture: when it isn't running, [askConsent]
+     * shows Android's prompt, and reading starts once capture does.
+     */
+    fun toggleOcr(askConsent: () -> Unit) {
+        if (ocr.enabled.value) {
+            ocr.setEnabled(false)
+            return
+        }
+        ocr.setEnabled(true)
+        if (!capture.running.value) askConsent()
+    }
+
+    fun editArea() {
+        closeLookup()
+        _editingArea.value = capture.frame()
+    }
+
+    fun saveArea(region: OcrRegion) {
+        viewModelScope.launch { ocr.saveRegion(region) }
+        _editingArea.value = null
+    }
+
+    fun resetArea() {
+        viewModelScope.launch { ocr.resetRegion() }
+        _editingArea.value = null
+    }
+
+    fun closeArea() {
+        _editingArea.value = null
+    }
 
     private val _lookup = MutableStateFlow<Lookup?>(null)
     val lookup: StateFlow<Lookup?> = _lookup.asStateFlow()

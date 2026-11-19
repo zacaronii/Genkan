@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.zxing.core)
     implementation(libs.androidx.webkit)
+    implementation(libs.mlkit.text.japanese)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

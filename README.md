@@ -5,7 +5,7 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phases 1 and 2** done: RomM sign-in, library, downloads, launching and play
+Status: **Phases 1 and 2** done, **Phase 3** (OCR) in progress: RomM sign-in, library, downloads, launching and play
 sessions; the bottom-screen reader with a texthooker connection, backlog, thread picker and
 a Yomitan dictionary popup. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -43,6 +43,11 @@ a Yomitan dictionary popup. See
   headword for its kanji-dictionary entry. To try it without a
   game: `python3 tools/hookbridge/test/fake_host.py` on a computer and
   `adb reverse tcp:6677 tcp:6677`.
+- **OCR:** for games without a texthooker, *OCR* on the reader's bar reads the top screen
+  (Android asks once per session to allow screen capture). *Area* sets the part of the
+  screen to read for each game, drawn over a picture of the top screen; by default it's the
+  lower third. A line is read once its text stops changing, with ML Kit's on-device
+  Japanese model.
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

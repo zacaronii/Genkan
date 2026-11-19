@@ -21,6 +21,7 @@ coil = "3.6.3"
 work = "2.12.0"
 zxing = "3.5.4"
 webkit = "1.14.0"
+mlkitJapanese = "16.0.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -54,6 +55,7 @@ okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
+mlkit-text-japanese = { module = "com.google.mlkit:text-recognition-japanese", version.ref = "mlkitJapanese" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 
 [plugins]

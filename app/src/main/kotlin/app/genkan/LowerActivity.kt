@@ -2,6 +2,7 @@
 // app/src/main/kotlin/com/nendo/argosy/hardware/SecondaryHomeActivity.kt
 package app.genkan
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +13,7 @@ import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import app.genkan.capture.CaptureConsentActivity
 import app.genkan.hardware.FocusDirectorActivity
 import app.genkan.hardware.RefocusGate
 import app.genkan.home.DualScreenState
@@ -60,7 +62,10 @@ class LowerActivity : ComponentActivity() {
 
         setContent {
             GenkanTheme {
-                ReaderScreen(viewModel = reader)
+                ReaderScreen(
+                    viewModel = reader,
+                    onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
+                )
             }
         }
     }

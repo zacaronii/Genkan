@@ -11,5 +11,11 @@
                 <action android:name="app.genkan.debug.IMPORT_DICTIONARIES" />
             </intent-filter>
         </receiver>
+        <!-- Debug builds only: a stand-in game screen for OCR tests. -->
+        <activity
+            android:name=".debug.OcrTestCardActivity"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:theme="@style/Theme.Genkan" />
     </application>
 </manifest>

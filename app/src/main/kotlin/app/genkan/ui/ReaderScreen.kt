@@ -43,7 +43,7 @@ import app.genkan.reader.ThreadSample
 
 /** The bottom screen: the current game's backlog, tap a word to look it up. */
 @Composable
-fun ReaderScreen(viewModel: ReaderViewModel) {
+fun ReaderScreen(viewModel: ReaderViewModel, onAskCaptureConsent: () -> Unit) {
     val lines by viewModel.session.lines.collectAsStateWithLifecycle()
     val status by viewModel.session.status.collectAsStateWithLifecycle()
     val game by viewModel.session.game.collectAsStateWithLifecycle()
@@ -52,6 +52,11 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
     val picking by viewModel.picking.collectAsStateWithLifecycle()
     val lookup by viewModel.lookup.collectAsStateWithLifecycle()
     val popup by viewModel.popup.collectAsStateWithLifecycle()
+    val ocrOn by viewModel.ocr.enabled.collectAsStateWithLifecycle()
+    val capturing by viewModel.capture.running.collectAsStateWithLifecycle()
+    val ocrMs by viewModel.ocr.lastReadMs.collectAsStateWithLifecycle()
+    val region by viewModel.ocr.region.collectAsStateWithLifecycle()
+    val editing by viewModel.editingArea.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -63,14 +68,21 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
             Column(Modifier.weight(1f)) {
                 Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1)
                 Text(
-                    when (status) {
-                        is HookStatus.Connected -> "Texthooker connected"
-                        is HookStatus.Waiting -> "Waiting for a texthooker on ${status.address.removePrefix("ws://")}"
+                    when {
+                        ocrOn && !capturing -> "OCR: waiting for capture"
+                        ocrOn -> "OCR" + (ocrMs?.let { "  ·  $it ms" } ?: "")
+                        else -> when (status) {
+                            is HookStatus.Connected -> "Texthooker connected"
+                            is HookStatus.Waiting -> "Waiting for a texthooker"
+                        }
                     },
+                    maxLines = 1,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
                 )
             }
+            Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
+            if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
             if (threads.isNotEmpty() || chosen != null) {
                 Chip("Thread: ${chosen?.thread ?: "choose"}") { viewModel.openPicker() }
             }
@@ -78,7 +90,9 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val panelHeight = maxHeight * PANEL_FRACTION
             val needsChoice = threads.isNotEmpty() && chosen == null
-            if (picking || needsChoice) {
+            if (editing != null) {
+                OcrAreaEditor(editing, region, onSave = viewModel::saveArea, onReset = viewModel::resetArea, onCancel = viewModel::closeArea)
+            } else if (picking || needsChoice) {
                 ThreadPicker(threads, chosen?.thread, onChoose = viewModel::choose, onClose = viewModel::closePicker.takeIf { !needsChoice })
             } else {
                 Backlog(lines, lookup, panelHeight, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
@@ -97,7 +111,7 @@ fun ReaderScreen(viewModel: ReaderViewModel) {
 }
 
 @Composable
-private fun Chip(label: String, onClick: () -> Unit) {
+internal fun Chip(label: String, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Text(
         label,
