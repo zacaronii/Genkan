@@ -51,6 +51,17 @@ Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
     -> app/src/main/kotlin/app/genkan/launch/PcGames.kt
 
 --------------------------------------------------------------------------
+Furoshiki (GPL-2.0-or-later, distributed here under GPL-3.0-or-later)
+https://github.com/sommepo/furoshiki
+Pinned commit: 738ccf5c70342b0aed17a9b6b5c56805785ab9fe
+
+  home/src/line_feed.h, home/src/line_feed.cpp (Normalise, IsJunk, Key,
+    Compare, MessageText, Feed; ported from Qt to Kotlin)
+    -> app/src/main/kotlin/app/genkan/reader/LineFeed.kt
+  home/tests/tests.cpp (the Lines cases)
+    -> app/src/test/kotlin/app/genkan/reader/LineFeedTest.kt
+
+--------------------------------------------------------------------------
 hoshidicts, bee-san's fork (GPL-3.0)
 https://github.com/bee-san/hoshidicts
 Pinned commit: 088ac5ded9e4de62a0c3f434f3f72350945459a3
