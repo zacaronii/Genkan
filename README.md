@@ -53,10 +53,15 @@ a Yomitan dictionary popup. See
   the app (about 150 ms a line on the Thor); the chip next to *Area* switches to ML Kit's
   Japanese model (faster, but it misreads game fonts more often). The build downloads Meiki's
   pinned models from Hugging Face once into `.gradle/meiki`.
-- **Saves:** for Azahar (3DS) and RetroArch games downloaded from RomM, Genkan syncs the save
+- **Saves:** for Azahar (3DS), RetroArch, DuckStation and Dolphin games downloaded from RomM, Genkan syncs the save
   with RomM's device sync before the game starts and after it ends. A save about to be replaced
   is copied to `Genkan/save-backups` first; when both sides changed, the device keeps its copy
   and archives it in RomM; a delete on the server never removes a save from the device.
+  DuckStation (PS1) and Dolphin (GameCube, Wii) keep their saves in their own `Android/data`,
+  which other apps can't read, so those go through [Shizuku](https://github.com/RikkaApps/Shizuku):
+  install and start it (it stops at every reboot), then *Allow Genkan in Shizuku* in settings.
+  Their save folders are shared by every game, so Genkan learns which files are a game's from
+  what changed there while it ran.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

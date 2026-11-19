@@ -131,3 +131,10 @@ ONNX Runtime (MIT)
 https://github.com/microsoft/onnxruntime
 
   com.microsoft.onnxruntime:onnxruntime-android, used unmodified as a library.
+
+--------------------------------------------------------------------------
+Shizuku API (Apache-2.0)
+https://github.com/RikkaApps/Shizuku-API
+
+  dev.rikka.shizuku:api and dev.rikka.shizuku:provider, used unmodified as
+  libraries.
