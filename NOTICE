@@ -51,6 +51,15 @@ Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
     -> app/src/main/kotlin/app/genkan/launch/PcGames.kt
 
 --------------------------------------------------------------------------
+hoshidicts, bee-san's fork (GPL-3.0)
+https://github.com/bee-san/hoshidicts
+Pinned commit: 088ac5ded9e4de62a0c3f434f3f72350945459a3
+
+  Used unmodified as a git submodule at third_party/hoshidicts (with its own
+  submodules and vendored libraries, each under its own licence), built into
+  libgenkan_dictionary.so through app/src/main/cpp/dictionary_jni.cpp.
+
+--------------------------------------------------------------------------
 RomM (AGPL-3.0)
 https://github.com/rommapp/romm
 

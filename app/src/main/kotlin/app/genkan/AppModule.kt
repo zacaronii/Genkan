@@ -2,6 +2,7 @@ package app.genkan
 
 import android.content.Context
 import androidx.room.Room
+import app.genkan.dictionary.DictionaryDao
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
@@ -36,4 +37,7 @@ object AppModule {
 
     @Provides
     fun playSessionDao(db: LibraryDatabase): PlaySessionDao = db.playSessions()
+
+    @Provides
+    fun dictionaryDao(db: LibraryDatabase): DictionaryDao = db.dictionaries()
 }

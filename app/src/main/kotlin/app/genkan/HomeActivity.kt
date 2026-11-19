@@ -193,6 +193,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.ENABLE_HOME -> enableHome()
             SetupAction.DISABLE_HOME -> disableHome()
             SetupAction.SYNC_LIBRARY -> lifecycleScope.launch { viewModel.librarySync.sync() }
+            SetupAction.IMPORT_DICTIONARIES -> viewModel.importDictionaries()
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

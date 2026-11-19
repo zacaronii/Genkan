@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "app.genkan"
     compileSdk = 37
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "app.genkan"
@@ -15,6 +16,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.1"
+        ndk {
+            // The Thor and the arm64 test emulator.
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.31.6"
+        }
     }
 
     buildTypes {

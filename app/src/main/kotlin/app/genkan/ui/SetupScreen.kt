@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.dictionary.ImportStatus
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
 import app.genkan.romm.RomMState
@@ -26,6 +27,8 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val romm by viewModel.romm.state.collectAsStateWithLifecycle()
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
+    val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
+    val dictionaryImport by viewModel.dictionaries.importStatus.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -52,6 +55,17 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Text(
             "Play time: " + if (usageAccess) "exact (usage access on)" else "approximate; allow usage access so sleep and other apps aren't counted",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "Dictionaries: " + (dictionaries.takeIf { it.isNotEmpty() }?.joinToString { it.title } ?: "none") +
+                when (val i = dictionaryImport) {
+                    is ImportStatus.Running -> "  ·  importing ${i.current} (${i.done + 1} of ${i.total})…"
+                    is ImportStatus.Done -> "  ·  last import: ${i.imported} new, ${i.skipped} already there" +
+                        (if (i.failed.isEmpty()) "" else ", failed: ${i.failed.joinToString()}")
+                    ImportStatus.Idle -> ""
+                },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

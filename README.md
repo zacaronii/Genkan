@@ -5,8 +5,9 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phase 1** in progress: RomM sign-in, the library, downloads, launching and
-play-session upload work. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Status: **Phase 1** done (RomM sign-in, library, downloads, launching, play sessions).
+**Phase 2** (the reader) in progress: dictionaries import and look up. See
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Using it
 
@@ -25,6 +26,12 @@ play-session upload work. See [docs/ROADMAP.md](docs/ROADMAP.md).
   back to Genkan. For exact times (sleep and other apps left out), allow *Usage access* from
   Genkan's settings; without it a session runs from launch until Genkan is back in front.
   Sessions under 10 seconds (an emulator that closed straight away) aren't reported.
+- **Dictionaries:** put Yomitan dictionary zips (JMdict, a frequency list such as JPDB, a
+  pitch-accent or kanji dictionary) in `Download/` or a folder directly inside it, then choose
+  *Import dictionaries from Download* in settings. Importing again skips dictionaries that
+  are already there and replaces ones with a new revision. Lookups use
+  [hoshidicts](https://github.com/bee-san/hoshidicts), so conjugated forms find their
+  dictionary entries (眺めた → 眺める).
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 
@@ -41,7 +48,9 @@ play-session upload work. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Build
 
-Requires JDK 21 and the Android SDK (platform 37, build-tools, NDK 29 from Phase 2 on).
+Requires JDK 21 and the Android SDK (platform 37, build-tools, NDK 29, CMake 3.31.6).
+Clone with `--recursive`, or run `git submodule update --init --recursive`, for the
+dictionary engine in `third_party/hoshidicts`.
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug
