@@ -99,7 +99,7 @@ class LaunchCommandBuilderTest {
 
     @Test
     fun `every catalog platform uses a RomM slug Genkan's library knows`() {
-        val rommSlugs = setOf("nes", "snes", "gb", "gbc", "gba", "n64", "psx", "ps2", "ngc", "wii", "3ds")
+        val rommSlugs = setOf("nes", "snes", "gb", "gbc", "gba", "n64", "psx", "ps2", "psp", "ngc", "wii", "3ds")
         EmulatorCatalog.emulators.forEach { assertTrue(it.id, rommSlugs.containsAll(it.platforms)) }
     }
 

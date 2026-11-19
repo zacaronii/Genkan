@@ -126,6 +126,20 @@ object EmulatorCatalog {
             ),
         ),
         EmulatorDef(
+            id = "ppsspp", packageName = "org.ppsspp.ppsspp", displayName = "PPSSPP",
+            platforms = setOf("psp"),
+            recipe = Recipe.Custom(activity = "org.ppsspp.ppsspp.PpssppActivity"),
+            method = LaunchMethod.SHELL,
+            downloadUrl = "https://play.google.com/store/apps/details?id=org.ppsspp.ppsspp",
+        ),
+        EmulatorDef(
+            id = "ppsspp_gold", packageName = "org.ppsspp.ppssppgold", displayName = "PPSSPP Gold",
+            platforms = setOf("psp"),
+            recipe = Recipe.Custom(activity = "org.ppsspp.ppsspp.PpssppActivity"),
+            method = LaunchMethod.SHELL,
+            downloadUrl = "https://play.google.com/store/apps/details?id=org.ppsspp.ppssppgold",
+        ),
+        EmulatorDef(
             id = "azahar", packageName = "org.azahar_emu.azahar", displayName = "Azahar",
             platforms = setOf("3ds"),
             recipe = Recipe.Custom(

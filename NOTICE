@@ -138,3 +138,11 @@ https://github.com/RikkaApps/Shizuku-API
 
   dev.rikka.shizuku:api and dev.rikka.shizuku:provider, used unmodified as
   libraries.
+
+--------------------------------------------------------------------------
+Agent scripts by 0xDC00 (MIT)
+https://github.com/0xDC00/scripts
+
+  PSP hook addresses and text clean-up from PSP_ULJM06119_Dunamis15.js and
+  PSP_NPJH50127_Tokimeki-Memorial-4.js
+    -> app/src/main/kotlin/app/genkan/ppsspp/PspHooks.kt
