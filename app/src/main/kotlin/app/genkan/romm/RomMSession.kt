@@ -129,6 +129,21 @@ class RomMSession @Inject constructor(
         _state.value = RomMState.SignedOut
     }
 
+    /**
+     * RomM answered 401 to a signed-in request: the token was revoked or expired on the server.
+     * Forget it and send the user back to the login screen with the reason.
+     */
+    fun onUnauthorized() {
+        if (account == null) return
+        loginJob?.cancel()
+        scope.launch {
+            store.clear()
+            account = null
+            api = null
+            fail("RomM no longer accepts this device's sign-in. Sign in again.")
+        }
+    }
+
     fun signOut() {
         loginJob?.cancel()
         scope.launch {

@@ -80,6 +80,13 @@ class DownloaderTest {
     }
 
     @Test
+    fun `a revoked token surfaces as unauthorized, not a generic failure`() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(401).build())
+        val failure = runCatching { downloader.download(server.url("/f").toString(), "old", target(), 1000) {} }
+        assertTrue(failure.exceptionOrNull() is app.genkan.romm.RomMUnauthorizedException)
+    }
+
+    @Test
     fun `a complete file is not downloaded again`() = runBlocking {
         target().parentFile!!.mkdirs()
         target().writeText(payload)

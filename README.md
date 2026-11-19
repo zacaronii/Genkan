@@ -5,8 +5,8 @@ screens (built for the AYN Thor). The top screen runs the launcher and the games
 the bottom screen is a reading companion: a text backlog with tap-to-look-up, and, in
 later phases, one-tap Anki cards and reading stats.
 
-Status: **Phase 1** in progress: RomM sign-in, the library grid and downloads work;
-launching games is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Status: **Phase 1** in progress: RomM sign-in, the library, downloads and launching work;
+session tracking and play-session upload are next. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Using it
 
@@ -17,6 +17,12 @@ launching games is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Downloads:** A downloads the focused game (A again cancels), X twice deletes it. Games
   go to `ROMs/<platform>/` on internal storage, so the first download asks for
   *All files access*. Downloads resume after a crash or a dropped connection.
+- **Playing:** A on a downloaded game starts it on the top screen in the first installed
+  emulator for its platform: RetroArch (NES, SNES, GB/GBC/GBA, N64; install the FCEUmm,
+  Snes9x, mGBA and Mupen64Plus-Next cores from RetroArch's Online Updater), DuckStation
+  (PS1), ARMSX2 (PS2), Dolphin (GameCube/Wii) or Azahar (3DS).
+- **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
+  Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 
 ## How the two screens work
 

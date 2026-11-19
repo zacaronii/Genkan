@@ -42,6 +42,7 @@ class Downloader(private val client: OkHttpClient) {
             if (response.code == 416 && expectedBytes != null && resumeFrom == expectedBytes) {
                 finish(part, target); onBytes(resumeFrom); return
             }
+            if (response.code == 401) throw app.genkan.romm.RomMUnauthorizedException()
             if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${target.name}")
             // 206 continues the part file; a 200 means the server ignored the range, so start over.
             val append = response.code == 206 && resumeFrom > 0

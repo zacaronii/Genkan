@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
+import app.genkan.launch.LocalShelves
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryPane
 import app.genkan.library.SyncStatus
@@ -70,7 +71,7 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         PlatformRail(
-            names = platforms.map { "${it.name}  ${it.romCount}" },
+            names = platforms.map { if (it.id < 0) it.name else "${it.name}  ${it.romCount}" },
             selected = focus.platformIndex,
             railFocused = focus.pane == LibraryPane.PLATFORMS,
             onSelect = viewModel::selectPlatform,
@@ -80,7 +81,7 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
             Header(
                 title = platforms.getOrNull(focus.platformIndex)?.name ?: "Library",
                 sync = sync,
-                subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id]) },
+                subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], viewModel::emulatorFor) },
             )
             if (platforms.isEmpty()) {
                 EmptyLibrary(sync)
@@ -89,7 +90,7 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
                     games = games,
                     downloads = downloads,
                     focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
-                    coverUrl = viewModel::coverUrl,
+                    coverModel = viewModel::coverModel,
                     onColumns = { viewModel.columns = it },
                     onSelect = viewModel::selectGame,
                 )
@@ -148,7 +149,7 @@ private fun GameGrid(
     games: List<GameEntity>,
     downloads: Map<Long, DownloadEntity>,
     focusedIndex: Int?,
-    coverUrl: (GameEntity) -> String?,
+    coverModel: (GameEntity) -> Any?,
     onColumns: (Int) -> Unit,
     onSelect: (Int) -> Unit,
 ) {
@@ -170,14 +171,14 @@ private fun GameGrid(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             itemsIndexed(games, key = { _, game -> game.id }) { index, game ->
-                GameCard(game, coverUrl(game), downloads[game.id], focused = index == focusedIndex, onClick = { onSelect(index) })
+                GameCard(game, coverModel(game), downloads[game.id], focused = index == focusedIndex, onClick = { onSelect(index) })
             }
         }
     }
 }
 
 @Composable
-private fun GameCard(game: GameEntity, cover: String?, download: DownloadEntity?, focused: Boolean, onClick: () -> Unit) {
+private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, focused: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     Column(
@@ -200,7 +201,13 @@ private fun GameCard(game: GameEntity, cover: String?, download: DownloadEntity?
                 modifier = Modifier.padding(8.dp),
             )
             if (cover != null) {
-                AsyncImage(model = cover, contentDescription = game.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                val isIcon = game.platformSlug == LocalShelves.APPS_SLUG
+                AsyncImage(
+                    model = cover,
+                    contentDescription = game.name,
+                    contentScale = if (isIcon) ContentScale.Fit else ContentScale.Crop,
+                    modifier = if (isIcon) Modifier.fillMaxSize().padding(28.dp) else Modifier.fillMaxSize(),
+                )
             }
             DownloadBadge(download, Modifier.align(Alignment.BottomCenter))
         }
@@ -239,7 +246,11 @@ private fun DownloadBadge(download: DownloadEntity?, modifier: Modifier) {
     }
 }
 
-private fun gameLine(game: GameEntity, download: DownloadEntity?): String {
+private fun gameLine(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
+    when (game.platformSlug) {
+        LocalShelves.PC_SLUG -> return "${game.name}  ·  A: play in GameNative"
+        LocalShelves.APPS_SLUG -> return "${game.name}  ·  A: open"
+    }
     val size = formatSize(game.fsSizeBytes)
     return when (download?.state) {
         null -> "${game.name}  ·  $size  ·  A: download"
@@ -248,7 +259,10 @@ private fun gameLine(game: GameEntity, download: DownloadEntity?): String {
             val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
             "${game.name}  ·  downloading $percent% of $size  ·  A: cancel"
         }
-        DownloadState.INSTALLED -> "${game.name}  ·  $size on this device  ·  X: delete"
+        DownloadState.INSTALLED -> {
+            val play = emulatorFor(game.platformSlug)?.let { "A: play in $it" } ?: "no emulator installed"
+            "${game.name}  ·  $size  ·  $play  ·  X: delete"
+        }
         DownloadState.FAILED -> "${game.name}  ·  failed: ${download.error ?: "unknown error"}  ·  A: retry"
     }
 }

@@ -5,6 +5,7 @@ import app.genkan.romm.RomMApi
 import app.genkan.romm.RomMPlatform
 import app.genkan.romm.RomMRom
 import app.genkan.romm.RomMSession
+import app.genkan.romm.RomMUnauthorizedException
 import app.genkan.romm.RomMUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +40,9 @@ class LibrarySync @Inject constructor(
             }
             try {
                 _status.value = SyncStatus.Done(syncWith(api))
+            } catch (e: RomMUnauthorizedException) {
+                _status.value = SyncStatus.Failed("Signed out by RomM")
+                session.onUnauthorized()
             } catch (e: Exception) {
                 Log.w(TAG, "Library sync failed", e)
                 _status.value = SyncStatus.Failed(e.message ?: "Library sync failed")
@@ -75,8 +79,10 @@ class LibrarySync @Inject constructor(
         return total
     }
 
-    private fun <T> retrofit2.Response<T>.bodyOrThrow(what: String): T =
-        body().takeIf { isSuccessful } ?: error("RomM refused $what (${code()})")
+    private fun <T> retrofit2.Response<T>.bodyOrThrow(what: String): T {
+        if (code() == 401) throw RomMUnauthorizedException()
+        return body().takeIf { isSuccessful } ?: error("RomM refused $what (${code()})")
+    }
 
     companion object {
         private const val TAG = "LibrarySync"

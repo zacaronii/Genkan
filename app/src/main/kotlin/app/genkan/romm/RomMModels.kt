@@ -594,6 +594,9 @@ data class RomMPairingExchangeResponse(
 )
 
 
+/** RomM rejected the stored token (HTTP 401). */
+class RomMUnauthorizedException : java.io.IOException("RomM rejected this device's sign-in")
+
 sealed class RomMResult<out T> {
     data class Success<T>(val data: T) : RomMResult<T>()
     data class Error(val message: String, val code: Int? = null) : RomMResult<Nothing>()

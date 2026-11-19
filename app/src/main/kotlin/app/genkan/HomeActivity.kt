@@ -57,6 +57,7 @@ class HomeActivity : ComponentActivity() {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
         dualScreen.refresh()
         startCompanionIfMissing()
+        libraryViewModel.refreshLocal()
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}

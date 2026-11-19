@@ -6,6 +6,7 @@ import android.util.Log
 import app.genkan.library.GameEntity
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMSession
+import app.genkan.romm.RomMUnauthorizedException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -103,8 +104,9 @@ class DownloadQueue @Inject constructor(
         }
         dao.setState(row.romId, DownloadState.RUNNING)
         try {
-            val rom = withContext(Dispatchers.IO) { api.getRom(row.romId) }.body()
-                ?: error("RomM did not return game ${row.romId}")
+            val response = withContext(Dispatchers.IO) { api.getRom(row.romId) }
+            if (response.code() == 401) throw RomMUnauthorizedException()
+            val rom = response.body() ?: error("RomM did not return game ${row.romId}")
             val target = File(row.path)
             val files = if (rom.hasMultipleFiles || rom.hasNestedSingleFile) {
                 rom.files.orEmpty().filter(DownloadPaths::isGameFile).map { file ->
@@ -134,6 +136,9 @@ class DownloadQueue @Inject constructor(
             Log.i(TAG, "Installed ${row.name} at ${row.path}")
         } catch (e: CancellationException) {
             throw e
+        } catch (e: RomMUnauthorizedException) {
+            dao.setState(row.romId, DownloadState.FAILED, "Sign in to RomM again")
+            session.onUnauthorized()
         } catch (e: Exception) {
             Log.w(TAG, "Download of ${row.name} failed", e)
             dao.setState(row.romId, DownloadState.FAILED, e.message ?: "Download failed")

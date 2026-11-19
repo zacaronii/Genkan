@@ -39,6 +39,16 @@ Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
     DeviceAuthPoller.kt (+ DeviceAuthPoll from RomMConnectionManager.kt),
     RomMApiFactory.kt, RomMImageAuthInterceptor.kt
     -> app/src/main/kotlin/app/genkan/romm/
+  app/src/main/kotlin/com/nendo/argosy/data/emulator/
+    EmulatorRegistry.kt (entries + recipes), LaunchCommand.kt,
+    GameLauncher.kt (RetroArch and custom-recipe command building)
+  app/src/main/kotlin/com/nendo/argosy/libretro/LibretroCoreRegistry.kt
+    (default core ids)
+    -> app/src/main/kotlin/app/genkan/launch/
+       EmulatorCatalog.kt, LaunchCommand.kt, LaunchCommandBuilder.kt
+  app/src/main/kotlin/com/nendo/argosy/data/launcher/
+    FrontendSyncMarkers.kt, GameNativeSyncFolder.kt, GameNativeLauncher.kt
+    -> app/src/main/kotlin/app/genkan/launch/PcGames.kt
 
 --------------------------------------------------------------------------
 RomM (AGPL-3.0)

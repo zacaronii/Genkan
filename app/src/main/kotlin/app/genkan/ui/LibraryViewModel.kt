@@ -6,6 +6,9 @@ import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.download.DownloadState
 import app.genkan.input.PadKey
+import app.genkan.launch.GameLauncher
+import app.genkan.launch.LocalShelves
+import app.genkan.launch.LaunchResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -50,7 +53,11 @@ class LibraryViewModel @Inject constructor(
     private val session: RomMSession,
     private val librarySync: LibrarySync,
     private val downloadQueue: DownloadQueue,
+    private val gameLauncher: GameLauncher,
+    private val localShelves: LocalShelves,
 ) : ViewModel() {
+
+    private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
 
     val downloads: StateFlow<Map<Long, DownloadEntity>> = downloadQueue.downloads
 
@@ -69,23 +76,45 @@ class LibraryViewModel @Inject constructor(
     private val _focus = MutableStateFlow(LibraryFocus())
     val focus: StateFlow<LibraryFocus> = _focus.asStateFlow()
 
+    /** PC games first (the visual novels live there), then RomM's platforms, then apps. */
     val platforms: StateFlow<List<PlatformEntity>> =
-        dao.platforms().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        combine(dao.platforms(), local) { romm, shelves ->
+            shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val games: StateFlow<List<GameEntity>> =
         combine(platforms, _focus.map { it.platformIndex }.distinctUntilChanged()) { list, index -> list.getOrNull(index) }
             .map { it?.id }
             .distinctUntilChanged()
-            .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else dao.games(id) }
+            .flatMapLatest { id ->
+                when {
+                    id == null -> flowOf(emptyList())
+                    id < 0 -> local.map { it.games[id].orEmpty() }
+                    else -> dao.games(id)
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        refreshLocal()
+    }
+
+    /** Re-reads GameNative's export and the app list; cheap, so it runs on every resume. */
+    fun refreshLocal() {
+        viewModelScope.launch { local.value = localShelves.load() }
+    }
 
     val syncStatus: StateFlow<SyncStatus> = librarySync.status
 
     /** Set by the grid from its measured width, so up/down move by whole rows. */
     var columns: Int = 1
 
-    fun coverUrl(game: GameEntity): String? =
-        session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, game.coverPath) }
+    /** What the card shows: an app's icon, or a cover URL (RomM asset or Steam art). */
+    fun coverModel(game: GameEntity): Any? = when {
+        game.platformSlug == LocalShelves.APPS_SLUG -> localShelves.appIcon(game)
+        LocalShelves.isLocal(game) -> game.coverPath
+        else -> session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, game.coverPath) }
+    }
 
     fun onKey(key: PadKey): Boolean {
         if (key == PadKey.Y) {
@@ -117,11 +146,15 @@ class LibraryViewModel @Inject constructor(
     }
 
     private fun primaryAction(game: GameEntity) {
+        if (LocalShelves.isLocal(game)) {
+            if (localShelves.launch(game)) show("Opening ${game.name}…") else show("Couldn't open ${game.name}")
+            return
+        }
         when (downloads.value[game.id]?.state) {
             DownloadState.QUEUED, DownloadState.RUNNING -> {
                 downloadQueue.cancel(game.id); show("Download cancelled")
             }
-            DownloadState.INSTALLED -> show("Downloaded. Launching games arrives in the next update.")
+            DownloadState.INSTALLED -> launch(game)
             null, DownloadState.FAILED -> {
                 if (!hasStorageAccess()) {
                     _events.tryEmit(LibraryEvent.NeedStorageAccess)
@@ -130,6 +163,23 @@ class LibraryViewModel @Inject constructor(
                 }
                 _events.tryEmit(LibraryEvent.NeedNotifications)
                 downloadQueue.enqueue(game)
+            }
+        }
+    }
+
+    /** Name of the emulator A would start for [platformSlug], or null when none is installed. */
+    fun emulatorFor(platformSlug: String): String? = gameLauncher.installedEmulatorFor(platformSlug)?.first?.displayName
+
+    private fun launch(game: GameEntity) {
+        val download = downloads.value[game.id] ?: return
+        viewModelScope.launch {
+            when (val result = gameLauncher.launch(game, download)) {
+                is LaunchResult.Launched -> show("Starting ${game.name} in ${result.emulator.displayName}…")
+                is LaunchResult.NoEmulator -> show(
+                    if (result.suggestions.isEmpty()) "Genkan can't launch this platform yet"
+                    else "Install ${result.suggestions.map { it.displayName.substringBefore(" (") }.distinct().joinToString(" or ")} to play this"
+                )
+                is LaunchResult.Failed -> show(result.message)
             }
         }
     }
@@ -161,6 +211,7 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun sync() {
+        refreshLocal()
         viewModelScope.launch { librarySync.sync() }
     }
 }
