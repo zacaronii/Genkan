@@ -1,7 +1,8 @@
 // Hook addresses and text clean-up adapted from 0xDC00's Agent scripts (MIT):
 // https://github.com/0xDC00/scripts PSP_ULJM06119_Dunamis15.js, PSP_NPJH50127_Tokimeki-Memorial-4.js
 // and from LunaHook's PPSSPP table (GPL-3.0), LunaTranslator
-// src/NativeImpl/LunaHook/LunaHook/emulators/ppsspp_1.cpp: My Merry May with be, Danganronpa 1-2, CLANNAD.
+// src/NativeImpl/LunaHook/LunaHook/emulators/ppsspp_1.cpp: My Merry May with be, Danganronpa 1-2, CLANNAD,
+// Grisaia (with util/stringfilters.cpp's katakana remap).
 package app.genkan.ppsspp
 
 import java.nio.charset.Charset
@@ -37,6 +38,9 @@ object PspHooks {
         // ダンガンロンパ 希望の学園と絶望の高校生 (PSP the Best), スーパーダンガンロンパ2
         "NPJH50515" to listOf(PspHook(0x088540B0L, "a0", Charsets.UTF_16LE, ::danganronpa)),
         "NPJH50631" to listOf(PspHook(0x088D1A24L, "a0", Charsets.UTF_16LE, ::danganronpa)),
+        // グリザイアの果実 (both discs): hiragana stored as half-width katakana
+        "ULJM06232" to listOf(PspHook(0x08840324L, "t0", SHIFT_JIS, ::grisaia)),
+        "ULJM06233" to listOf(PspHook(0x08840324L, "t0", SHIFT_JIS, ::grisaia)),
         // CLANNAD (both discs)
         "ULJM05338" to listOf(PspHook(0x0880F240L, "a0", Charsets.UTF_16LE)),
         "ULJM05339" to listOf(PspHook(0x0880F240L, "a0", Charsets.UTF_16LE)),
@@ -45,6 +49,15 @@ object PspHooks {
     private val MERRY_MAY_CODES = Regex("%K|%P|%p|%N|%V|%LC|%LE|%FS|%FE|%CFFFF|☆")
 
     fun myMerryMay(raw: String): String = raw.replace(MERRY_MAY_CODES, "").replace('├', 'ー').replace('┤', 'ー')
+
+    private val KANA_REMAP: Map<Char, Char> = buildMap {
+        "ｧｨｩｪｫｬｭｮｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝｯ"
+            .zip("ぁぃぅぇぉゃゅょあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんっ")
+            .forEach { (from, to) -> put(from, to) }
+        putAll(mapOf('｢' to '「', '｣' to '」', 'ｰ' to 'ー', '､' to '、', '?' to '？', '｡' to '。', '!' to '！', '○' to '〇', '･' to '…', 'ﾟ' to '？', 'ﾞ' to '！'))
+    }
+
+    fun grisaia(raw: String): String = raw.map { KANA_REMAP[it] ?: it }.joinToString("").replace(Regex("\\\$t(.*?)@"), "$1")
 
     fun danganronpa(raw: String): String = raw.replace("\n", "").replace(Regex("<CLT \\d+>(.*?)<CLT>"), "$1")
 

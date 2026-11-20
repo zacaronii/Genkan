@@ -40,5 +40,8 @@ class PspHooksTest {
     fun `ported LunaHook filters`() {
         assertEquals("ちょっと待ってー", PspHooks.myMerryMay("%Kちょっと%N待って├%P"))
         assertEquals("希望の学園", PspHooks.danganronpa("<CLT 3>希望の\n学園<CLT>"))
+        // The game keeps hiragana as half-width katakana; ﾞ stands for ！ in its font.
+        assertEquals("「こんにちは。」", PspHooks.grisaia("｢ｺﾝﾆﾁﾊ｡｣"))
+        assertEquals("天音です", PspHooks.grisaia("\$t天音@です"))
     }
 }
