@@ -2,6 +2,7 @@ package app.genkan.core
 
 import android.os.Environment
 import app.genkan.saves.SaveLocator
+import app.genkan.saves.SaveTarget
 import java.io.File
 
 /**
@@ -16,5 +17,18 @@ object CoreSaves {
 
     fun fileFor(platformSlug: String, core: CoreDef, rom: File, storage: File = Environment.getExternalStorageDirectory()): File =
         SaveLocator(storage).locate(platformSlug, rom)?.takeIf { !it.folder }?.path
-            ?: File(storage, "Genkan/saves/${core.id}/${rom.nameWithoutExtension}.srm")
+            ?: ownFile(core, rom, storage)
+
+    /**
+     * The save to sync when the built-in player runs the game and keeps it in Genkan's own folder,
+     * filed in RomM under the core's name; null when it shares a standalone emulator's save,
+     * which syncs as that emulator's.
+     */
+    fun ownTarget(platformSlug: String, core: CoreDef, rom: File, storage: File = Environment.getExternalStorageDirectory()): SaveTarget? {
+        if (core.sharedSaves.isNotEmpty() || SaveLocator(storage).locate(platformSlug, rom)?.folder == false) return null
+        val file = ownFile(core, rom, storage)
+        return SaveTarget(core.id, file, folder = false, name = file.name)
+    }
+
+    private fun ownFile(core: CoreDef, rom: File, storage: File) = File(storage, "Genkan/saves/${core.id}/${rom.nameWithoutExtension}.srm")
 }

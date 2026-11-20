@@ -1,6 +1,7 @@
 package app.genkan.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.File
 
@@ -24,6 +25,18 @@ class CoreSavesTest {
             File("/storage/Genkan/saves/pcsx_rearmed/Game (Japan).srm"),
             CoreSaves.fileFor("psx", core, File("/storage/ROMs/psx/Game (Japan).chd"), storage),
         )
+    }
+
+    @Test
+    fun `only saves in Genkan's own folder sync as the core's`() {
+        val psx = CoreCatalog.forPlatform("psx")!!
+        val target = CoreSaves.ownTarget("psx", psx, File("/storage/ROMs/psx/Game (Japan).chd"), storage)!!
+        assertEquals("pcsx_rearmed", target.emulator)
+        assertEquals(File("/storage/Genkan/saves/pcsx_rearmed/Game (Japan).srm"), target.path)
+        assertEquals("Game (Japan).srm", target.name)
+        assertNull(CoreSaves.ownTarget("gba", CoreCatalog.forPlatform("gba")!!, File("/storage/ROMs/gba/Game.gba"), storage))
+        assertNull(CoreSaves.ownTarget("psp", CoreCatalog.forPlatform("psp")!!, File("/storage/ROMs/psp/Game.iso"), storage))
+        assertEquals("melonds", CoreSaves.ownTarget("nds", CoreCatalog.forPlatform("nds")!!, File("/storage/ROMs/nds/Game.nds"), storage)?.emulator)
     }
 
     @Test

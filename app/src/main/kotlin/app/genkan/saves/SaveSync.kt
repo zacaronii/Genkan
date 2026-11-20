@@ -37,6 +37,9 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipFile
+import app.genkan.core.CoreCatalog
+import app.genkan.core.CoreSaves
+import app.genkan.core.PlayerSettings
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -63,6 +66,7 @@ class SaveSync @Inject constructor(
     private val sessions: SessionTracker,
     private val privileged: Privileged,
     private val saveFiles: SaveFileDao,
+    private val player: PlayerSettings,
 ) {
     private val storage = Environment.getExternalStorageDirectory().path
     /** What each watched emulator's save folders held when a game started, by rom. */
@@ -94,8 +98,11 @@ class SaveSync @Inject constructor(
             val installed = File(download.path)
             val rom = if (installed.isDirectory) installed.walkTopDown().firstOrNull { it.isFile } ?: return@withLock false else installed
             try {
-                val watched = WatchedEmulator.BY_PLATFORM[game.platformSlug]
-                val io = if (watched != null) {
+                val own = builtInTarget(game.platformSlug, rom)
+                val watched = WatchedEmulator.BY_PLATFORM[game.platformSlug].takeIf { own == null }
+                val io = if (own != null) {
+                    DirectIo(own)
+                } else if (watched != null) {
                     val files = filesFor(watched)
                     if (files == null) {
                         report(romId, SaveStatus.Failed(System.currentTimeMillis(), "Shizuku isn't running, so ${watched.emulator} saves can't be reached"))
@@ -120,9 +127,17 @@ class SaveSync @Inject constructor(
      * session creates or changes can be claimed as that game's save afterwards.
      */
     suspend fun beforeLaunch(romId: Long, platformSlug: String) = withContext(Dispatchers.IO) {
+        if (player.isEnabled() && CoreCatalog.forPlatform(platformSlug)?.sharedSaves?.isEmpty() == true) return@withContext
         val watched = WatchedEmulator.BY_PLATFORM[platformSlug] ?: return@withContext
         val files = filesFor(watched) ?: return@withContext
         snapshots[romId] = snapshot(watched, files)
+    }
+
+    /** The built-in player's own save for the game, when it runs the game (as the launcher decides). */
+    private suspend fun builtInTarget(platformSlug: String, rom: File): SaveTarget? {
+        if (!player.isEnabled()) return null
+        val core = CoreCatalog.forPlatform(platformSlug) ?: return null
+        return CoreSaves.ownTarget(platformSlug, core, rom, File(storage))
     }
 
     private fun snapshot(watched: WatchedEmulator, files: IFileService): Map<String, SaveSnapshot.Entry> =

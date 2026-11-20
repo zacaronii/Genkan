@@ -83,8 +83,8 @@ a Yomitan dictionary popup. See
   itself: OCR and card audio need no screen-capture prompt, and text is found in memory as for
   Azahar (a PSP scan takes a third of a second), with no hook profile or network debugger.
   GBA saves are RetroArch's mGBA `.srm` files and PSP saves go on PPSSPP's memory stick, so
-  each is shared with the standalone emulator and synced; PS1 saves stay in
-  `Genkan/saves/pcsx_rearmed` for now. Select+Start saves and quits. A DS game's upper screen
+  each is shared with the standalone emulator and synced; PS1 and DS saves are kept in
+  `Genkan/saves/<core>` and synced to RomM under the core's name. Select+Start saves and quits. A DS game's upper screen
   is on the top display and its touch screen on the bottom one, over the reader; clicking
   either stick swaps the touch screen and the reader.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
