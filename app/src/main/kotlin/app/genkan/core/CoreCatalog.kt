@@ -21,6 +21,8 @@ data class CoreDef(
      * (a standalone emulator's, so the two share saves); else Genkan's own.
      */
     val sharedSaves: List<String> = emptyList(),
+    /** The core stacks two screens in one frame (a DS): the lower one goes to the bottom display. */
+    val splitScreens: Boolean = false,
 )
 
 object CoreCatalog {
@@ -47,6 +49,26 @@ object CoreCatalog {
             ramBase = 0x08000000L,
             // The core's saves folder is its memory stick: PPSSPP's own, so PSP/SAVEDATA is shared.
             sharedSaves = listOf("ppsspp", "PPSSPP"),
+        ),
+        CoreDef(
+            id = "melonds", displayName = "melonDS DS", library = "libmelonds_libretro_android.so",
+            platforms = setOf("nds"),
+            variables = mapOf(
+                // One frame, upper screen over lower and nothing between, which Genkan splits.
+                "melonds_number_of_screen_layouts" to "1",
+                "melonds_screen_layout1" to "top-bottom",
+                "melonds_screen_gap" to "0",
+                "melonds_touch_mode" to "touch",
+                // For carts with more than one language, the one the console is set to.
+                "melonds_firmware_language" to "ja",
+                // Frames in memory, not on the GPU: the split needs their pixels.
+                "melonds_render_mode" to "software",
+                "melonds_threaded_renderer" to "enabled",
+            ),
+            // Main RAM is 4 MB at 0x02000000, mirrored up to 0x03000000.
+            pointerMask = 0x023FFFFFL,
+            ramBase = 0x02000000L,
+            splitScreens = true,
         ),
     )
 

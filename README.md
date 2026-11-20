@@ -78,13 +78,15 @@ a Yomitan dictionary popup. See
   string to follow: OCR stays on to tell which page shows, and each line is swapped for that
   page's exact text from memory. Azahar's RPC listens on the whole network while a game runs.
 - **Built-in player (opt-in):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
-  PS1 games (PCSX ReARMed) and PSP games (PPSSPP) inside Genkan instead of their installed
+  DS games (melonDS DS), PS1 games (PCSX ReARMed) and PSP games (PPSSPP) inside Genkan instead of their installed
   emulator, in a process of its own. Genkan then reads the game's frames, sound and memory
   itself: OCR and card audio need no screen-capture prompt, and text is found in memory as for
   Azahar (a PSP scan takes a third of a second), with no hook profile or network debugger.
   GBA saves are RetroArch's mGBA `.srm` files and PSP saves go on PPSSPP's memory stick, so
   each is shared with the standalone emulator and synced; PS1 saves stay in
-  `Genkan/saves/pcsx_rearmed` for now. Select+Start saves and quits.
+  `Genkan/saves/pcsx_rearmed` for now. Select+Start saves and quits. A DS game's upper screen
+  is on the top display and its touch screen on the bottom one, over the reader; clicking
+  either stick swaps the touch screen and the reader.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

@@ -10,7 +10,9 @@
 #ifndef LIBRETRODROID_GENKANTAP_H
 #define LIBRETRODROID_GENKANTAP_H
 
+#include <atomic>
 #include <cstdint>
+#include <utility>
 #include <mutex>
 #include <vector>
 
@@ -55,6 +57,17 @@ public:
     void pushAudio(const int16_t *stereo, size_t frames);
     size_t drainAudio(int16_t *out, size_t capacity);
 
+    /**
+     * Two screens stacked in one frame (a DS): this display draws only the upper one, and the
+     * whole frame is kept, as RGBA, for the other display and the reader.
+     */
+    void setSplitScreens(bool split);
+    bool isSplitScreens();
+    void keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format);
+    /** Rows [firstRow, firstRow + rows) of the last kept frame into [out]; false when it has none that big. */
+    bool copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsigned rows);
+    std::pair<unsigned, unsigned> frameSize();
+
 private:
     GenkanTap() = default;
 
@@ -68,6 +81,12 @@ private:
     size_t ringStart = 0;
     size_t ringCount = 0;
     int32_t sampleRate = 0;
+
+    std::atomic<bool> splitScreens { false };
+    std::mutex frameLock;
+    std::vector<uint8_t> frame;
+    unsigned frameWidth = 0;
+    unsigned frameHeight = 0;
 };
 
 }

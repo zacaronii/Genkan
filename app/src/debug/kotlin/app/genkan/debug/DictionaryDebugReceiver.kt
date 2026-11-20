@@ -13,6 +13,7 @@ import app.genkan.capture.CaptureConsentActivity
 import app.genkan.capture.ScreenCapture
 import app.genkan.core.BuiltInPlayer
 import app.genkan.core.BuiltInText
+import app.genkan.core.CoreActivity
 import app.genkan.core.PlayerSettings
 import app.genkan.launch.GameLauncher
 import app.genkan.launch.topScreenOptions
@@ -27,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -68,6 +70,8 @@ import javax.inject.Inject
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (starts a downloaded game and marks it as playing, without the save sync the grid runs first)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_FILE -n app.genkan/.debug.DictionaryDebugReceiver --es path /sdcard/x.nds --es platform nds
+ * (plays a file that isn't in the library, such as homebrew, in the built-in player)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -164,6 +168,13 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(300))) }
                     }
                     "app.genkan.debug.PLAYER_OFFER" -> builtInText.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.PLAYER_FILE" -> {
+                        val start = Intent(context, CoreActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .putExtra(CoreActivity.EXTRA_ROM, intent.getStringExtra("path"))
+                            .putExtra(CoreActivity.EXTRA_PLATFORM, intent.getStringExtra("platform"))
+                        withContext(Dispatchers.Main) { context.startActivity(start, topScreenOptions()) }
+                    }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
                     }

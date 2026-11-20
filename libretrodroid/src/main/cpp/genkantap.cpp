@@ -38,6 +38,12 @@ void GenkanTap::setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned)) 
 
 void GenkanTap::clear() {
     {
+        std::lock_guard<std::mutex> lock(frameLock);
+        frame.clear();
+        frameWidth = 0;
+        frameHeight = 0;
+    }
+    {
         std::lock_guard<std::mutex> lock(memoryLock);
         memory.clear();
         systemRamData = nullptr;
@@ -107,6 +113,52 @@ size_t GenkanTap::drainAudio(int16_t *out, size_t capacity) {
     ringStart = (ringStart + n) % std::max<size_t>(ring.size(), 1);
     ringCount -= n;
     return n;
+}
+
+void GenkanTap::setSplitScreens(bool split) {
+    splitScreens = split;
+}
+
+bool GenkanTap::isSplitScreens() {
+    return splitScreens;
+}
+
+void GenkanTap::keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format) {
+    std::lock_guard<std::mutex> lock(frameLock);
+    frame.resize(static_cast<size_t>(width) * height * 4);
+    frameWidth = width;
+    frameHeight = height;
+    auto *out = frame.data();
+    for (unsigned y = 0; y < height; y++) {
+        const auto *row = static_cast<const uint8_t *>(data) + y * pitch;
+        for (unsigned x = 0; x < width; x++, out += 4) {
+            uint8_t r, g, b;
+            if (format == RETRO_PIXEL_FORMAT_XRGB8888) {
+                uint32_t p = reinterpret_cast<const uint32_t *>(row)[x];
+                r = p >> 16; g = p >> 8; b = p;
+            } else if (format == RETRO_PIXEL_FORMAT_RGB565) {
+                uint16_t p = reinterpret_cast<const uint16_t *>(row)[x];
+                r = (p >> 11 & 0x1F) << 3; g = (p >> 5 & 0x3F) << 2; b = (p & 0x1F) << 3;
+            } else {
+                uint16_t p = reinterpret_cast<const uint16_t *>(row)[x];
+                r = (p >> 10 & 0x1F) << 3; g = (p >> 5 & 0x1F) << 3; b = (p & 0x1F) << 3;
+            }
+            out[0] = r; out[1] = g; out[2] = b; out[3] = 0xFF;
+        }
+    }
+}
+
+bool GenkanTap::copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsigned rows) {
+    std::lock_guard<std::mutex> lock(frameLock);
+    size_t row = static_cast<size_t>(frameWidth) * 4;
+    if (rows == 0 || firstRow + rows > frameHeight || row * rows > capacity) return false;
+    memcpy(out, frame.data() + row * firstRow, row * rows);
+    return true;
+}
+
+std::pair<unsigned, unsigned> GenkanTap::frameSize() {
+    std::lock_guard<std::mutex> lock(frameLock);
+    return { frameWidth, frameHeight };
 }
 
 }

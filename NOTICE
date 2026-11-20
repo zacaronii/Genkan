@@ -108,8 +108,10 @@ Pinned commit: fee2e824525daa22bcf318f96127fe43fa8a15ad
 
   libmgba_libretro_android.so (mGBA, MPL-2.0, https://github.com/mgba-emu/mgba),
   libpcsx_rearmed_libretro_android.so (PCSX ReARMed, GPL-2.0,
-  https://github.com/libretro/pcsx_rearmed) and libppsspp_libretro_android.so
-  (PPSSPP, GPL-2.0, https://github.com/hrydgard/ppsspp), arm64-v8a,
+  https://github.com/libretro/pcsx_rearmed), libppsspp_libretro_android.so
+  (PPSSPP, GPL-2.0, https://github.com/hrydgard/ppsspp) and
+  libmelonds_libretro_android.so (melonDS DS, GPL-3.0,
+  https://github.com/JesseTG/melonds-ds), arm64-v8a,
   unmodified, bundled as native libraries; and assets/ppsspp.zip (PPSSPP's
   fonts, shaders and flash0 files, unmodified) as assets/cores/ppsspp.zip.
   They are downloaded at build time by the downloadCores and

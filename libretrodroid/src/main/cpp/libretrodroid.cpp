@@ -494,7 +494,9 @@ void LibretroDroid::step() {
 
 float LibretroDroid::getAspectRatio() {
     float gameAspectRatio = Environment::getInstance().retrieveGameSpecificAspectRatio();
-    return gameAspectRatio > 0 ? gameAspectRatio : defaultAspectRatio;
+    float ratio = gameAspectRatio > 0 ? gameAspectRatio : defaultAspectRatio;
+    // Genkan: half the stacked frame is drawn here, twice as wide for its height.
+    return GenkanTap::getInstance().isSplitScreens() ? ratio * 2 : ratio;
 }
 
 void LibretroDroid::refreshAspectRatio() {
@@ -532,6 +534,12 @@ void LibretroDroid::handleVideoRefresh(
     size_t pitch
 ) {
     if (video) {
+        auto &tap = GenkanTap::getInstance();
+        if (tap.isSplitScreens() && data != nullptr && data != RETRO_HW_FRAME_BUFFER_VALID) {
+            // Genkan: the lower screen goes to the other display; this one draws the upper.
+            tap.keepFrame(data, width, height, pitch, static_cast<retro_pixel_format>(Environment::getInstance().getPixelFormat()));
+            height /= 2;
+        }
         video->onNewFrame(data, width, height, pitch);
 
         if (video->rendersInVideoCallback()) {

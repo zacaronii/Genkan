@@ -37,5 +37,27 @@ object GenkanTap {
     /** Moves up to `out.size` mono samples into [out]; returns how many. */
     @JvmStatic external fun drainAudio(out: ShortArray): Int
 
+    /**
+     * The core stacks two screens in one frame (a DS): the view draws only the upper one, and the
+     * whole frame is kept for [copyFrame]. Set before the view is made.
+     */
+    @JvmStatic external fun setSplitScreens(split: Boolean)
+
+    /** The last kept frame's width and height, or null before one came. */
+    fun frameSize(): Pair<Int, Int>? {
+        val packed = packedFrameSize()
+        val width = (packed ushr 32).toInt()
+        val height = packed.toInt()
+        return if (width > 0 && height > 0) width to height else null
+    }
+
+    /** RGBA rows of the last kept frame into the direct [out]; false when there is no such frame. */
+    @JvmStatic external fun copyFrame(out: java.nio.ByteBuffer, firstRow: Int, rows: Int): Boolean
+
+    /** A touch on the lower screen, from 0 to 1 across and down it; negative for a release. */
+    @JvmStatic external fun touchLowerScreen(x: Float, y: Float)
+
     @JvmStatic private external fun memoryRegions(): LongArray
+
+    @JvmStatic private external fun packedFrameSize(): Long
 }

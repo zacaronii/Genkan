@@ -1,5 +1,6 @@
 package app.genkan.core
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -11,6 +12,7 @@ import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
 import android.view.KeyEvent
+import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -52,6 +54,7 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var quitting = false
 
     private var selectDown = false
+    private var lowerScreen: LowerScreen? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +80,7 @@ class CoreActivity : ComponentActivity() {
         val system = File(filesDir, "system").apply { mkdirs() }
         def.assets?.let { (zip, folder) -> CoreAssets.unpack(this, zip, File(system, folder)) }
 
+        GenkanTap.setSplitScreens(def.splitScreens)
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
             coreFilePath = def.library
@@ -94,6 +98,8 @@ class CoreActivity : ComponentActivity() {
             // Touch mode (the bottom screen was tapped last) must not leave it without focus.
             isFocusableInTouchMode = true
             setOnKeyListener { _, _, event -> onPadKey(event) }
+            // The upper screen of a DS takes no touches: the lower one does, on the bottom display.
+            if (def.splitScreens) setOnTouchListener(ignoreTouches)
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = quit()
@@ -103,6 +109,9 @@ class CoreActivity : ComponentActivity() {
             addView(retroView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         })
         retroView.requestFocus()
+        if (def.splitScreens) {
+            lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
+        }
 
         bindService(Intent(this, CoreHostService::class.java), connection, Context.BIND_AUTO_CREATE)
         lifecycleScope.launch(Dispatchers.IO) { sendAudio() }
@@ -165,6 +174,8 @@ class CoreActivity : ComponentActivity() {
         }
 
         override fun frame(): Bundle? {
+            // Both of a DS's screens, as the core drew them: the reader looks at either.
+            if (core.splitScreens) return keptFrameBundle()
             val result = AtomicReference<Bundle?>()
             val done = CountDownLatch(1)
             retroView.grabFrame { pixels, width, height ->
@@ -200,6 +211,32 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
+    /** The core's whole stacked frame, enlarged so small text is big enough to read. */
+    private fun keptFrameBundle(): Bundle? {
+        val (width, height) = GenkanTap.frameSize() ?: return null
+        val pixels = ByteBuffer.allocateDirect(width * height * 4)
+        if (!GenkanTap.copyFrame(pixels, 0, height)) return null
+        val scale = (MIN_FRAME_SIDE + width - 1) / width
+        val row = width * 4
+        val memory = SharedMemory.create("genkan-frame", row * scale * height * scale)
+        val out = memory.mapReadWrite()
+        val line = ByteArray(row)
+        val wide = ByteArray(row * scale)
+        for (y in 0 until height) {
+            pixels.position(y * row)
+            pixels.get(line)
+            for (x in 0 until width) for (k in 0 until scale) line.copyInto(wide, (x * scale + k) * 4, x * 4, x * 4 + 4)
+            repeat(scale) { out.put(wide) }
+        }
+        SharedMemory.unmap(out)
+        memory.setProtect(android.system.OsConstants.PROT_READ)
+        return Bundle().apply {
+            putInt(BuiltInPlayer.FRAME_WIDTH, width * scale)
+            putInt(BuiltInPlayer.FRAME_HEIGHT, height * scale)
+            putParcelable(BuiltInPlayer.FRAME_PIXELS, memory)
+        }
+    }
+
     /** Writes the game's battery save when it changed since the last write. */
     @Synchronized
     private fun save() {
@@ -229,6 +266,12 @@ class CoreActivity : ComponentActivity() {
 
     /** Select held while Start goes down: save and quit. Seen before the core gets the keys. */
     private fun onPadKey(event: KeyEvent): Boolean {
+        // Either stick's click swaps the DS's lower screen and the reader on the bottom display.
+        val lower = lowerScreen
+        if (lower != null && (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL || event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) lower.toggle()
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_START && event.action == KeyEvent.ACTION_DOWN && selectDown) {
             quit()
@@ -243,6 +286,8 @@ class CoreActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        lowerScreen?.dismiss()
+        lowerScreen = null
         super.onDestroy()
         if (::core.isInitialized) {
             runCatching { unbindService(connection) }
@@ -261,5 +306,9 @@ class CoreActivity : ComponentActivity() {
         private const val AUDIO_EVERY_MS = 100L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L
+        /** A kept frame is enlarged to at least this wide for the reader's OCR. */
+        private const val MIN_FRAME_SIDE = 720
+        @SuppressLint("ClickableViewAccessibility")
+        private val ignoreTouches = View.OnTouchListener { _, _ -> true }
     }
 }
