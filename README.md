@@ -102,7 +102,8 @@ a Yomitan dictionary popup. See
   characters (kana and kanji, each line once; Furoshiki's rules) and active reading time
   (needs a line or a lookup in the last five minutes), shown on the reader's bar. Under
   *Reading log* in settings, a mochibridge address and API token send each session to
-  kechimochi with minutes and characters; sessions are re-sent as they grow.
+  kechimochi with minutes and characters; sessions are re-sent as they grow. When mochibridge
+  asks for a RomM game's cover, Genkan sends the one it shows (RomM's own cover, once).
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
 

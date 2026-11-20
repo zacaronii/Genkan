@@ -40,4 +40,12 @@ class ReadingLogPayloadTest {
         assertEquals(true, body["final"])
         assertEquals(mapOf("title" to "漢検トレーニング2", "fields" to mapOf("Platform" to "PC")), body["entry"])
     }
+
+    @Test
+    fun `covers go next to sessions on the same server`() {
+        val config = ReadingLogConfig("bridge.local:8000/")
+        assertEquals("http://bridge.local:8000/api/sessions", config.endpoint)
+        assertEquals("http://bridge.local:8000/api/covers", config.coversEndpoint)
+        assertEquals("https://b/api/covers", ReadingLogConfig("https://b").coversEndpoint)
+    }
 }
