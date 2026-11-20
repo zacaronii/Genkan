@@ -10,7 +10,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Display
-import android.view.MotionEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,9 +31,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 private const val TAG = "LowerActivity"
-
-/** Debounce after a touch ends before focus is handed back to the top screen. */
-private const val REFOCUS_DEBOUNCE_MS = 120L
 
 /**
  * Wait after the companion comes to the front before handing focus back: its window was just
@@ -60,7 +57,6 @@ class LowerActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val refocusGate = RefocusGate()
     private val refocus = Runnable {
-        if (!hasWindowFocus()) return@Runnable
         refocusGate.markLaunched(SystemClock.uptimeMillis())
         FocusDirectorActivity.launchOnDisplay(this, Display.DEFAULT_DISPLAY)
     }
@@ -71,6 +67,11 @@ class LowerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (releaseIfOnDefaultDisplay()) return
         dualScreen.onLowerPlaced(ownDisplayId)
+        // Controller input follows the focused screen (T3). A window that can't take focus
+        // still gets touches, and touching it leaves focus where it was, so a tap on the bottom
+        // screen no longer pulls the pad away from the top one. Handing focus back after each
+        // tap launched a window over the game instead, and PPSSPP paused and redrew for it.
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
 
         setContent {
             GenkanTheme {
@@ -96,33 +97,17 @@ class LowerActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
-        if (!isFinishing) dualScreen.onLowerPlaced(ownDisplayId)
-    }
-
-    /**
-     * A companion that comes to the front (started after Genkan restarts, or respawned) takes
-     * input focus with it, and the controller would then drive the bottom screen until the top
-     * one is touched. It never wants the pad, so hand focus back, but only while it really holds
-     * focus: refocusing on every resume ping-ponged with the launcher's resume forever.
-     */
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
+        if (isFinishing) return
+        dualScreen.onLowerPlaced(ownDisplayId)
+        // Coming to the front (Home, wake, a respawn) still moves the focused screen down here,
+        // where no window can take the pad, so hand it back to the top one.
         handler.removeCallbacks(refocus)
-        if (hasFocus) handler.postDelayed(refocus, maxOf(RESUME_REFOCUS_MS, refocusGate.delayFor(SystemClock.uptimeMillis())))
+        handler.postDelayed(refocus, maxOf(RESUME_REFOCUS_MS, refocusGate.delayFor(SystemClock.uptimeMillis())))
     }
 
-    /**
-     * Controller input follows the last-touched screen (T3). After every touch on the bottom
-     * screen, send focus back to the top display so the pad keeps driving the launcher or game.
-     */
-    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        val handled = super.dispatchTouchEvent(event)
-        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-            handler.removeCallbacks(refocus)
-            val wait = maxOf(REFOCUS_DEBOUNCE_MS, refocusGate.delayFor(SystemClock.uptimeMillis()))
-            handler.postDelayed(refocus, wait)
-        }
-        return handled
+    override fun onPause() {
+        handler.removeCallbacks(refocus)
+        super.onPause()
     }
 
     override fun onDestroy() {
