@@ -1,6 +1,7 @@
 package app.genkan
 
 import android.app.Application
+import app.genkan.download.DownloadQueue
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
 import app.genkan.stats.ReadingLogPusher
@@ -32,6 +33,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var ppssppText: Lazy<PpssppText>
     @Inject lateinit var azaharText: Lazy<AzaharText>
     @Inject lateinit var builtInText: Lazy<BuiltInText>
+    @Inject lateinit var downloadQueue: Lazy<DownloadQueue>
 
     override fun onCreate() {
         super.onCreate()
@@ -47,6 +49,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         ppssppText.get().start()
         azaharText.get().start()
         builtInText.get().start()
+        downloadQueue.get().resume()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

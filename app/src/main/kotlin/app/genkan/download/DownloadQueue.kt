@@ -49,7 +49,12 @@ class DownloadQueue @Inject constructor(
 
     fun enqueue(game: GameEntity) = scope.launch {
         val existing = dao.get(game.id)
-        if (existing?.state == DownloadState.INSTALLED || existing?.state == DownloadState.RUNNING) return@launch
+        if (existing?.state == DownloadState.INSTALLED) return@launch
+        if (existing?.state == DownloadState.RUNNING) {
+            // RUNNING with nothing running here is a download a process death cut off.
+            if (current == null) DownloadService.start(context)
+            return@launch
+        }
         val fsName = game.fsName ?: game.name
         dao.upsert(
             DownloadEntity(
@@ -63,6 +68,13 @@ class DownloadQueue @Inject constructor(
             )
         )
         DownloadService.start(context)
+    }
+
+    /** Picks up downloads a process death left queued or half done, from their .part files. */
+    fun resume() = scope.launch {
+        if (current != null || dao.next() == null) return@launch
+        // Android may refuse a foreground service while Genkan is in the background; A on the game resumes it then.
+        runCatching { DownloadService.start(context) }.onFailure { Log.i(TAG, "Downloads wait for Genkan: ${it.message}") }
     }
 
     /** Stops a queued or running download and throws away what it had written. */
@@ -107,7 +119,7 @@ class DownloadQueue @Inject constructor(
         try {
             val response = withContext(Dispatchers.IO) { api.getRom(row.romId) }
             if (response.code() == 401) throw RomMUnauthorizedException()
-            val rom = response.body() ?: error("RomM did not return game ${row.romId}")
+            val rom = response.body() ?: error("RomM answered ${response.code()} for game ${row.romId}")
             val target = File(row.path)
             val files = if (rom.hasMultipleFiles || rom.hasNestedSingleFile) {
                 rom.files.orEmpty().filter(DownloadPaths::isGameFile).map { file ->
