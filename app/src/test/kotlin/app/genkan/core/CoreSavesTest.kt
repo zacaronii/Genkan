@@ -25,4 +25,15 @@ class CoreSavesTest {
             CoreSaves.fileFor("psx", core, File("/storage/ROMs/psx/Game (Japan).chd"), storage),
         )
     }
+
+    @Test
+    fun `PSP saves go on PPSSPP's memory stick when it has one`() {
+        val storage = kotlin.io.path.createTempDirectory().toFile()
+        val core = CoreCatalog.forPlatform("psp")!!
+        val fallback = File(storage, "private")
+        assertEquals(fallback, CoreSaves.directoryFor(core, fallback, storage))
+        File(storage, "ppsspp/PSP/SAVEDATA").mkdirs()
+        assertEquals(File(storage, "ppsspp"), CoreSaves.directoryFor(core, fallback, storage))
+        storage.deleteRecursively()
+    }
 }

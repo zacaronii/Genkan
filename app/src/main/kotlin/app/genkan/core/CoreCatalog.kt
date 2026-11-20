@@ -12,6 +12,15 @@ data class CoreDef(
     val platforms: Set<String>,
     val variables: Map<String, String> = emptyMap(),
     val pointerMask: Long = 0xFFFFFFFFL,
+    /** A zip in the APK's assets/cores the core needs in its system folder, and the folder's name. */
+    val assets: Pair<String, String>? = null,
+    /** Where the game sees the system RAM, for a core that gives no memory map. */
+    val ramBase: Long = 0L,
+    /**
+     * Folders under shared storage, any of which the core may keep its saves in when it is there
+     * (a standalone emulator's, so the two share saves); else Genkan's own.
+     */
+    val sharedSaves: List<String> = emptyList(),
 )
 
 object CoreCatalog {
@@ -26,6 +35,18 @@ object CoreCatalog {
             platforms = setOf("psx"),
             // The PS1's RAM is mirrored at 0x80000000 and 0xA0000000: games point through those.
             pointerMask = 0x1FFFFFFFL,
+        ),
+        CoreDef(
+            id = "ppsspp", displayName = "PPSSPP", library = "libppsspp_libretro_android.so",
+            platforms = setOf("psp"),
+            // Three times the PSP's 480x272: sharp on the Thor's 1080p screen.
+            variables = mapOf("ppsspp_internal_resolution" to "1440x816"),
+            // User RAM at 0x08000000 is also seen at 0x48000000 (uncached) and 0x88000000 (kernel).
+            pointerMask = 0x3FFFFFFFL,
+            assets = "ppsspp.zip" to "PPSSPP",
+            ramBase = 0x08000000L,
+            // The core's saves folder is its memory stick: PPSSPP's own, so PSP/SAVEDATA is shared.
+            sharedSaves = listOf("ppsspp", "PPSSPP"),
         ),
     )
 

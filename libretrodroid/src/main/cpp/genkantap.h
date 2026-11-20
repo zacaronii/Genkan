@@ -41,7 +41,11 @@ public:
     void operator=(GenkanTap const&) = delete;
 
     void setMemoryMaps(const struct retro_memory_map *map);
-    void addSystemRam(void *data, size_t size);
+    /**
+     * Without a memory map, the core's system RAM, asked for again at each read: some cores
+     * (PPSSPP) set their memory up only after the game has loaded.
+     */
+    void setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned));
     void clear();
     std::vector<Region> regions();
     bool read(uint64_t address, uint8_t *out, size_t size);
@@ -56,6 +60,8 @@ private:
 
     std::mutex memoryLock;
     std::vector<Region> memory;
+    void *(*systemRamData)(unsigned) = nullptr;
+    size_t (*systemRamSize)(unsigned) = nullptr;
 
     std::mutex audioLock;
     std::vector<int16_t> ring;

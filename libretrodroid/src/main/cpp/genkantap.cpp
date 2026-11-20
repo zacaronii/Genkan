@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <sys/uio.h>
+#include <unistd.h>
 
 namespace libretrodroid {
 
@@ -28,17 +30,18 @@ void GenkanTap::setMemoryMaps(const struct retro_memory_map *map) {
     }
 }
 
-void GenkanTap::addSystemRam(void *data, size_t size) {
+void GenkanTap::setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned)) {
     std::lock_guard<std::mutex> lock(memoryLock);
-    // A memory map, when the core gave one, says more than the bare system RAM.
-    if (!memory.empty() || data == nullptr || size == 0) return;
-    memory.push_back(Region { 0, size, static_cast<uint8_t *>(data), false });
+    systemRamData = data;
+    systemRamSize = size;
 }
 
 void GenkanTap::clear() {
     {
         std::lock_guard<std::mutex> lock(memoryLock);
         memory.clear();
+        systemRamData = nullptr;
+        systemRamSize = nullptr;
     }
     std::lock_guard<std::mutex> lock(audioLock);
     ringStart = 0;
@@ -47,15 +50,22 @@ void GenkanTap::clear() {
 
 std::vector<GenkanTap::Region> GenkanTap::regions() {
     std::lock_guard<std::mutex> lock(memoryLock);
-    return memory;
+    // A memory map, when the core gave one, says more than the bare system RAM.
+    if (!memory.empty() || systemRamData == nullptr) return memory;
+    auto *data = static_cast<uint8_t *>(systemRamData(RETRO_MEMORY_SYSTEM_RAM));
+    size_t size = systemRamSize(RETRO_MEMORY_SYSTEM_RAM);
+    if (data == nullptr || size == 0) return {};
+    return { Region { 0, size, data, false } };
 }
 
 bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
-    std::lock_guard<std::mutex> lock(memoryLock);
-    for (const auto &r : memory) {
+    for (const auto &r : regions()) {
         if (address >= r.start && address + size <= r.start + r.length) {
-            std::memcpy(out, r.host + (address - r.start), size);
-            return true;
+            // Copied by the kernel, so memory the core unmapped or never mapped fails the read
+            // instead of crashing the game.
+            struct iovec local { out, size };
+            struct iovec remote { r.host + (address - r.start), size };
+            return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
         }
     }
     return false;

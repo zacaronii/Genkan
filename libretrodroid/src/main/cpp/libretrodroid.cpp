@@ -621,10 +621,7 @@ void LibretroDroid::afterGameLoad() {
     updateAudioSampleRateMultiplier();
 
     GenkanTap::getInstance().setSampleRate((int32_t) std::lround(system_av_info.timing.sample_rate));
-    GenkanTap::getInstance().addSystemRam(
-        core->retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM),
-        core->retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM)
-    );
+    GenkanTap::getInstance().setSystemRam(core->retro_get_memory_data, core->retro_get_memory_size);
 
     defaultAspectRatio = findDefaultAspectRatio(system_av_info);
 }

@@ -160,7 +160,7 @@ val downloadMeikiModels = tasks.register<DownloadPinnedFiles>("downloadMeikiMode
 
 /**
  * Libretro cores for the built-in player, as native libraries, from Lemuroid's prebuilt cores
- * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0). See NOTICE.
+ * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0, PPSSPP GPL-2.0). See NOTICE.
  */
 val lemuroidCores = "https://raw.githubusercontent.com/Swordfish90/LemuroidCores/fee2e824525daa22bcf318f96127fe43fa8a15ad"
 
@@ -170,15 +170,29 @@ val downloadCores = tasks.register<DownloadPinnedFiles>("downloadCores") {
         listOf(
             "$lemuroidCores/lemuroid_core_mgba/src/main/jniLibs/arm64-v8a/libmgba_libretro_android.so fbb03681b7d7ea4fa04bac0f60a005d9fcdc732ece3df1b715fabc19d1f9b2ab libmgba_libretro_android.so",
             "$lemuroidCores/lemuroid_core_pcsx_rearmed/src/main/jniLibs/arm64-v8a/libpcsx_rearmed_libretro_android.so 1c32c21dcc488889db7556bd0bd11c72219228f8d35d36bc30c640472af21fd3 libpcsx_rearmed_libretro_android.so",
+            "$lemuroidCores/lemuroid_core_ppsspp/src/main/jniLibs/arm64-v8a/libppsspp_libretro_android.so 2d5370602e07df1e5bc0fb20467cff52aafa8ccbade904b5d7f60b3eebd2ff23 libppsspp_libretro_android.so",
         ),
     )
     cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
     outputDir.set(layout.buildDirectory.dir("generated/cores"))
 }
 
+/** Files cores need beside them: PPSSPP's fonts, shaders and flash0, unpacked on first use. */
+val downloadCoreAssets = tasks.register<DownloadPinnedFiles>("downloadCoreAssets") {
+    subdir.set("cores")
+    files.set(
+        listOf(
+            "$lemuroidCores/assets/ppsspp.zip 2ae4b85598b1759ee405cefeea2d8cf8a75971ff641b860b7fc45a8c83eca0d5 ppsspp.zip",
+        ),
+    )
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/core-assets"))
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
     }
 }

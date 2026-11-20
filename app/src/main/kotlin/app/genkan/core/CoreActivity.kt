@@ -74,12 +74,15 @@ class CoreActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
+        val system = File(filesDir, "system").apply { mkdirs() }
+        def.assets?.let { (zip, folder) -> CoreAssets.unpack(this, zip, File(system, folder)) }
+
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
             coreFilePath = def.library
             gameFilePath = rom.absolutePath
-            systemDirectory = File(filesDir, "system").apply { mkdirs() }.absolutePath
-            savesDirectory = File(filesDir, "saves").apply { mkdirs() }.absolutePath
+            systemDirectory = system.absolutePath
+            savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()?.also { lastSaved = it }
             shader = ShaderConfig.Default

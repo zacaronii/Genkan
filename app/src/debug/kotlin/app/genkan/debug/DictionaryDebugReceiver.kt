@@ -58,6 +58,8 @@ import javax.inject.Inject
  * (cuts the last seconds of game audio as a card would; GameAudioRecorder logs its level)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
+ * (looks for on-screen text in the built-in player's game memory)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (hands the line to the built-in player's text source as if OCR had read it)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_REGIONS -n app.genkan/.debug.DictionaryDebugReceiver
@@ -155,6 +157,12 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         audio.clip(now - intent.getLongExtra("ms", 3000), now)
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
+                    "app.genkan.debug.PLAYER_FIND" -> {
+                        val started = System.currentTimeMillis()
+                        val found = builtInText.searchNow(intent.getStringExtra("text").orEmpty())
+                        Log.i(TAG, "Player search: ${found.size} strings in ${System.currentTimeMillis() - started} ms")
+                        found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(300))) }
+                    }
                     "app.genkan.debug.PLAYER_OFFER" -> builtInText.offered.emit(intent.getStringExtra("text").orEmpty())
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))

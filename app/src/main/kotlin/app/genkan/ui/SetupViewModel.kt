@@ -29,7 +29,7 @@ enum class SetupAction(val label: String) {
     SHIZUKU("Allow Genkan in Shizuku (emulator saves)"),
     PSP_DEBUGGER("PSP text from PPSSPP's debugger: switch on or off"),
     AZAHAR_RPC("3DS text from Azahar's RPC server: switch on or off"),
-    BUILT_IN_PLAYER("Built-in player for GB, GBA and PS1: switch on or off"),
+    BUILT_IN_PLAYER("Built-in player for GB, GBA, PS1 and PSP: switch on or off"),
     SIGN_OUT("Sign out of RomM"),
 }
 

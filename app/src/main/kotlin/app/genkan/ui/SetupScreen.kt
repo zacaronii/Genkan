@@ -91,7 +91,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Text(
             "Built-in player: " + if (builtInPlayer) {
-                "on; GB, GBA and PS1 games run inside Genkan, which reads their memory, frames and sound directly. Select+Start quits"
+                "on; GB, GBA, PS1 and PSP games run inside Genkan, which reads their memory, frames and sound directly. Select+Start quits"
             } else {
                 "off; every game starts in its installed emulator"
             },

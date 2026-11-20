@@ -10,6 +10,10 @@ import java.io.File
  * folder, by core.
  */
 object CoreSaves {
+    /** The folder a core keeps its own saves in: a standalone emulator's when it has one here. */
+    fun directoryFor(core: CoreDef, fallback: File, storage: File = Environment.getExternalStorageDirectory()): File =
+        core.sharedSaves.map { File(storage, it) }.firstOrNull { File(it, "PSP/SAVEDATA").isDirectory } ?: fallback
+
     fun fileFor(platformSlug: String, core: CoreDef, rom: File, storage: File = Environment.getExternalStorageDirectory()): File =
         SaveLocator(storage).locate(platformSlug, rom)?.takeIf { !it.folder }?.path
             ?: File(storage, "Genkan/saves/${core.id}/${rom.nameWithoutExtension}.srm")

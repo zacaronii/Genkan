@@ -81,8 +81,9 @@ class BuiltInPlayer @Inject constructor() {
         } catch (e: RemoteException) {
             return null
         }
-        val regions = raw.toList().chunked(3).map { (start, length, mirror) -> Triple(start until start + length, mirror != 0L, Unit) }
-        return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask)
+        val base = game.core.ramBase
+        val regions = raw.toList().chunked(3).map { (start, length, mirror) -> (base + start until base + start + length) to (mirror != 0L) }
+        return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base)
     }
 
     companion object {
@@ -99,13 +100,15 @@ private class CoreMemory(
     override val regions: List<LongRange>,
     private val all: List<LongRange>,
     private val pointerMask: Long,
+    /** Added to the core's own addresses to give the game's. */
+    private val base: Long,
 ) : MemorySource {
     override val maxRead: Int = MAX_READ
 
     override fun target(value: Long): Long? = (value and pointerMask).takeIf { v -> all.any { v in it } }
 
     override fun read(address: Long, size: Int): ByteArray? = try {
-        session.read(address, size)
+        session.read(address - base, size)
     } catch (e: RemoteException) {
         null
     }
