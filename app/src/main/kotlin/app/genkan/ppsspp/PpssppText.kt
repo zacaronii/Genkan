@@ -142,7 +142,12 @@ class PpssppText @Inject constructor(
                 return@collect
             }
             when (event["event"]) {
-                "game.status", "game.start" -> {
+                // Another game may be loaded into the same PPSSPP: ask again which one.
+                "game.start", "game.quit" -> {
+                    gameId = null
+                    ws.send(json.toJson(mapOf("event" to "game.status", "ticket" to "status")))
+                }
+                "game.status" -> {
                     val id = (event["game"] as? Map<*, *>)?.get("id") as? String ?: return@collect
                     if (id == gameId) return@collect
                     gameId = id
