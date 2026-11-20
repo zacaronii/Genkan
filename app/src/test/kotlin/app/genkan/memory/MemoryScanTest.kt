@@ -1,4 +1,4 @@
-package app.genkan.azahar
+package app.genkan.memory
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,7 +64,35 @@ class MemoryScanTest {
             MemoryScan.pointersInto(chunk, 0x08000000L, 0x30001000L..0x30001010L),
         )
         assertEquals(0x30001000L, MemoryScan.u32(chunk.copyOfRange(4, 8)))
-        assertTrue(MemoryScan.inRegions(0x30001000L))
-        assertFalse(MemoryScan.inRegions(0x00100000L))
+    }
+
+    @Test
+    fun `a pointer through a mirror counts as one to the address it folds to`() {
+        val chunk = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putInt(0x80012340.toInt()).putInt(0x00012340).array()
+        assertEquals(
+            listOf(0L to 0x12340L, 4L to 0x12340L),
+            MemoryScan.pointersInto(chunk, 0L, 0x12300L..0x12400L) { it and 0x1FFFFFFFL },
+        )
+    }
+
+    @Test
+    fun `a script splits into the pages the player sees, without markup`() {
+        val script = "<E800 268><E003 60><CNTR>１２月１７日\n<CNTR>地方裁判所<E023><PAGE>\n<E800 276>" +
+            "<E025 4>（うーん。<E003 34>ぜんっ<E003 20>ぜん）<E023><PAGE>\n<E800 299><E040 0 1>"
+        val bytes = script.toByteArray(Charsets.UTF_8)
+        val pages = MemoryScan.pages(bytes, Charsets.UTF_8)
+        assertEquals(listOf("１２月１７日地方裁判所", "（うーん。ぜんっぜん）"), pages.map { it.text })
+        assertEquals(0, pages[0].offset)
+        // The second page starts right after the first one's page tag.
+        assertEquals(script.substringBefore("\n<E800 276>").toByteArray(Charsets.UTF_8).size, pages[1].offset)
+    }
+
+    @Test
+    fun `terminators end pages too, in UTF-16`() {
+        val bytes = "一つ目".toByteArray(Charsets.UTF_16LE) + byteArrayOf(0, 0) + "二つ目".toByteArray(Charsets.UTF_16LE)
+        assertEquals(
+            listOf(MemoryScan.Page(0, "一つ目"), MemoryScan.Page(8, "二つ目")),
+            MemoryScan.pages(bytes, Charsets.UTF_16LE),
+        )
     }
 }

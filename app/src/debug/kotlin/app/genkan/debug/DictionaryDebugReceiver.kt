@@ -7,6 +7,13 @@ import android.content.Intent
 import android.os.Environment
 import android.util.Log
 import app.genkan.dictionary.Dictionaries
+import app.genkan.download.DownloadQueue
+import app.genkan.capture.CaptureConsentActivity
+import app.genkan.capture.ScreenCapture
+import app.genkan.launch.GameLauncher
+import app.genkan.launch.topScreenOptions
+import app.genkan.ocr.OcrReader
+import app.genkan.launch.LaunchResult
 import app.genkan.library.LibraryDatabase
 import app.genkan.saves.SaveSync
 import app.genkan.privileged.Privileged
@@ -37,6 +44,16 @@ import javax.inject.Inject
  * (looks for on-screen text in the running 3DS game's memory, through Azahar's RPC)
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (hands the line to the 3DS text source as if OCR had read it: it locks on and follows it)
+ *   adb shell am broadcast -a app.genkan.debug.AZAHAR_POINTERS -n app.genkan/.debug.DictionaryDebugReceiver --es from 089ddc90 --es to 089e0000
+ * (logs every pointer in the 3DS game's memory into the range, in hex)
+ *   adb shell am broadcast -a app.genkan.debug.AZAHAR_VALUES -n app.genkan/.debug.DictionaryDebugReceiver --es from 200 --es to 4000
+ * (logs every aligned word holding a value in the range, for finding offsets that move)
+ *   adb shell am broadcast -a app.genkan.debug.OCR -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
+ * (switches OCR on, asking for screen capture on the top screen when it isn't running, or off)
+ *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
+ * (downloads one game from the library, as choosing it in the grid does)
+ *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
+ * (starts a downloaded game and marks it as playing, without the save sync the grid runs first)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -47,6 +64,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var privileged: Privileged
     @Inject lateinit var azahar: AzaharText
+    @Inject lateinit var downloadQueue: DownloadQueue
+    @Inject lateinit var gameLauncher: GameLauncher
+    @Inject lateinit var ocr: OcrReader
+    @Inject lateinit var capture: ScreenCapture
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -70,11 +91,47 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         val roms = if (rom != 0L) listOf(rom) else database.downloads().all().first().map { it.romId }
                         roms.forEach { Log.i(TAG, "Save sync of rom $it ran: ${saveSync.sync(it, dryRun = dry)}") }
                     }
+                    "app.genkan.debug.DOWNLOAD" -> {
+                        val game = database.library().game(intent.getLongExtra("rom", 0))
+                        if (game == null) Log.w(TAG, "No such game") else downloadQueue.enqueue(game).join()
+                    }
+                    "app.genkan.debug.LAUNCH" -> {
+                        val rom = intent.getLongExtra("rom", 0)
+                        val game = database.library().game(rom)
+                        val download = database.downloads().get(rom)
+                        if (game == null || download == null) {
+                            Log.w(TAG, "Not downloaded")
+                        } else {
+                            val result = gameLauncher.launch(game, download)
+                            Log.i(TAG, "Launch: $result")
+                            if (result is LaunchResult.Launched) nowPlaying.started(game.id, game.name, game.platformSlug)
+                        }
+                    }
                     "app.genkan.debug.AZAHAR_FIND" -> {
                         val started = System.currentTimeMillis()
                         val found = azahar.searchNow(intent.getStringExtra("text").orEmpty())
                         Log.i(TAG, "Azahar search: ${found.size} strings in ${System.currentTimeMillis() - started} ms")
-                        found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(80))) }
+                        found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(1500))) }
+                    }
+                    "app.genkan.debug.AZAHAR_POINTERS" -> {
+                        val from = intent.getStringExtra("from").orEmpty().toLong(16)
+                        val to = intent.getStringExtra("to").orEmpty().toLong(16)
+                        azahar.pointersNow(from..to).forEach { (slot, value) -> Log.i(TAG, "  pointer 0x%08x -> 0x%08x".format(slot, value)) }
+                    }
+                    "app.genkan.debug.AZAHAR_VALUES" -> {
+                        val from = intent.getStringExtra("from").orEmpty().toLong(16)
+                        val to = intent.getStringExtra("to").orEmpty().toLong(16)
+                        azahar.valuesNow(from..to).forEach { (slot, value) -> Log.i(TAG, "  value 0x%08x = 0x%08x".format(slot, value)) }
+                    }
+                    "app.genkan.debug.OCR" -> {
+                        val on = intent.getBooleanExtra("on", true)
+                        ocr.setEnabled(on)
+                        if (on && !capture.running.value) {
+                            context.startActivity(
+                                Intent(context, CaptureConsentActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                topScreenOptions(),
+                            )
+                        }
                     }
                     "app.genkan.debug.AZAHAR_OFFER" -> azahar.offered.emit(intent.getStringExtra("text").orEmpty())
                     "app.genkan.debug.SHIZUKU_PROBE" -> {

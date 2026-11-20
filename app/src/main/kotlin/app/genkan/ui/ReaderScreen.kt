@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import app.genkan.azahar.AzaharStatus
+import app.genkan.memory.MemoryTextStatus
 import app.genkan.ppsspp.PpssppStatus
 import app.genkan.reader.HookStatus
 import app.genkan.reader.ReaderLineEntity
@@ -86,14 +86,15 @@ fun ReaderScreen(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                         ocrOn && !capturing -> "OCR: waiting for capture"
-                        azahar == AzaharStatus.Locked -> "Azahar text (following it in memory)"
-                        azahar == AzaharStatus.Searching -> "Azahar: looking for this line in memory…"
+                        azahar == MemoryTextStatus.Locked -> "Azahar text (following it in memory)"
+                        azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
+                        azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
                         ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
                         ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR"
                         ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
                         ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
-                            (if (azahar == AzaharStatus.NotFound) "  ·  not found in Azahar's memory" else "")
-                        azahar == AzaharStatus.NeedsOcr -> "Azahar: turn OCR on once to find the text"
+                            (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "")
+                        azahar == MemoryTextStatus.NeedsOcr -> "Azahar: turn OCR on once to find the text"
                         else -> when (status) {
                             is HookStatus.Connected -> "Texthooker connected"
                             is HookStatus.Waiting -> "Waiting for a texthooker"

@@ -95,6 +95,9 @@ class OcrReader @Inject constructor(
         latch.reset()
     }
 
+    /** Turns a line OCR read into the game's exact text, or null to keep OCR's. */
+    @Volatile var corrector: (suspend (String) -> String?)? = null
+
     private fun start() {
         if (job?.isActive == true) return
         latch.reset()
@@ -127,7 +130,9 @@ class OcrReader @Inject constructor(
         Log.i(TAG, "${engine.name} read ${text.length} characters in $ms ms: $text")
         if (text.isBlank() || text == lastText) return
         lastText = text
-        session.submit(HookMessage(text))
+        // A memory source that has the game's script gives the line in the game's own words.
+        val exact = corrector?.let { fix -> runCatching { fix(text) }.onFailure { Log.w(TAG, "Correction failed: $it") }.getOrNull() }
+        session.submit(HookMessage(exact ?: text))
         _lines.tryEmit(text)
     }
 
