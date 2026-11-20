@@ -91,24 +91,24 @@ class ReaderSession @Inject constructor(
         }
         val now = System.currentTimeMillis()
         val feed = feeds.getOrPut(message.thread) { LineFeed() }
-        feed.take(message.text, now).forEach { handOver(it) }
+        feed.take(message.text, now).forEach { handOver(it, message.thread) }
         if (feed.hasPending) {
             settleJobs[message.thread]?.cancel()
             settleJobs[message.thread] = scope.launch {
                 delay(LineFeed.SETTLE_MS)
-                lock.withLock { feed.settle(System.currentTimeMillis())?.let { handOver(it) } }
+                lock.withLock { feed.settle(System.currentTimeMillis())?.let { handOver(it, message.thread) } }
             }
         }
     }
 
-    private suspend fun handOver(out: LineFeed.Out) {
+    private suspend fun handOver(out: LineFeed.Out, thread: String) {
         val key = nowPlaying.game.value.key
         val now = System.currentTimeMillis()
         val last = out.takesBack?.let { dao.last(key) }
         if (last != null && last.text == out.takesBack) {
             dao.replace(last.id, out.text, now)
         } else {
-            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now))
+            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now, thread = thread.ifEmpty { null }))
         }
         // A line that carries on one already counted adds only its new part to the stats.
         val takenBack = out.takesBack
