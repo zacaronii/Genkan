@@ -1,5 +1,7 @@
 // Hook addresses and text clean-up adapted from 0xDC00's Agent scripts (MIT):
 // https://github.com/0xDC00/scripts PSP_ULJM06119_Dunamis15.js, PSP_NPJH50127_Tokimeki-Memorial-4.js
+// and from LunaHook's PPSSPP table (GPL-3.0), LunaTranslator
+// src/NativeImpl/LunaHook/LunaHook/emulators/ppsspp_1.cpp: My Merry May with be, Danganronpa 1-2, CLANNAD.
 package app.genkan.ppsspp
 
 import java.nio.charset.Charset
@@ -30,7 +32,21 @@ object PspHooks {
             // Dialogue passes here too; only lines without closing punctuation are choices.
             PspHook(0x08850270L, "a1", SHIFT_JIS) { s -> s.takeIf { Regex("[^…。！？]$").containsMatchIn(it) } },
         ),
+        // My Merry May with be
+        "ULJM05603" to listOf(PspHook(0x0886F014L, "a3", SHIFT_JIS, ::myMerryMay)),
+        // ダンガンロンパ 希望の学園と絶望の高校生 (PSP the Best), スーパーダンガンロンパ2
+        "NPJH50515" to listOf(PspHook(0x088540B0L, "a0", Charsets.UTF_16LE, ::danganronpa)),
+        "NPJH50631" to listOf(PspHook(0x088D1A24L, "a0", Charsets.UTF_16LE, ::danganronpa)),
+        // CLANNAD (both discs)
+        "ULJM05338" to listOf(PspHook(0x0880F240L, "a0", Charsets.UTF_16LE)),
+        "ULJM05339" to listOf(PspHook(0x0880F240L, "a0", Charsets.UTF_16LE)),
     )
+
+    private val MERRY_MAY_CODES = Regex("%K|%P|%p|%N|%V|%LC|%LE|%FS|%FE|%CFFFF|☆")
+
+    fun myMerryMay(raw: String): String = raw.replace(MERRY_MAY_CODES, "").replace('├', 'ー').replace('┤', 'ー')
+
+    fun danganronpa(raw: String): String = raw.replace("\n", "").replace(Regex("<CLT \\d+>(.*?)<CLT>"), "$1")
 
     fun dunamis15(raw: String): String = raw
         .replace(Regex("\\[[^\\]]+."), "")
@@ -38,9 +54,13 @@ object PspHooks {
         .replace(Regex("%\\d+#[0-9a-fA-F]*;"), "")
         .replace(Regex("\n+"), "")
 
-    /** The string at the start of [bytes], up to its NUL terminator. */
+    /** The string at the start of [bytes], up to its NUL terminator (two bytes for UTF-16). */
     fun decode(bytes: ByteArray, charset: Charset): String {
-        val end = bytes.indexOf(0).let { if (it < 0) bytes.size else it }
+        val end = if (charset == Charsets.UTF_16LE) {
+            (0 until bytes.size - 1 step 2).firstOrNull { bytes[it] == 0.toByte() && bytes[it + 1] == 0.toByte() } ?: (bytes.size and 1.inv())
+        } else {
+            bytes.indexOf(0).let { if (it < 0) bytes.size else it }
+        }
         return String(bytes, 0, end, charset)
     }
 }

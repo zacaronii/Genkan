@@ -27,4 +27,18 @@ class PspHooksTest {
         assertEquals("一緒に帰る", choices.clean("一緒に帰る"))
         assertNull(choices.clean("今日はいい天気だね。"))
     }
+
+    @Test
+    fun `UTF-16 strings end at a two-byte terminator`() {
+        val bytes = "希望の学園".toByteArray(Charsets.UTF_16LE) + byteArrayOf(0, 0, 0x41, 0)
+        assertEquals("希望の学園", PspHooks.decode(bytes, Charsets.UTF_16LE))
+        // A zero high byte inside a character isn't a terminator.
+        assertEquals("A", PspHooks.decode(byteArrayOf(0x41, 0, 0, 0), Charsets.UTF_16LE))
+    }
+
+    @Test
+    fun `ported LunaHook filters`() {
+        assertEquals("ちょっと待ってー", PspHooks.myMerryMay("%Kちょっと%N待って├%P"))
+        assertEquals("希望の学園", PspHooks.danganronpa("<CLT 3>希望の\n学園<CLT>"))
+    }
 }
