@@ -62,6 +62,12 @@ a Yomitan dictionary popup. See
   install and start it (it stops at every reboot), then *Allow Genkan in Shizuku* in settings.
   Their save folders are shared by every game, so Genkan learns which files are a game's from
   what changed there while it ran.
+- **PSP text from PPSSPP (opt-in):** *PSP text from PPSSPP's debugger* in settings turns on
+  PPSSPP's remote debugger (a fixed port in its `ppsspp.ini`; switching off restores PPSSPP's own
+  values). For games with a hook profile, Genkan sets non-pausing log breakpoints at the game's
+  text routine and reads each line from memory, with OCR off. PPSSPP 1.20 opens that debugger to
+  the whole network while a game runs, hence off by default. Profiles must match the game's
+  version: デュナミス15 1.01 doesn't match the published hook, so more profiles are still to come.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

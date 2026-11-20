@@ -45,6 +45,7 @@ import app.genkan.ui.LibraryViewModel
 import app.genkan.ui.LoginScreen
 import app.genkan.ui.LoginViewModel
 import app.genkan.ui.Screen
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
@@ -264,6 +265,9 @@ class HomeActivity : ComponentActivity() {
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )
             SetupAction.SHIZUKU -> viewModel.privileged.requestPermission()
+            SetupAction.PSP_DEBUGGER -> lifecycleScope.launch {
+                viewModel.ppssppText.setEnabled(!viewModel.ppssppText.enabled.first())
+            }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

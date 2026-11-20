@@ -7,6 +7,7 @@ import app.genkan.home.DualScreenState
 import app.genkan.library.LibrarySync
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
+import app.genkan.ppsspp.PpssppText
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ enum class SetupAction(val label: String) {
     READING_LOG("Reading log"),
     USAGE_ACCESS("Usage access (exact play time)"),
     SHIZUKU("Allow Genkan in Shizuku (emulator saves)"),
+    PSP_DEBUGGER("PSP text from PPSSPP's debugger: switch on or off"),
     SIGN_OUT("Sign out of RomM"),
 }
 
@@ -35,6 +37,7 @@ class SetupViewModel @Inject constructor(
     val dictionaries: Dictionaries,
     private val sessionTracker: SessionTracker,
     val privileged: Privileged,
+    val ppssppText: PpssppText,
 ) : ViewModel() {
 
 

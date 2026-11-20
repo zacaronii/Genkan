@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.ppsspp.PpssppStatus
 import app.genkan.reader.HookStatus
 import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ThreadSample
@@ -68,6 +69,7 @@ fun ReaderScreen(
     val editing by viewModel.editingArea.collectAsStateWithLifecycle()
     val recording by viewModel.audio.running.collectAsStateWithLifecycle()
     val reading by viewModel.stats.session.collectAsStateWithLifecycle()
+    val ppsspp by viewModel.ppsspp.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -82,6 +84,9 @@ fun ReaderScreen(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                         ocrOn && !capturing -> "OCR: waiting for capture"
+                        ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
+                        ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR"
+                        ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
                         ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + if (recording) "  ·  audio" else ""
                         else -> when (status) {
                             is HookStatus.Connected -> "Texthooker connected"

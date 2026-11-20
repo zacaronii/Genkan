@@ -28,6 +28,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
     val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
+    val pspDebugger by viewModel.ppssppText.enabled.collectAsStateWithLifecycle(false)
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
 
     Column(
@@ -64,6 +65,15 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
                 Privileged.State.NOT_ALLOWED -> "Shizuku is running; allow Genkan below"
                 Privileged.State.STOPPED -> "start Shizuku (it stops at every reboot)"
                 Privileged.State.MISSING -> "install Shizuku to sync them"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "PSP text from PPSSPP: " + if (pspDebugger) {
+                "on; PPSSPP's debugger is reachable from your network while a game runs"
+            } else {
+                "off; PSP games use OCR (switching it on opens PPSSPP's debugger to your network while a game runs)"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
