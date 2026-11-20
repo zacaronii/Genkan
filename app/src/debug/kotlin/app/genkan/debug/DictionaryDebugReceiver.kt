@@ -4,10 +4,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import app.genkan.azahar.AzaharText
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Environment
 import android.util.Log
 import app.genkan.dictionary.Dictionaries
 import app.genkan.download.DownloadQueue
+import app.genkan.audio.AacEncoder
 import app.genkan.audio.GameAudioRecorder
 import app.genkan.capture.CaptureConsentActivity
 import app.genkan.capture.ScreenCapture
@@ -58,6 +60,8 @@ import javax.inject.Inject
  * (switches OCR on, asking for screen capture on the top screen when it isn't running, or off)
  *   adb shell am broadcast -a app.genkan.debug.AUDIO_CLIP -n app.genkan/.debug.DictionaryDebugReceiver [--el ms 3000]
  * (cuts the last seconds of game audio as a card would; GameAudioRecorder logs its level)
+ *   adb shell am broadcast -a app.genkan.debug.CARD_MEDIA -n app.genkan/.debug.DictionaryDebugReceiver
+ * (writes what a card made now would carry, the frame as WebP and the last 3 s as M4A, to Download/genkan-card-media)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
@@ -159,6 +163,15 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     "app.genkan.debug.AUDIO_CLIP" -> {
                         val now = System.currentTimeMillis()
                         audio.clip(now - intent.getLongExtra("ms", 3000), now)
+                    }
+                    "app.genkan.debug.CARD_MEDIA" -> {
+                        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "genkan-card-media").apply { mkdirs() }
+                        val frame = capture.frame()
+                        frame?.let { bmp -> File(dir, "picture.webp").outputStream().use { bmp.compress(Bitmap.CompressFormat.WEBP_LOSSY, 80, it) } }
+                        val now = System.currentTimeMillis()
+                        val voice = audio.clip(now - 3000, now)
+                        voice?.let { AacEncoder.encode(it, GameAudioRecorder.SAMPLE_RATE, File(dir, "audio.m4a")) }
+                        Log.i(TAG, "Card media: frame ${frame?.width}x${frame?.height}, audio ${voice?.size} samples, in $dir")
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
                     "app.genkan.debug.PLAYER_FIND" -> {
