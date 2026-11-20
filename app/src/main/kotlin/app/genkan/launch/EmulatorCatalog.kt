@@ -49,6 +49,10 @@ data class EmulatorDef(
     /** Draws its own second screen on the other display (Azahar's 3DS bottom screen). */
     val drawsBothScreens: Boolean = false,
     val downloadUrl: String? = null,
+    /** BIOS files from the platform's firmware in RomM: RomM's file name to the name in [firmwareDir]. */
+    val firmware: Map<String, String> = emptyMap(),
+    /** The emulator's BIOS folder, relative to shared storage. */
+    val firmwareDir: String? = null,
 )
 
 const val DUCKSTATION_PLAIN_PATH_MIN_BUILD = 10_000
@@ -91,6 +95,9 @@ object EmulatorCatalog {
                 ),
             ),
             downloadUrl = "https://play.google.com/store/apps/details?id=com.github.stenzek.duckstation",
+            // It finds BIOS images by their contents; the Japanese one for the Japanese library.
+            firmware = mapOf("ps-30j.bin" to "scph5500.bin"),
+            firmwareDir = "Android/data/com.github.stenzek.duckstation/files/bios",
         ),
         EmulatorDef(
             id = "armsx2_refresh", packageName = "com.armsx2", displayName = "ARMSX2",

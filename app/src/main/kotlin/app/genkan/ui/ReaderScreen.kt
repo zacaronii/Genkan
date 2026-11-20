@@ -34,6 +34,9 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,7 +85,8 @@ fun ReaderScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1)
+                // One line that ends in "…": wrapped, it would show only its first words with no sign of the rest.
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
@@ -107,13 +111,15 @@ fun ReaderScreen(
                         }
                     },
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
                 )
             }
-            // The chips scroll sideways rather than squeeze the game's title out.
+            // The chips take what they need, up to most of the bar, and scroll sideways past that;
+            // the game's title gets the rest.
             Row(
-                Modifier.weight(2f, fill = false).horizontalScroll(rememberScrollState()),
+                Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp * 0.6f).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 onShowGame?.let { Chip("Game", it) }

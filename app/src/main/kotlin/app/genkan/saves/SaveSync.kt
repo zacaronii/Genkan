@@ -329,7 +329,13 @@ class SaveSync @Inject constructor(
         override fun read(): LocalSave? {
             if (paths.isEmpty()) return null
             val stage = staging("out")
-            paths.forEach { check(files.copy("$base/$it", File(stage, it).path)) { "couldn't read $it" } }
+            paths.forEach {
+                // DuckStation writes its cards private to itself (mkstemp), out of even Shizuku's reach.
+                if (!files.copy("$base/$it", File(stage, it).path)) {
+                    stage.deleteRecursively()
+                    error(if (watched.emulator == "duckstation") "DuckStation keeps its memory cards private; they can't be synced" else "couldn't read $it")
+                }
+            }
             if (single != null) {
                 val file = File(stage, single)
                 return LocalSave(file, SaveHash.ofFile(file), file.length(), file.lastModified(), temporary = true)
@@ -343,7 +349,8 @@ class SaveSync @Inject constructor(
 
         override suspend fun replace(incoming: File, fileName: String) {
             val backup = backupDir(watched.emulator, "rom-$romId")
-            paths.forEach { files.copy("$base/$it", File(backup, it).path) }
+            // No backup, no restore: a save that can't be copied out mustn't be overwritten.
+            paths.forEach { check(files.copy("$base/$it", File(backup, it).path)) { "couldn't back up $it" } }
             val stage = staging("in")
             if (fileName.endsWith(".zip")) unzipInto(incoming, stage) else incoming.copyTo(File(stage, "${watched.folders.first()}/$fileName"))
             val restored = SaveHash.filesOf(stage).map { it.first }

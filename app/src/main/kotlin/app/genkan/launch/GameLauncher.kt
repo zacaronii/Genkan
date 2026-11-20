@@ -73,6 +73,7 @@ class GameLauncher @Inject constructor(
         val (emulator, version) = installedEmulatorFor(game.platformSlug)
             ?: return@withContext LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug))
 
+        withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(emulator, game.platformId) }
         val command = builder.build(emulator, rom, game.platformSlug, version)
             ?: return@withContext LaunchResult.Failed("${emulator.displayName} has no core set for ${game.platformSlug}")
         Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${rom.name}")

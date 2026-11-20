@@ -24,7 +24,9 @@ a Yomitan dictionary popup. See
 - **Playing:** A on a downloaded game starts it on the top screen in the first installed
   emulator for its platform: RetroArch (NES, SNES, GB/GBC/GBA, N64; install the FCEUmm,
   Snes9x, mGBA and Mupen64Plus-Next cores from RetroArch's Online Updater), DuckStation
-  (PS1), ARMSX2 (PS2), Dolphin (GameCube/Wii) or Azahar (3DS).
+  (PS1), ARMSX2 (PS2), Dolphin (GameCube/Wii) or Azahar (3DS). DuckStation gets the Japanese
+  PS1 BIOS (`ps-30j.bin`) from the platform's firmware in RomM, copied into its `bios` folder
+  through Shizuku before the first game starts.
 - **Play time:** each play of a RomM game is reported to RomM as a play session when you come
   back to Genkan. For exact times (sleep and other apps left out), allow *Usage access* from
   Genkan's settings; without it a session runs from launch until Genkan is back in front.
@@ -53,15 +55,17 @@ a Yomitan dictionary popup. See
   the app (about 150 ms a line on the Thor); the chip next to *Area* switches to ML Kit's
   Japanese model (faster, but it misreads game fonts more often). The build downloads Meiki's
   pinned models from Hugging Face once into `.gradle/meiki`.
-- **Saves:** for Azahar (3DS), RetroArch, DuckStation, Dolphin and PPSSPP (PSP) games downloaded from RomM, Genkan syncs the save
+- **Saves:** for Azahar (3DS), RetroArch, Dolphin and PPSSPP (PSP) games downloaded from RomM, Genkan syncs the save
   with RomM's device sync before the game starts and after it ends. A save about to be replaced
   is copied to `Genkan/save-backups` first; when both sides changed, the device keeps its copy
   and archives it in RomM; a delete on the server never removes a save from the device.
-  DuckStation (PS1) and Dolphin (GameCube, Wii) keep their saves in their own `Android/data`,
+  Dolphin (GameCube, Wii) keeps its saves in its own `Android/data`,
   which other apps can't read, so those go through [Shizuku](https://github.com/RikkaApps/Shizuku):
   install and start it (it stops at every reboot), then *Allow Genkan in Shizuku* in settings.
-  Their save folders are shared by every game, so Genkan learns which files are a game's from
-  what changed there while it ran.
+  Its save folders are shared by every game, so Genkan learns which files are a game's from
+  what changed there while it ran. DuckStation's memory cards can't be synced: it writes them
+  readable by itself only, which even Shizuku can't get past. For synced PS1 saves, use the
+  built-in player.
 - **PSP text from PPSSPP (opt-in):** *PSP text from PPSSPP's debugger* in settings turns on
   PPSSPP's remote debugger (a fixed port in its `ppsspp.ini`; switching off restores PPSSPP's own
   values). For games with a hook profile, Genkan sets non-pausing log breakpoints at the game's
