@@ -5,11 +5,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
 
 add_definitions("-DVFS_FRONTEND -DHAVE_STRL")
 
-# Let's include oboe
-set (OBOE_DIR oboe)
-add_subdirectory (${OBOE_DIR} oboe)
-include_directories (${OBOE_DIR}/include)
-include_directories (${OBOE_DIR}/src)
+# Oboe from its prefab package (Genkan: instead of a submodule).
+find_package (oboe REQUIRED CONFIG)
 
 include_directories("libretro/libretro-common/include")
 
@@ -101,6 +98,6 @@ target_link_libraries(libretrodroid
                       android
                       log 
                       EGL
-                      oboe
+                      oboe::oboe
                       GLESv3
 )

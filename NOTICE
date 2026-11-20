@@ -96,10 +96,10 @@ Pinned commit: 683652f8705a6953218444d72ed77d2c5913fffb
     -> libretrodroid/ (the :libretrodroid module), modified: <functional>
     includes for newer NDKs; memory maps, memory reads and an audio tap
     (cpp/genkantap*, GenkanTap.kt, environment.cpp, libretrodroid.cpp); frame
-    grabs (GLRetroView.kt). Its submodules, used unmodified as git submodules
-    at the commits LibretroDroid pins: Oboe (Apache-2.0,
-    b15f5e39c01a7ada306d959e5129620b145fb8b4) and libretro-common (MIT,
-    b0c348ea5543c4d7fb0bc479258aa6988b20c0c9).
+    grabs (GLRetroView.kt); Oboe from its published package
+    (com.google.oboe:oboe, Apache-2.0) instead of a submodule. libretro-common
+    (MIT) is used unmodified as a git submodule at the commit LibretroDroid
+    pins, b0c348ea5543c4d7fb0bc479258aa6988b20c0c9.
 
 --------------------------------------------------------------------------
 Libretro cores, prebuilt by Lemuroid's LemuroidCores

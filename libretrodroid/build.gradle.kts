@@ -1,5 +1,5 @@
 // LibretroDroid (Filippo Scognamiglio, GPL-3.0) at 683652f8, with Genkan's additions: memory
-// reads, an audio tap and frame grabs for the reader. See NOTICE.
+// reads, an audio tap and frame grabs for the reader, and Oboe from its prefab. See NOTICE.
 plugins {
     alias(libs.plugins.android.library)
 }
@@ -17,9 +17,14 @@ android {
         }
         externalNativeBuild {
             cmake {
-                arguments += "-DANDROID_STL=c++_static"
+                // Oboe's prefab needs the shared C++ runtime.
+                arguments += "-DANDROID_STL=c++_shared"
             }
         }
+    }
+
+    buildFeatures {
+        prefab = true
     }
 
     externalNativeBuild {
@@ -37,4 +42,5 @@ kotlin {
 dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.oboe)
 }
