@@ -45,8 +45,15 @@ Proton 11 arm64ec on the Thor:
   the proxy from the game folder. Without it Wine kept its built-in `version.dll`.
 - LunaHook survived x86-on-ARM translation: it matched the KiriKiri engine, inserted its
   `EmbedKrkrZ` and `KiriKiriZ` hooks, and lines came out in Japanese.
-- Genkan's reader, another Android app, reached `ws://127.0.0.1:6677` and showed both
+- Genkan's reader, another Android app, reached `ws://127.0.0.1:6677` and showed the
   threads in its picker.
+- **Gotcha found:** the host was a console program, and its console window took the game's
+  keyboard and controller focus: the game kept drawing but ignored input. The host is now
+  built as a GUI program (`-mwindows`), so no console opens, and the proxy starts it with
+  `CREATE_NO_WINDOW` as well.
+- Threads in this game: `TextRender` carries each line exactly as shown; `EmbedKrkrZ` repeats
+  it along with the script's Chinese translations; `KiriKiriZ` doubles characters and mixes
+  in the speaker's name. So the dialogue thread to pick is `TextRender`.
 
 Getting the proxy in place: GameNative installs games in its private storage, which adb and
 Shizuku can't reach, but each container maps the game folder as `A:` and Android's Download
@@ -92,6 +99,8 @@ build/game64/         64-bit test: fakevn64.exe, version.dll, hookbridge/
 thread=TextOutA        ; only send this thread (name as logged); omit to send all
 code=HS10@0:gdi32.dll:TextOutA   ; optional LunaHook hook code to insert on connect
 pc_hooks=0             ; leave 0 (see gotcha above)
+remove=EmbedKrkrZ      ; take out hooks LunaHook inserts by itself, by name as logged
+                       ; (removing TextRender while Marco ran froze it, so use with care)
 [server]
 port=6677
 ```

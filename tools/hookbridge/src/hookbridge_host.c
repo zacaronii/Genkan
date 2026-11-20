@@ -46,6 +46,10 @@ typedef void (*Luna_ConnectProcess_t)(DWORD pid);
 typedef void (*Luna_InsertHookCode_t)(DWORD pid, const wchar_t *hookcode);
 
 static Luna_InsertHookCode_t Luna_InsertHookCode;
+typedef void (*Luna_RemoveHook_t)(DWORD pid, uint64_t addr);
+static Luna_RemoveHook_t Luna_RemoveHook;
+// Hooks to take out again as LunaHook inserts them, by name: [hook] remove=TextRender,EmbedKrkrZ
+static wchar_t removeNames[512];
 
 // ---------- options ----------
 static DWORD gamePid;
@@ -302,10 +306,35 @@ static void OnOutput(const wchar_t *code, const char *name, ThreadParam tp, cons
     Logf("hookbridge-host: line [%s] %s", name, textUtf8);
     Broadcast(json);
 }
+static DWORD WINAPI RemoveLater(LPVOID addr) {
+    Sleep(200); // not from inside LunaHook's own callback
+    Luna_RemoveHook(gamePid, (uint64_t)(uintptr_t)addr);
+    Logf("hookbridge-host: removed hook at %llx", (unsigned long long)(uintptr_t)addr);
+    return 0;
+}
+
+// LunaHook reports each hook it inserts as "注入钩子: <name> <hex address>".
+static void MaybeRemove(const wchar_t *log) {
+    const wchar_t *p = wcsstr(log, L"\u6ce8\u5165\u94a9\u5b50: ");
+    if (!p || !removeNames[0] || !Luna_RemoveHook) return;
+    wchar_t name[128];
+    unsigned long long addr;
+    if (swscanf(p + 6, L"%127ls %llx", name, &addr) != 2) return;
+    wchar_t list[512], *ctx = NULL;
+    lstrcpyW(list, removeNames);
+    for (wchar_t *n = wcstok(list, L",", &ctx); n; n = wcstok(NULL, L",", &ctx)) {
+        if (!wcscmp(n, name)) {
+            CloseHandle(CreateThread(NULL, 0, RemoveLater, (LPVOID)(uintptr_t)addr, 0, NULL));
+            return;
+        }
+    }
+}
+
 static void OnHostInfo(int type, const wchar_t *log) {
     char msg[4096];
     ToUtf8(log, msg, sizeof(msg));
     Logf("hookbridge-host: info(%d) %s", type, msg);
+    MaybeRemove(log);
 }
 static void OnHookInsert(DWORD pid, uint64_t address, const wchar_t *code) {
     (void)pid; (void)address; (void)code;
@@ -340,6 +369,7 @@ int wmain(int argc, wchar_t **argv) {
     wsprintfW(ini, L"%s\\hookbridge.ini", kit);
     if (!hookcode[0] && GetPrivateProfileStringW(L"hook", L"code", L"", value, 512, ini)) lstrcpyW(hookcode, value);
     if (!threadFilter[0] && GetPrivateProfileStringW(L"hook", L"thread", L"", value, 512, ini)) ToUtf8(value, threadFilter, sizeof(threadFilter));
+    GetPrivateProfileStringW(L"hook", L"remove", L"", removeNames, 512, ini);
     port = GetPrivateProfileIntW(L"server", L"port", port, ini);
 
     WSADATA wsa;
@@ -357,6 +387,7 @@ int wmain(int argc, wchar_t **argv) {
     Luna_Settings_t Luna_Settings = (Luna_Settings_t)GetProcAddress(host, "Luna_Settings");
     Luna_ConnectProcess_t Luna_ConnectProcess = (Luna_ConnectProcess_t)GetProcAddress(host, "Luna_ConnectProcess");
     Luna_InsertHookCode = (Luna_InsertHookCode_t)GetProcAddress(host, "Luna_InsertHookCode");
+    Luna_RemoveHook = (Luna_RemoveHook_t)GetProcAddress(host, "Luna_RemoveHook");
     if (!Luna_Start || !Luna_Settings || !Luna_ConnectProcess) { Logf("hookbridge-host: LunaHost64.dll is missing exports"); return 1; }
 
     Luna_Start(OnConnect, OnDisconnect, OnThreadCreate, OnThreadDestroy, OnOutput, OnHostInfo, OnHookInsert, OnEmbed,
@@ -373,4 +404,11 @@ int wmain(int argc, wchar_t **argv) {
     WaitForMultipleObjects(game ? 2 : 1, waits, FALSE, INFINITE);
     Logf("hookbridge-host: game ended, exiting");
     return 0;
+}
+
+// Built as a GUI program (-mwindows) so Wine opens no console window: one would take the
+// game's keyboard and controller focus (in GameNative the game keeps drawing but ignores input).
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int show) {
+    (void)inst; (void)prev; (void)cmdLine; (void)show;
+    return wmain(__argc, __wargv);
 }

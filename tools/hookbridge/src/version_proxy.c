@@ -120,7 +120,8 @@ static DWORD WINAPI StartBridge(LPVOID unused) {
     wsprintfW(cmd, L"\"%s\\hookbridge-host.exe\" --pid %lu --kit \"%s\"", kit, GetCurrentProcessId(), kit);
     STARTUPINFOW si = {sizeof(si)};
     PROCESS_INFORMATION pi;
-    if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, kit, &si, &pi)) {
+    // No console window: it would take the game's input focus.
+    if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, kit, &si, &pi)) {
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
         Log("hookbridge: host started%s", "");
