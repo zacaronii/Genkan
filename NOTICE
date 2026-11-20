@@ -128,8 +128,10 @@ https://github.com/HIllya51/LunaTranslator
     -> app/src/main/kotlin/app/genkan/ppsspp/PspHooks.kt
 
   tools/hookbridge loads LunaHost64.dll, LunaHook32.dll and LunaHook64.dll from
-  the v12.1.3.11 release; get_lunahook.sh downloads them, and they are not
-  committed here.
+  the v12.1.3.11 release, unmodified; get_lunahook.sh downloads them, and they
+  are not committed here. Builds made with tools/hookbridge/kit.sh (CI's are)
+  carry them in Genkan's assets (assets/hookbridge), which Genkan copies to
+  Download/Genkan/hook for PC games.
 
 --------------------------------------------------------------------------
 RomM (AGPL-3.0)

@@ -110,6 +110,13 @@ a Yomitan dictionary popup. See
   asks for a RomM game's cover, Genkan sends the one it shows (RomM's own cover, once).
 - **PC games:** games installed in GameNative show up as a *PC* shelf once GameNative's
   Frontend Sync export is on (it writes `Games/Steam/*.steam`). **Apps** lists Android apps.
+- **PC game text ([hookbridge](tools/hookbridge)):** starting a PC game puts the hook kit in
+  `Download/Genkan/hook`, which GameNative's containers see as `D:\Genkan\hook`. Once per game:
+  turn on *Enable mod loaders* in its container settings (General), then from the game's
+  *Open container* desktop run `D:\Genkan\hook\setup.bat`, which copies the hook into the
+  game's folder (`setup-32bit.bat` or `setup-64bit.bat` if its guess is wrong). From then on
+  the reader gets the game's text; pick the dialogue thread once (KiriKiri games: TextRender).
+  A hooked game can take a minute or two longer to start.
 
 ## How the two screens work
 

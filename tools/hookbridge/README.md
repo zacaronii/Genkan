@@ -109,7 +109,7 @@ port=6677
 
 ```sh
 sudo dpkg --add-architecture i386 && sudo apt-get update
-sudo apt-get install -y wine wine32:i386 wine64 gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 xvfb p7zip-full fonts-noto-cjk
+sudo apt-get install -y wine wine32:i386 wine64 gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 xvfb unzip fonts-noto-cjk
 pip install websockets
 ./get_lunahook.sh && ./build.sh
 test/run_test.sh
@@ -133,8 +133,11 @@ test/run_test.sh
 4. **Android side.** Genkan's reader connects to `ws://127.0.0.1:6677` and uses `thread`
    for its thread picker. Test it against this host from the Android emulator
    using the Mac's IP (temporarily bind the host to `0.0.0.0` for that).
-5. **On the Thor.** Done for one game (see "In GameNative" above). Next: pick a thread per game,
-   and have Genkan install the kit and the proxy itself.
+5. **On the Thor.** Genkan packs the kit (`kit.sh` builds it into `build/assets/hookbridge`) and
+   copies it to `Download/Genkan/hook` whenever a PC game starts. Per game, once: turn on
+   *Enable mod loaders* in its container settings, open *Open container*, and run
+   `D:\Genkan\hook\setup.bat` (it guesses 32- or 64-bit; `setup-32bit.bat` and
+   `setup-64bit.bat` force one). Then pick the dialogue thread in Genkan's reader.
 
 ## Licences
 

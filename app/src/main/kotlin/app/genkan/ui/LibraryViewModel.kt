@@ -12,6 +12,7 @@ import app.genkan.launch.EmulatorDef
 import android.app.ActivityManager
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import app.genkan.launch.HookKit
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
 import app.genkan.play.SessionTracker
@@ -68,6 +69,7 @@ class LibraryViewModel @Inject constructor(
     private val downloadQueue: DownloadQueue,
     private val gameLauncher: GameLauncher,
     private val localShelves: LocalShelves,
+    private val hookKit: HookKit,
     private val sessionTracker: SessionTracker,
     private val nowPlaying: NowPlaying,
     private val focusedGame: FocusedGame,
@@ -177,6 +179,8 @@ class LibraryViewModel @Inject constructor(
 
     private fun primaryAction(game: GameEntity) {
         if (LocalShelves.isLocal(game)) {
+            // PC games read their text through the hook kit on D:; refresh it while the game loads.
+            if (game.platformSlug == LocalShelves.PC_SLUG && hasStorageAccess()) viewModelScope.launch { hookKit.install() }
             if (localShelves.launch(game)) {
                 nowPlaying.started(game.id, game.name, game.platformSlug)
                 show("Opening ${game.name}…")

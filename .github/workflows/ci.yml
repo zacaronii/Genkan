@@ -46,6 +46,20 @@ jobs:
           key: cores-${{ hashFiles('app/build.gradle.kts') }}
           restore-keys: cores-
 
+      # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
+      # the proxy and host; LunaHook comes from LunaTranslator's pinned release.
+      - name: Cache LunaHook
+        uses: actions/cache@v4
+        with:
+          path: tools/hookbridge/dl
+          key: lunahook-${{ hashFiles('tools/hookbridge/get_lunahook.sh') }}
+
+      - name: Build the hook kit
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
+          tools/hookbridge/kit.sh
+
       - name: Build, test and lint
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug
 

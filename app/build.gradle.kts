@@ -195,5 +195,9 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
+        // The PC hook kit (tools/hookbridge/kit.sh, which needs MinGW): packed when it's been
+        // built; without it, Genkan just has no kit to install.
+        val hookKit = rootProject.file("tools/hookbridge/build/assets")
+        if (hookKit.isDirectory) variant.sources.assets?.addStaticSourceDirectory(hookKit.path)
     }
 }
