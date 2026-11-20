@@ -55,6 +55,9 @@ EXPORTS(DECLARE_PTR)
 EXPORTS(DEFINE_STUB)
 
 static HMODULE self;
+// hookbridge-proxy.log, in the kit once it's found (the game's folder may not be readable
+// from outside, as in GameNative), else next to this DLL.
+static wchar_t logPath[MAX_PATH];
 
 static void Log(const char *fmt, const char *arg) {
     char buf[1024];
@@ -62,6 +65,12 @@ static void Log(const char *fmt, const char *arg) {
     OutputDebugStringA(buf);
     fprintf(stderr, "%s\n", buf);
     fflush(stderr);
+    HANDLE f = CreateFileW(logPath, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return;
+    DWORD written;
+    lstrcatA(buf, "\r\n");
+    WriteFile(f, buf, lstrlenA(buf), &written, NULL);
+    CloseHandle(f);
 }
 
 static BOOL LoadRealVersion(void) {
@@ -94,10 +103,17 @@ static BOOL FindKit(wchar_t *dir) {
 static DWORD WINAPI StartBridge(LPVOID unused) {
     (void)unused;
     wchar_t kit[MAX_PATH];
+    GetModuleFileNameW(self, logPath, MAX_PATH);
+    wchar_t *slash = wcsrchr(logPath, L'\\');
+    if (slash) lstrcpyW(slash, L"\\hookbridge-proxy.log");
     if (!FindKit(kit)) {
         Log("hookbridge: no hook kit found (set HOOKBRIDGE_DIR or add a hookbridge folder)%s", "");
         return 0;
     }
+    wsprintfW(logPath, L"%s\\hookbridge-proxy.log", kit);
+    char exe[MAX_PATH];
+    GetModuleFileNameA(NULL, exe, MAX_PATH);
+    Log("hookbridge: proxy loaded in %s", exe);
 
     // Start the host, telling it which process to connect to.
     wchar_t cmd[2 * MAX_PATH];

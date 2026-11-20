@@ -4,8 +4,8 @@ Gets a Windows game's text out of Wine as WebSocket lines, without injecting any
 from outside the game. Built and tested on 2026-11-16 under Wine 9.0 on x86_64 Linux.
 Genkan's Phase H; its reader (Phase 2) is the Android client.
 
-**Status:** proven under x86 Wine only. ARM translation (FEX/Box64), real game engines,
-GameNative's Wine build and reaching 127.0.0.1 from another Android app are untested.
+**Status:** works in GameNative on an ARM handheld (AYN Thor, GameNative 1.4.0, Proton 11
+arm64ec) with a real KiriKiri Z game; first proven under x86 Wine.
 
 ## What was proven
 
@@ -36,8 +36,24 @@ This worked for both a 32-bit and a 64-bit game.
    froze the game. LunaHook's DLL already hooks the GDI text functions itself, so this is
    now off by default (`--pc-hooks` or `pc_hooks=1` turns it on).
 
-**Not yet proven:** that this survives x86 to ARM translation (FEX/Box64), real game
-engines, GameNative's own Wine build, and reaching 127.0.0.1 from another Android app.
+## In GameNative (2026-11-20)
+
+A 32-bit KiriKiri Z visual novel (marco.exe, which imports `version.dll`) under GameNative's
+Proton 11 arm64ec on the Thor:
+
+- With *Enable mod loaders* on in the game's container settings (General tab), Wine loaded
+  the proxy from the game folder. Without it Wine kept its built-in `version.dll`.
+- LunaHook survived x86-on-ARM translation: it matched the KiriKiri engine, inserted its
+  `EmbedKrkrZ` and `KiriKiriZ` hooks, and lines came out in Japanese.
+- Genkan's reader, another Android app, reached `ws://127.0.0.1:6677` and showed both
+  threads in its picker.
+
+Getting the proxy in place: GameNative installs games in its private storage, which adb and
+Shizuku can't reach, but each container maps the game folder as `A:` and Android's Download
+folder as `D:`. So the kit goes in `Download/Genkan/hook`, plus a batch file that copies
+the proxy across (`copy /y D:\Genkan\hook\version32.dll A:\version.dll`), run once from the
+game's *Open container* desktop. The proxy writes `hookbridge-proxy.log` in the kit, since
+the game folder can't be read from outside.
 
 ## Layout
 
@@ -92,7 +108,7 @@ test/run_test.sh
 
 ## Next steps
 
-1. **ARM translation, the big unknown.** Create an Ubuntu 24.04 ARM64 VM (UTM, OrbStack or
+1. **ARM translation** (now shown to work in GameNative; this was the plan for checking it). Create an Ubuntu 24.04 ARM64 VM (UTM, OrbStack or
    Parallels; keep the default 4K page size). Install Box64 with x86 Wine (WoW64), and
    separately FEX-Emu with x86 Wine, then run `test/run_test.sh` under each. Pass means
    LunaHook's code patching survives translation, as it would in GameNative.
@@ -108,8 +124,8 @@ test/run_test.sh
 4. **Android side.** Genkan's reader connects to `ws://127.0.0.1:6677` and uses `thread`
    for its thread picker. Test it against this host from the Android emulator
    using the Mac's IP (temporarily bind the host to `0.0.0.0` for that).
-5. **On the Thor.** Put the kit in `Downloads/Genkan/hook`, the proxy in the game folder,
-   turn on Load mods, and launch.
+5. **On the Thor.** Done for one game (see "In GameNative" above). Next: pick a thread per game,
+   and have Genkan install the kit and the proxy itself.
 
 ## Licences
 
