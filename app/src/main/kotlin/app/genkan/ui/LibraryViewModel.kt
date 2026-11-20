@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import app.genkan.library.FocusedGame
 import app.genkan.saves.SaveSync
+import app.genkan.azahar.AzaharText
 import app.genkan.ppsspp.PpssppText
 import kotlinx.coroutines.withTimeoutOrNull
 import app.genkan.library.GameEntity
@@ -72,6 +73,7 @@ class LibraryViewModel @Inject constructor(
     private val focusedGame: FocusedGame,
     private val saveSync: SaveSync,
     private val ppssppText: PpssppText,
+    private val azaharText: AzaharText,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -212,6 +214,7 @@ class LibraryViewModel @Inject constructor(
                 saveSync.sync(game.id)
                 saveSync.beforeLaunch(game.id, game.platformSlug)
                 if (game.platformSlug == "psp") ppssppText.beforeLaunch()
+                if (game.platformSlug == "3ds") azaharText.beforeLaunch()
             }
             when (val result = gameLauncher.launch(game, download)) {
                 is LaunchResult.Launched -> {

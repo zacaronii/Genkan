@@ -268,6 +268,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.PSP_DEBUGGER -> lifecycleScope.launch {
                 viewModel.ppssppText.setEnabled(!viewModel.ppssppText.enabled.first())
             }
+            SetupAction.AZAHAR_RPC -> lifecycleScope.launch {
+                viewModel.azaharText.setEnabled(!viewModel.azaharText.enabled.first())
+            }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

@@ -2,6 +2,7 @@ package app.genkan.debug
 
 import android.content.BroadcastReceiver
 import android.content.Context
+import app.genkan.azahar.AzaharText
 import android.content.Intent
 import android.os.Environment
 import android.util.Log
@@ -32,6 +33,10 @@ import javax.inject.Inject
  * --es copy_to DIR instead downloads RomM's newest Genkan save into DIR, leaving the real one alone)
  *   adb shell am broadcast -a app.genkan.debug.SHIZUKU_PROBE -n app.genkan/.debug.DictionaryDebugReceiver
  * (writes, lists and deletes a probe file in DuckStation's memory card folder through Shizuku)
+ *   adb shell am broadcast -a app.genkan.debug.AZAHAR_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
+ * (looks for on-screen text in the running 3DS game's memory, through Azahar's RPC)
+ *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
+ * (hands the line to the 3DS text source as if OCR had read it: it locks on and follows it)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -41,6 +46,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var database: LibraryDatabase
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var privileged: Privileged
+    @Inject lateinit var azahar: AzaharText
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -64,6 +70,13 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         val roms = if (rom != 0L) listOf(rom) else database.downloads().all().first().map { it.romId }
                         roms.forEach { Log.i(TAG, "Save sync of rom $it ran: ${saveSync.sync(it, dryRun = dry)}") }
                     }
+                    "app.genkan.debug.AZAHAR_FIND" -> {
+                        val started = System.currentTimeMillis()
+                        val found = azahar.searchNow(intent.getStringExtra("text").orEmpty())
+                        Log.i(TAG, "Azahar search: ${found.size} strings in ${System.currentTimeMillis() - started} ms")
+                        found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(80))) }
+                    }
+                    "app.genkan.debug.AZAHAR_OFFER" -> azahar.offered.emit(intent.getStringExtra("text").orEmpty())
                     "app.genkan.debug.SHIZUKU_PROBE" -> {
                         val files = privileged.files()
                         Log.i(TAG, "Shizuku ${privileged.state()}, helper ${files != null}")

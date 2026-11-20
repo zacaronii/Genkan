@@ -13,9 +13,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -69,6 +72,10 @@ class OcrReader @Inject constructor(
         }
     }
 
+    private val _lines = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Each new line read, for sources that use OCR to find the text elsewhere (Azahar). */
+    val lines: SharedFlow<String> = _lines.asSharedFlow()
+
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
@@ -121,6 +128,7 @@ class OcrReader @Inject constructor(
         if (text.isBlank() || text == lastText) return
         lastText = text
         session.submit(HookMessage(text))
+        _lines.tryEmit(text)
     }
 
     private fun crop(frame: Bitmap, region: OcrRegion): Bitmap? {

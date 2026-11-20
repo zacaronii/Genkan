@@ -29,6 +29,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
     val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
     val pspDebugger by viewModel.ppssppText.enabled.collectAsStateWithLifecycle(false)
+    val azaharRpc by viewModel.azaharText.enabled.collectAsStateWithLifecycle(false)
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
 
     Column(
@@ -74,6 +75,15 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
                 "on; PPSSPP's debugger is reachable from your network while a game runs"
             } else {
                 "off; PSP games use OCR (switching it on opens PPSSPP's debugger to your network while a game runs)"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "3DS text from Azahar: " + if (azaharRpc) {
+                "on; after OCR reads a line, Genkan follows it in memory. Azahar's RPC is reachable from your network while a game runs"
+            } else {
+                "off; 3DS games use OCR (switching it on opens Azahar's RPC server to your network while a game runs)"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,

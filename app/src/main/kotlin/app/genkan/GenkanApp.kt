@@ -5,6 +5,7 @@ import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
 import app.genkan.stats.ReadingLogPusher
 import app.genkan.saves.SaveSync
+import app.genkan.azahar.AzaharText
 import app.genkan.ppsspp.PpssppText
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
@@ -26,6 +27,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var readingLog: ReadingLogPusher
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var ppssppText: PpssppText
+    @Inject lateinit var azaharText: AzaharText
 
     override fun onCreate() {
         super.onCreate()
@@ -37,6 +39,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         readingLog.start()
         saveSync.start()
         ppssppText.start()
+        azaharText.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

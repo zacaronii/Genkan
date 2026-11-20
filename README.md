@@ -68,6 +68,13 @@ a Yomitan dictionary popup. See
   text routine and reads each line from memory, with OCR off. PPSSPP 1.20 opens that debugger to
   the whole network while a game runs, hence off by default. Profiles must match the game's
   version: デュナミス15 1.01 doesn't match the published hook, so more profiles are still to come.
+- **3DS text from Azahar (opt-in):** *3DS text from Azahar's RPC server* in settings turns on
+  Azahar's scripting RPC (`enable_rpc_server` in its `config.ini`; switching off restores Azahar's
+  own value). The RPC only reads memory, so no profile is needed but OCR starts it off: the
+  first line OCR reads is looked up in the game's memory (UTF-16, UTF-8 or Shift-JIS), then
+  Genkan follows that string, and the game's pointers to it, and switches OCR off. A full
+  scan takes a few seconds. Games that draw text without keeping it as a string can't be
+  followed and stay on OCR. Azahar's RPC listens on the whole network while a game runs.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

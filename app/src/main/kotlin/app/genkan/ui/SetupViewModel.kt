@@ -7,6 +7,7 @@ import app.genkan.home.DualScreenState
 import app.genkan.library.LibrarySync
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
+import app.genkan.azahar.AzaharText
 import app.genkan.ppsspp.PpssppText
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +27,7 @@ enum class SetupAction(val label: String) {
     USAGE_ACCESS("Usage access (exact play time)"),
     SHIZUKU("Allow Genkan in Shizuku (emulator saves)"),
     PSP_DEBUGGER("PSP text from PPSSPP's debugger: switch on or off"),
+    AZAHAR_RPC("3DS text from Azahar's RPC server: switch on or off"),
     SIGN_OUT("Sign out of RomM"),
 }
 
@@ -38,6 +40,7 @@ class SetupViewModel @Inject constructor(
     private val sessionTracker: SessionTracker,
     val privileged: Privileged,
     val ppssppText: PpssppText,
+    val azaharText: AzaharText,
 ) : ViewModel() {
 
 
