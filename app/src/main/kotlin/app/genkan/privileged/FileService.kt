@@ -6,9 +6,11 @@ import kotlin.system.exitProcess
 /**
  * Runs in a separate process that Shizuku starts with the shell user's identity, which may read
  * and write other apps' Android/data folders. Keep it to plain file work on paths Genkan names.
+ * Genkan also uses it in-process for save folders it can reach itself (PPSSPP's memory stick).
  */
 class FileService : IFileService.Stub() {
 
+    /** Shizuku's teardown of the helper process. Never call it on an in-process instance. */
     override fun destroy() {
         exitProcess(0)
     }

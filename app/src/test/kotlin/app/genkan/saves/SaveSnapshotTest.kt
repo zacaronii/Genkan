@@ -18,6 +18,10 @@ class SaveSnapshotTest {
     @Test
     fun `watched emulators live in their Android data folders`() {
         val duck = WatchedEmulator.BY_PLATFORM.getValue("psx")
-        assertEquals(listOf("/sd/Android/data/com.github.stenzek.duckstation/files/memcards"), duck.roots("/sd"))
+        assertEquals("/sd/Android/data/com.github.stenzek.duckstation/files", duck.base("/sd") { false })
+        // PPSSPP: the memory stick folder that has a PSP folder in it.
+        val psp = WatchedEmulator.BY_PLATFORM.getValue("psp")
+        assertEquals("/sd/ppsspp", psp.base("/sd") { it == "/sd/ppsspp/PSP" })
+        assertEquals("/sd", psp.base("/sd") { it == "/sd/PSP" })
     }
 }

@@ -8,6 +8,7 @@ import app.genkan.download.DownloadState
 import app.genkan.library.LibraryDao
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
+import app.genkan.privileged.FileService
 import app.genkan.privileged.IFileService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -95,7 +96,7 @@ class SaveSync @Inject constructor(
             try {
                 val watched = WatchedEmulator.BY_PLATFORM[game.platformSlug]
                 val io = if (watched != null) {
-                    val files = privileged.files()
+                    val files = filesFor(watched)
                     if (files == null) {
                         report(romId, SaveStatus.Failed(System.currentTimeMillis(), "Shizuku isn't running, so ${watched.emulator} saves can't be reached"))
                         return@withLock true
@@ -120,7 +121,7 @@ class SaveSync @Inject constructor(
      */
     suspend fun beforeLaunch(romId: Long, platformSlug: String) = withContext(Dispatchers.IO) {
         val watched = WatchedEmulator.BY_PLATFORM[platformSlug] ?: return@withContext
-        val files = privileged.files() ?: return@withContext
+        val files = filesFor(watched) ?: return@withContext
         snapshots[romId] = snapshot(watched, files)
     }
 
@@ -137,7 +138,11 @@ class SaveSync @Inject constructor(
         saveFiles.claim(changed.map { SaveFileEntity(watched.emulator, it, romId) })
     }
 
-    private fun filesDir(watched: WatchedEmulator) = "$storage/Android/data/${watched.packageName}/files"
+    private fun filesDir(watched: WatchedEmulator) = watched.base(storage) { File(it).exists() }
+
+    /** Shizuku's helper for another app's Android/data; the same file work in-process otherwise. */
+    private suspend fun filesFor(watched: WatchedEmulator): IFileService? =
+        if (watched.privileged) privileged.files() else FileService()
 
     /**
      * Fetches [romId]'s newest Genkan save from RomM into [into], next to rather than over the

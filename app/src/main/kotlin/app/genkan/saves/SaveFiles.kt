@@ -23,18 +23,31 @@ interface SaveFileDao {
     suspend fun claim(files: List<SaveFileEntity>)
 }
 
-/** An emulator whose saves sit in folders shared by every game, inside its own Android/data. */
-data class WatchedEmulator(val emulator: String, val packageName: String, val folders: List<String>) {
-
-    /** The real folders, under the emulator's Android/data/<package>/files. */
-    fun roots(storage: String): List<String> = folders.map { "$storage/Android/data/$packageName/files/$it" }
+/**
+ * An emulator whose saves sit in folders shared by every game: [folders] under the first of
+ * [bases] (relative to shared storage) that exists. [privileged] when that is another app's
+ * Android/data, which only Shizuku can reach.
+ */
+data class WatchedEmulator(
+    val emulator: String,
+    val bases: List<String>,
+    val folders: List<String>,
+    val privileged: Boolean,
+) {
+    /** The emulator's base folder, or its first candidate when none exists yet. */
+    fun base(storage: String, exists: (String) -> Boolean): String =
+        bases.map { if (it.isEmpty()) storage else "$storage/$it" }.let { all -> all.firstOrNull { exists("$it/${folders.first().substringBefore('/')}") } ?: all.first() }
 
     companion object {
+        private fun androidData(pkg: String) = listOf("Android/data/$pkg/files")
+
         /** By RomM platform: the emulator Genkan launches for it and where its saves are. */
         val BY_PLATFORM = mapOf(
-            "psx" to WatchedEmulator("duckstation", "com.github.stenzek.duckstation", listOf("memcards")),
-            "ngc" to WatchedEmulator("dolphin", "org.dolphinemu.dolphinemu", listOf("GC")),
-            "wii" to WatchedEmulator("dolphin", "org.dolphinemu.dolphinemu", listOf("Wii/title")),
+            "psx" to WatchedEmulator("duckstation", androidData("com.github.stenzek.duckstation"), listOf("memcards"), privileged = true),
+            "ngc" to WatchedEmulator("dolphin", androidData("org.dolphinemu.dolphinemu"), listOf("GC"), privileged = true),
+            "wii" to WatchedEmulator("dolphin", androidData("org.dolphinemu.dolphinemu"), listOf("Wii/title"), privileged = true),
+            // PPSSPP's memory stick: a folder chosen in PPSSPP, or PSP/ at the root of storage.
+            "psp" to WatchedEmulator("ppsspp", listOf("ppsspp", "", "PPSSPP"), listOf("PSP/SAVEDATA"), privileged = false),
         )
     }
 }
