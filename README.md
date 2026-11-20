@@ -86,7 +86,10 @@ a Yomitan dictionary popup. See
   each is shared with the standalone emulator and synced; PS1 and DS saves are kept in
   `Genkan/saves/<core>` and synced to RomM under the core's name. Select+Start saves and quits. A DS game's upper screen
   is on the top display and its touch screen on the bottom one, over the reader; clicking
-  either stick swaps the touch screen and the reader.
+  either stick swaps the touch screen and the reader. PS1 games boot with the Japanese BIOS
+  (`ps-30j.bin`, SCPH-5500) from the platform's firmware in RomM, fetched on first launch;
+  without it the core's stand-in BIOS hangs some games. A multi-disc game without an `.m3u`
+  gets one, disc 1 first, so discs can be changed.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,

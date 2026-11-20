@@ -53,6 +53,13 @@ interface RomMApi {
         @Path("id") romId: Long
     ): Response<RomMRom>
 
+    @GET("api/firmware")
+    suspend fun getFirmware(@Query("platform_id") platformId: Long): Response<List<RomMFirmware>>
+
+    @Streaming
+    @GET("api/firmware/{id}/content/{fileName}")
+    suspend fun downloadFirmware(@Path("id") firmwareId: Long, @Path("fileName") fileName: String): Response<ResponseBody>
+
     @Streaming
     @Headers("Accept-Encoding: identity")
     @GET("api/roms/{id}/content/{fileName}")

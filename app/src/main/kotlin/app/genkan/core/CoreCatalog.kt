@@ -21,6 +21,11 @@ data class CoreDef(
      * (a standalone emulator's, so the two share saves); else Genkan's own.
      */
     val sharedSaves: List<String> = emptyList(),
+    /**
+     * BIOS files from the platform's firmware in RomM the core boots with: RomM's file name to
+     * the name the core looks for in its system folder.
+     */
+    val firmware: Map<String, String> = emptyMap(),
     /** The core stacks two screens in one frame (a DS): the lower one goes to the bottom display. */
     val splitScreens: Boolean = false,
 )
@@ -37,6 +42,9 @@ object CoreCatalog {
             platforms = setOf("psx"),
             // The PS1's RAM is mirrored at 0x80000000 and 0xA0000000: games point through those.
             pointerMask = 0x1FFFFFFFL,
+            // Without a BIOS it emulates one, which some games hang on. The Japanese one (SCPH-5500,
+            // v3.0J) for Japanese discs, under a name the core picks up; it would prefer a US one.
+            firmware = mapOf("ps-30j.bin" to "scph5500.bin"),
         ),
         CoreDef(
             id = "ppsspp", displayName = "PPSSPP", library = "libppsspp_libretro_android.so",

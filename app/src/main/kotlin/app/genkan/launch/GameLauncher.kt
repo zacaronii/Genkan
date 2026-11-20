@@ -11,6 +11,7 @@ import app.genkan.core.BuiltInPlayer
 import app.genkan.core.CoreActivity
 import app.genkan.core.CoreCatalog
 import app.genkan.core.CoreDef
+import app.genkan.core.CoreFirmware
 import app.genkan.core.PlayerSettings
 import app.genkan.download.DownloadEntity
 import app.genkan.library.GameEntity
@@ -40,6 +41,7 @@ class GameLauncher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val playerSettings: PlayerSettings,
     private val player: BuiltInPlayer,
+    private val firmware: CoreFirmware,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -97,6 +99,7 @@ class GameLauncher @Inject constructor(
             player.quit()
             withTimeoutOrNull(QUIT_TIMEOUT_MS) { player.game.first { it == null } }
         }
+        withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(core, game.platformId) }
         Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
         val intent = Intent(context, CoreActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -147,5 +150,7 @@ class GameLauncher @Inject constructor(
     private companion object {
         const val TAG = "GameLauncher"
         const val QUIT_TIMEOUT_MS = 5_000L
+        /** A BIOS is half a megabyte: a slow or absent server mustn't hold the game up longer. */
+        const val FIRMWARE_TIMEOUT_MS = 10_000L
     }
 }

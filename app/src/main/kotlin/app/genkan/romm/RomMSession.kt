@@ -246,10 +246,13 @@ class RomMSession @Inject constructor(
     companion object {
         private const val TAG = "RomMSession"
 
-        /** What Genkan needs: browse and download, covers, its device record, play sessions. */
+        /**
+         * What Genkan needs: browse and download, covers, its device record, play sessions, and
+         * the BIOS files the built-in player boots with.
+         */
         val SCOPES = listOf(
             "me.read", "roms.read", "platforms.read", "assets.read", "assets.write",
-            "devices.read", "devices.write", "roms.user.read", "roms.user.write",
+            "devices.read", "devices.write", "roms.user.read", "roms.user.write", "firmware.read",
         )
 
         private val detailAdapter = Moshi.Builder().build().adapter(RomMDetailResponse::class.java)

@@ -106,10 +106,45 @@ class LaunchCommandBuilderTest {
     @Test
     fun `a multi-file game boots its playlist, else its cue, else its biggest file`() {
         val game = tmp.newFolder("Xenosaga II")
+        File(game, "Xenosaga II.m3u").writeText(".Disc 1.chd\n.Disc 2.chd\n")
         File(game, ".Disc 1.chd").writeBytes(ByteArray(10))
         File(game, ".Disc 2.chd").writeBytes(ByteArray(20))
-        assertEquals(".Disc 2.chd", LaunchCommandBuilder.bootFileIn(game)!!.name)
-        File(game, "Xenosaga II.m3u").writeText(".Disc 1.chd\n.Disc 2.chd\n")
         assertEquals("Xenosaga II.m3u", LaunchCommandBuilder.bootFileIn(game)!!.name)
+
+        val single = tmp.newFolder("Persona")
+        File(single, "Persona.cue").writeText("FILE \"Persona (Track 1).bin\" BINARY\n")
+        File(single, "Persona (Track 1).bin").writeBytes(ByteArray(30))
+        File(single, "Persona (Track 2).bin").writeBytes(ByteArray(40))
+        assertEquals("Persona.cue", LaunchCommandBuilder.bootFileIn(single)!!.name)
+
+        val extras = tmp.newFolder("Aconcagua")
+        File(extras, "Aconcagua.chd").writeBytes(ByteArray(10))
+        File(extras, "Aconcagua (Bonus).chd").writeBytes(ByteArray(20))
+        assertEquals("Aconcagua (Bonus).chd", LaunchCommandBuilder.bootFileIn(extras)!!.name)
+    }
+
+    @Test
+    fun `numbered discs without a playlist get one, disc 1 first`() {
+        val game = tmp.newFolder("Moonlight Syndrome (Japan)")
+        File(game, "Moonlight Syndrome (Japan) (Disc 2).chd").writeBytes(ByteArray(20))
+        File(game, "Moonlight Syndrome (Japan) (Disc 1).chd").writeBytes(ByteArray(10))
+        val playlist = LaunchCommandBuilder.bootFileIn(game)!!
+        assertEquals("Moonlight Syndrome (Japan).m3u", playlist.name)
+        assertEquals(
+            "Moonlight Syndrome (Japan) (Disc 1).chd\nMoonlight Syndrome (Japan) (Disc 2).chd\n",
+            playlist.readText(),
+        )
+        // The next launch finds it.
+        assertEquals(playlist, LaunchCommandBuilder.bootFileIn(game))
+
+        val cues = tmp.newFolder("Xenogears (Japan)")
+        listOf(2, 1).forEach { n ->
+            File(cues, "Xenogears (Japan) (Disc $n).cue").writeText("")
+            File(cues, "Xenogears (Japan) (Disc $n).bin").writeBytes(ByteArray(10))
+        }
+        assertEquals(
+            "Xenogears (Japan) (Disc 1).cue\nXenogears (Japan) (Disc 2).cue\n",
+            LaunchCommandBuilder.bootFileIn(cues)!!.readText(),
+        )
     }
 }

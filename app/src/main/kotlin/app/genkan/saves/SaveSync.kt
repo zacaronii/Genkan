@@ -17,6 +17,7 @@ import app.genkan.romm.RomMApi
 import app.genkan.romm.RomMClientSave
 import app.genkan.romm.RomMDownloadedPayload
 import app.genkan.romm.RomMNegotiatePayload
+import app.genkan.launch.LaunchCommandBuilder
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMSyncCompletePayload
 import app.genkan.romm.RomMSyncOperation
@@ -96,7 +97,8 @@ class SaveSync @Inject constructor(
             val download = downloads.get(romId)?.takeIf { it.state == DownloadState.INSTALLED } ?: return@withLock false
             val game = library.game(romId) ?: return@withLock false
             val installed = File(download.path)
-            val rom = if (installed.isDirectory) installed.walkTopDown().firstOrNull { it.isFile } ?: return@withLock false else installed
+            // The file the game boots from, which the player names its save after.
+            val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) ?: return@withLock false else installed
             try {
                 val own = builtInTarget(game.platformSlug, rom)
                 val watched = WatchedEmulator.BY_PLATFORM[game.platformSlug].takeIf { own == null }

@@ -101,14 +101,34 @@ class LaunchCommandBuilder(
         const val ONE_SHOT_FLAGS = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY
 
         /**
-         * The file to boot inside a multi-file game folder: its playlist if there is one, then a
-         * cue sheet, then the largest file.
+         * The file to boot inside a multi-file game folder: its playlist if there is one; for
+         * numbered discs without one, a playlist Genkan writes, disc 1 first, so the emulator
+         * can change discs; then a cue sheet, then the largest file.
          */
         fun bootFileIn(folder: File): File? {
             val files = folder.walkTopDown().filter { it.isFile && !it.name.endsWith(".part") }.toList()
-            return files.firstOrNull { it.extension.equals("m3u", true) }
-                ?: files.firstOrNull { it.extension.equals("cue", true) }
-                ?: files.maxByOrNull { it.length() }
+            files.firstOrNull { it.extension.equals("m3u", true) }?.let { return it }
+            val cues = files.filter { it.extension.equals("cue", true) }
+            // Each disc's cue sheet stands for it; without them, its image does (not a cue's tracks).
+            val images = cues.ifEmpty { files.filter { it.extension.lowercase() !in TRACK_EXTENSIONS } }
+            val discs = images.mapNotNull { file -> DISC.find(file.name)?.let { it.groupValues[1].toInt() to file } }
+            if (discs.size > 1 && discs.size == images.size) {
+                val playlist = File(folder, folder.name + ".m3u")
+                val lines = discs.sortedBy { it.first }.map { it.second.relativeTo(folder).invariantSeparatorsPath }
+                return try {
+                    playlist.writeText(lines.joinToString("\n", postfix = "\n"))
+                    playlist
+                } catch (e: java.io.IOException) {
+                    discs.minBy { it.first }.second
+                }
+            }
+            return cues.firstOrNull() ?: files.maxByOrNull { it.length() }
         }
+
+        /** "Disc 2", "Disk 2", "CD2": a disc's number in its file name. */
+        private val DISC = Regex("""(?i)\b(?:disc|disk|cd)\s*(\d+)""")
+
+        /** The tracks a cue sheet lists, never booted on their own. */
+        private val TRACK_EXTENSIONS = setOf("bin", "img", "wav", "ape", "flac", "mp3", "ogg", "sub", "sbi")
     }
 }
