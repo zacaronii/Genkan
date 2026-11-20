@@ -11,29 +11,59 @@ import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.os.Process
 import android.util.Log
+import app.genkan.core.BuiltInPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Records what the game plays, through the screen capture's MediaProjection, into a ring of
- * the last [SECONDS] seconds: a card's sentence audio is cut from it afterwards. Genkan's own
+ * Records what the game plays into a ring of the last [SECONDS] seconds: a card's sentence audio
+ * is cut from it afterwards. A game in the built-in player hands its sound over itself ([feed]);
+ * other emulators are recorded through the screen capture's MediaProjection. Genkan's own
  * sounds are left out by UID (T8: excludeUid, not usage matching, and never
  * allowAudioPlaybackCapture=false), with usage matching as the fallback PlayTranslate keeps.
  */
 @Singleton
-class GameAudioRecorder @Inject constructor(@ApplicationContext private val context: Context) {
-
+class GameAudioRecorder @Inject constructor(
+    @ApplicationContext private val context: Context,
+    player: BuiltInPlayer,
+) {
     private val lock = Any()
     private val ring = AudioRing(SAMPLE_RATE, SECONDS)
     private var record: AudioRecord? = null
     private var thread: Thread? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @Volatile private var fromPlayer = false
 
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
+
+    init {
+        scope.launch {
+            player.game.collect { game ->
+                fromPlayer = game != null
+                _running.value = record != null || fromPlayer
+            }
+        }
+    }
+
+    /**
+     * Mono 16-bit little-endian [pcm] at [sampleRate] from the built-in player, its newest sample
+     * played at [endMs]; resampled to the ring's rate.
+     */
+    fun feed(pcm: ByteArray, sampleRate: Int, endMs: Long) {
+        if (sampleRate <= 0 || pcm.size < 2) return
+        val input = ShortArray(pcm.size / 2) { ((pcm[it * 2].toInt() and 0xFF) or (pcm[it * 2 + 1].toInt() shl 8)).toShort() }
+        val output = Resample.linear(input, sampleRate, SAMPLE_RATE)
+        synchronized(lock) { ring.write(output, output.size, endMs) }
+    }
 
     fun hasPermission(): Boolean =
         context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -72,7 +102,8 @@ class GameAudioRecorder @Inject constructor(@ApplicationContext private val cont
             val chunk = ShortArray(SAMPLE_RATE / 10)
             while (record === rec) {
                 val n = rec.read(chunk, 0, chunk.size)
-                if (n > 0) synchronized(lock) { ring.write(chunk, n, System.currentTimeMillis()) }
+                // The built-in player's own sound is cleaner than a recording of it.
+                if (n > 0 && !fromPlayer) synchronized(lock) { ring.write(chunk, n, System.currentTimeMillis()) }
             }
         }, "GameAudioRecorder").apply { start() }
         Log.i(TAG, "Recording game audio")
@@ -85,7 +116,7 @@ class GameAudioRecorder @Inject constructor(@ApplicationContext private val cont
         thread = null
         runCatching { rec.stop() }
         rec.release()
-        _running.value = false
+        _running.value = fromPlayer
         Log.i(TAG, "Stopped recording game audio")
     }
 

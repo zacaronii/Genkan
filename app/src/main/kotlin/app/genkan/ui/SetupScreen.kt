@@ -30,6 +30,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
     val pspDebugger by viewModel.ppssppText.enabled.collectAsStateWithLifecycle(false)
     val azaharRpc by viewModel.azaharText.enabled.collectAsStateWithLifecycle(false)
+    val builtInPlayer by viewModel.playerSettings.enabled.collectAsStateWithLifecycle(false)
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
 
     Column(
@@ -84,6 +85,15 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
                 "on; after OCR reads a line, Genkan follows it in memory. Azahar's RPC is reachable from your network while a game runs"
             } else {
                 "off; 3DS games use OCR (switching it on opens Azahar's RPC server to your network while a game runs)"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "Built-in player: " + if (builtInPlayer) {
+                "on; GB, GBA and PS1 games run inside Genkan, which reads their memory, frames and sound directly. Select+Start quits"
+            } else {
+                "off; every game starts in its installed emulator"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,

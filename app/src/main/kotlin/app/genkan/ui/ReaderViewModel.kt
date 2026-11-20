@@ -13,6 +13,7 @@ import app.genkan.capture.CaptureService
 import app.genkan.capture.ScreenCapture
 import app.genkan.stats.ReadingStats
 import app.genkan.azahar.AzaharText
+import app.genkan.core.BuiltInText
 import app.genkan.ppsspp.PpssppText
 import app.genkan.dictionary.Dictionaries
 import app.genkan.ocr.OcrReader
@@ -47,6 +48,7 @@ class ReaderViewModel @Inject constructor(
     val stats: ReadingStats,
     val ppsspp: PpssppText,
     val azahar: AzaharText,
+    val builtIn: BuiltInText,
 ) : ViewModel(), PopupActions {
 
     /** The entries the popup shows now (a link can replace the tapped word's). */

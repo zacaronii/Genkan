@@ -8,8 +8,12 @@ import android.os.Environment
 import android.util.Log
 import app.genkan.dictionary.Dictionaries
 import app.genkan.download.DownloadQueue
+import app.genkan.audio.GameAudioRecorder
 import app.genkan.capture.CaptureConsentActivity
 import app.genkan.capture.ScreenCapture
+import app.genkan.core.BuiltInPlayer
+import app.genkan.core.BuiltInText
+import app.genkan.core.PlayerSettings
 import app.genkan.launch.GameLauncher
 import app.genkan.launch.topScreenOptions
 import app.genkan.ocr.OcrReader
@@ -50,6 +54,14 @@ import javax.inject.Inject
  * (logs every aligned word holding a value in the range, for finding offsets that move)
  *   adb shell am broadcast -a app.genkan.debug.OCR -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches OCR on, asking for screen capture on the top screen when it isn't running, or off)
+ *   adb shell am broadcast -a app.genkan.debug.AUDIO_CLIP -n app.genkan/.debug.DictionaryDebugReceiver [--el ms 3000]
+ * (cuts the last seconds of game audio as a card would; GameAudioRecorder logs its level)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
+ * (switches the built-in player setting)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
+ * (hands the line to the built-in player's text source as if OCR had read it)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_REGIONS -n app.genkan/.debug.DictionaryDebugReceiver
+ * (logs the memory regions the built-in player's core describes)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -68,6 +80,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var gameLauncher: GameLauncher
     @Inject lateinit var ocr: OcrReader
     @Inject lateinit var capture: ScreenCapture
+    @Inject lateinit var builtInText: BuiltInText
+    @Inject lateinit var player: BuiltInPlayer
+    @Inject lateinit var playerSettings: PlayerSettings
+    @Inject lateinit var audio: GameAudioRecorder
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -134,6 +150,15 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         }
                     }
                     "app.genkan.debug.AZAHAR_OFFER" -> azahar.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.AUDIO_CLIP" -> {
+                        val now = System.currentTimeMillis()
+                        audio.clip(now - intent.getLongExtra("ms", 3000), now)
+                    }
+                    "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
+                    "app.genkan.debug.PLAYER_OFFER" -> builtInText.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
+                        Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
                     "app.genkan.debug.SHIZUKU_PROBE" -> {
                         val files = privileged.files()
                         Log.i(TAG, "Shizuku ${privileged.state()}, helper ${files != null}")

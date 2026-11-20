@@ -88,6 +88,32 @@ Pinned commit: 088ac5ded9e4de62a0c3f434f3f72350945459a3
   libgenkan_dictionary.so through app/src/main/cpp/dictionary_jni.cpp.
 
 --------------------------------------------------------------------------
+LibretroDroid (GPL-3.0)
+https://github.com/Swordfish90/LibretroDroid
+Pinned commit: 683652f8705a6953218444d72ed77d2c5913fffb
+
+  libretrodroid/src/main/{cpp,java} and consumer-rules.pro
+    -> libretrodroid/ (the :libretrodroid module), modified: <functional>
+    includes for newer NDKs; memory maps, memory reads and an audio tap
+    (cpp/genkantap*, GenkanTap.kt, environment.cpp, libretrodroid.cpp); frame
+    grabs (GLRetroView.kt). Its submodules, used unmodified as git submodules
+    at the commits LibretroDroid pins: Oboe (Apache-2.0,
+    b15f5e39c01a7ada306d959e5129620b145fb8b4) and libretro-common (MIT,
+    b0c348ea5543c4d7fb0bc479258aa6988b20c0c9).
+
+--------------------------------------------------------------------------
+Libretro cores, prebuilt by Lemuroid's LemuroidCores
+https://github.com/Swordfish90/LemuroidCores
+Pinned commit: fee2e824525daa22bcf318f96127fe43fa8a15ad
+
+  libmgba_libretro_android.so (mGBA, MPL-2.0, https://github.com/mgba-emu/mgba)
+  and libpcsx_rearmed_libretro_android.so (PCSX ReARMed, GPL-2.0,
+  https://github.com/libretro/pcsx_rearmed), arm64-v8a, unmodified, bundled
+  as native libraries. They are downloaded at build time by the downloadCores
+  task in app/build.gradle.kts and are not committed here; their sources are
+  at the links above.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

@@ -6,11 +6,23 @@ import android.os.Environment
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
+import android.content.Intent
+import app.genkan.core.BuiltInPlayer
+import app.genkan.core.CoreActivity
+import app.genkan.core.CoreCatalog
+import app.genkan.core.CoreDef
+import app.genkan.core.PlayerSettings
 import app.genkan.download.DownloadEntity
 import app.genkan.library.GameEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,6 +38,8 @@ sealed class LaunchResult {
 @Singleton
 class GameLauncher @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val playerSettings: PlayerSettings,
+    private val player: BuiltInPlayer,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -35,17 +49,27 @@ class GameLauncher @Inject constructor(
         },
     )
 
-    fun installedEmulatorFor(platformSlug: String): Pair<EmulatorDef, String?>? =
-        EmulatorCatalog.candidatesFor(platformSlug).firstNotNullOfOrNull { emulator ->
+    private val builtInOn = playerSettings.enabled.stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, false)
+
+    fun installedEmulatorFor(platformSlug: String): Pair<EmulatorDef, String?>? {
+        CoreCatalog.forPlatform(platformSlug)?.takeIf { builtInOn.value }?.let { return builtInEmulator(it) to null }
+        return EmulatorCatalog.candidatesFor(platformSlug).firstNotNullOfOrNull { emulator ->
             installedVersion(emulator.packageName)?.let { emulator to it.ifEmpty { null } }
         }
+    }
+
+    /** The built-in player, when it is switched on and has a core for [platformSlug]. */
+    private suspend fun builtInFor(platformSlug: String): CoreDef? =
+        CoreCatalog.forPlatform(platformSlug)?.takeIf { playerSettings.isEnabled() }
 
     suspend fun launch(game: GameEntity, download: DownloadEntity): LaunchResult = withContext(Dispatchers.IO) {
-        val (emulator, version) = installedEmulatorFor(game.platformSlug)
-            ?: return@withContext LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug))
         val installed = File(download.path)
         val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) else installed
         if (rom == null || !rom.exists()) return@withContext LaunchResult.Failed("The game's files are missing; download it again")
+        builtInFor(game.platformSlug)?.let { core -> return@withContext launchBuiltIn(game, rom, core) }
+
+        val (emulator, version) = installedEmulatorFor(game.platformSlug)
+            ?: return@withContext LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug))
 
         val command = builder.build(emulator, rom, game.platformSlug, version)
             ?: return@withContext LaunchResult.Failed("${emulator.displayName} has no core set for ${game.platformSlug}")
@@ -61,6 +85,41 @@ class GameLauncher @Inject constructor(
             LaunchResult.Failed(e.message ?: "Launch failed")
         }
     }
+
+    /**
+     * Starts [rom] in the built-in player. A different game still open there is saved and closed
+     * first: its process can hold only one core.
+     */
+    private suspend fun launchBuiltIn(game: GameEntity, rom: File, core: CoreDef): LaunchResult {
+        val running = player.game.value
+        if (running != null && running.romId != game.id) {
+            Log.i(TAG, "Closing rom ${running.romId} in the built-in player first")
+            player.quit()
+            withTimeoutOrNull(QUIT_TIMEOUT_MS) { player.game.first { it == null } }
+        }
+        Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
+        val intent = Intent(context, CoreActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(CoreActivity.EXTRA_ROM, rom.absolutePath)
+            .putExtra(CoreActivity.EXTRA_ROM_ID, game.id)
+            .putExtra(CoreActivity.EXTRA_PLATFORM, game.platformSlug)
+        return try {
+            withContext(Dispatchers.Main) { context.startActivity(intent, topScreenOptions()) }
+            LaunchResult.Launched(builtInEmulator(core))
+        } catch (e: Exception) {
+            Log.w(TAG, "Launch failed", e)
+            LaunchResult.Failed(e.message ?: "Launch failed")
+        }
+    }
+
+    /** The built-in player as an emulator, for what the library shows and play sessions record. */
+    private fun builtInEmulator(core: CoreDef) = EmulatorDef(
+        id = "genkan_${core.id}",
+        packageName = context.packageName,
+        displayName = "Genkan (${core.displayName})",
+        platforms = core.platforms,
+        recipe = Recipe.Custom(activity = CoreActivity::class.java.name),
+    )
 
     /**
      * Runs `am start` for recipes that prefer it. Some builds (the Thor's among them) refuse `am`
@@ -87,5 +146,6 @@ class GameLauncher @Inject constructor(
 
     private companion object {
         const val TAG = "GameLauncher"
+        const val QUIT_TIMEOUT_MS = 5_000L
     }
 }

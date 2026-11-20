@@ -38,6 +38,14 @@ jobs:
           key: meiki-${{ hashFiles('app/build.gradle.kts') }}
           restore-keys: meiki-
 
+      # The built-in player's libretro cores (~5 MB) are fetched by Gradle too.
+      - name: Cache libretro cores
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores
+          key: cores-${{ hashFiles('app/build.gradle.kts') }}
+          restore-keys: cores-
+
       - name: Build, test and lint
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug
 

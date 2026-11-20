@@ -15,17 +15,24 @@ import android.util.Log
 import android.view.Display
 import androidx.core.graphics.createBitmap
 import app.genkan.audio.GameAudioRecorder
+import app.genkan.core.BuiltInPlayer
 import app.genkan.display.DisplayRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Mirrors the top screen through MediaProjection. MediaProjection only mirrors the default
- * display, which is the game's, so the reader on the bottom screen never shows up in frames.
+ * The top screen's frames: from the built-in player when a game runs in it, else mirrored
+ * through MediaProjection. MediaProjection only mirrors the default display, which is the
+ * game's, so the reader on the bottom screen never shows up in frames.
  *
  * The virtual display is made once per consent (T6: display queries during
  * createVirtualDisplay can deadlock the Thor's system_server), and consent doesn't survive
@@ -36,9 +43,14 @@ class ScreenCapture @Inject constructor(
     @ApplicationContext private val context: Context,
     private val displays: DisplayRepository,
     private val audio: GameAudioRecorder,
+    private val player: BuiltInPlayer,
 ) {
-    private val _running = MutableStateFlow(false)
-    val running: StateFlow<Boolean> = _running.asStateFlow()
+    private val mirroring = MutableStateFlow(false)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Whether frames are coming: from the player, or from a running capture. */
+    val running: StateFlow<Boolean> = combine(mirroring, player.game) { on, game -> on || game != null }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -68,7 +80,7 @@ class ScreenCapture @Inject constructor(
         projection = mp
         reader = imageReader
         thread = handlerThread
-        _running.value = true
+        mirroring.value = true
         Log.i(TAG, "Capturing the top screen at ${size.width}x${size.height}")
         // Game audio for sentence clips rides on the same consent, when recording is allowed.
         audio.start(mp)
@@ -90,12 +102,14 @@ class ScreenCapture @Inject constructor(
         thread?.quitSafely()
         thread = null
         synchronized(frameLock) { lastFrame = null }
-        if (_running.value) Log.i(TAG, "Capture stopped")
-        _running.value = false
+        if (mirroring.value) Log.i(TAG, "Capture stopped")
+        mirroring.value = false
     }
 
     /** The newest frame of the top screen (the last one again when nothing changed), or null. */
-    fun frame(): Bitmap? = synchronized(frameLock) {
+    fun frame(): Bitmap? = player.frame() ?: mirroredFrame()
+
+    private fun mirroredFrame(): Bitmap? = synchronized(frameLock) {
         val image = try {
             reader?.acquireLatestImage()
         } catch (e: IllegalStateException) {

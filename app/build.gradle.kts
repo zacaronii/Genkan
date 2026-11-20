@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.onnxruntime.android)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    implementation(project(":libretrodroid"))
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
@@ -97,25 +98,26 @@ dependencies {
 }
 
 /**
- * Meiki OCR's models (LGPL-3.0, trained on Japanese games) are bundled, not committed: this
- * fetches the pinned upstream ONNX files once into .gradle/meiki, checks their SHA-256, and adds
- * them to the APK's assets. Bump a revision only after checking the new files on the Thor.
+ * Large pinned files that are bundled, not committed: fetched once into a cache under .gradle,
+ * checked against their SHA-256, and copied into [subdir] of a generated source folder. Bump a
+ * revision only after checking the new files on the Thor.
  */
-abstract class DownloadMeikiModels : DefaultTask() {
-    /** Each entry is "url sha256 assetName". */
-    @get:Input abstract val models: ListProperty<String>
+abstract class DownloadPinnedFiles : DefaultTask() {
+    /** Each entry is "url sha256 fileName". */
+    @get:Input abstract val files: ListProperty<String>
+    @get:Input abstract val subdir: Property<String>
     @get:Internal abstract val cacheDir: DirectoryProperty
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun fetch() {
-        val out = outputDir.get().asFile.resolve("meiki").apply { deleteRecursively(); mkdirs() }
+        val out = outputDir.get().asFile.resolve(subdir.get()).apply { deleteRecursively(); mkdirs() }
         val cache = cacheDir.get().asFile.apply { mkdirs() }
-        for (entry in models.get()) {
+        for (entry in files.get()) {
             val (url, sha, name) = entry.split(" ")
             val cached = cache.resolve(name)
             if (!cached.isFile || sha256(cached) != sha) {
-                logger.lifecycle("Downloading Meiki model $name")
+                logger.lifecycle("Downloading $name")
                 val part = cache.resolve("$name.part")
                 URI(url).toURL().openStream().use { input -> part.outputStream().use { input.copyTo(it) } }
                 check(sha256(part) == sha) { "$name: SHA-256 mismatch for $url" }
@@ -142,8 +144,10 @@ abstract class DownloadMeikiModels : DefaultTask() {
 val meikiDetect = "https://huggingface.co/rtr46/meiki.text.detect.v0/resolve/a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6"
 val meikiRecognize = "https://huggingface.co/rtr46/meiki.txt.recognition.v0/resolve/a28cf5874dc2438ebb1c86336be26bcec51e3375"
 
-val downloadMeikiModels = tasks.register<DownloadMeikiModels>("downloadMeikiModels") {
-    models.set(
+/** Meiki OCR's models (LGPL-3.0, trained on Japanese games), as assets. */
+val downloadMeikiModels = tasks.register<DownloadPinnedFiles>("downloadMeikiModels") {
+    subdir.set("meiki")
+    files.set(
         listOf(
             "$meikiDetect/meiki.text.detect.v0.1.960x544.onnx 40b6a016667745cae7d3055929ae3b8b1e7716aac795f5904cd3c2c7c3b8404b detect.onnx",
             "$meikiRecognize/meiki.text.rec.v0.960x32.onnx 3e96bc772fbee9717e536a6353032bb944c3382dd2f6960ef4890decda43b000 rec_horizontal.onnx",
@@ -154,8 +158,27 @@ val downloadMeikiModels = tasks.register<DownloadMeikiModels>("downloadMeikiMode
     outputDir.set(layout.buildDirectory.dir("generated/meiki"))
 }
 
+/**
+ * Libretro cores for the built-in player, as native libraries, from Lemuroid's prebuilt cores
+ * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0). See NOTICE.
+ */
+val lemuroidCores = "https://raw.githubusercontent.com/Swordfish90/LemuroidCores/fee2e824525daa22bcf318f96127fe43fa8a15ad"
+
+val downloadCores = tasks.register<DownloadPinnedFiles>("downloadCores") {
+    subdir.set("arm64-v8a")
+    files.set(
+        listOf(
+            "$lemuroidCores/lemuroid_core_mgba/src/main/jniLibs/arm64-v8a/libmgba_libretro_android.so fbb03681b7d7ea4fa04bac0f60a005d9fcdc732ece3df1b715fabc19d1f9b2ab libmgba_libretro_android.so",
+            "$lemuroidCores/lemuroid_core_pcsx_rearmed/src/main/jniLibs/arm64-v8a/libpcsx_rearmed_libretro_android.so 1c32c21dcc488889db7556bd0bd11c72219228f8d35d36bc30c640472af21fd3 libpcsx_rearmed_libretro_android.so",
+        ),
+    )
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/cores"))
+}
+
 androidComponents {
     onVariants { variant ->
-        variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadMeikiModels::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
     }
 }

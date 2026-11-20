@@ -106,6 +106,24 @@
             android:taskAffinity=""
             android:theme="@style/Theme.Genkan.FocusDirector" />
 
+        <!--
+            The built-in player, in its own process: a core can't be loaded twice in one, and a
+            crashing core must not take the launcher down. It checks in with CoreHostService.
+        -->
+        <activity
+            android:name=".core.CoreActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|keyboard|keyboardHidden|navigation"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:process=":core"
+            android:screenOrientation="sensorLandscape"
+            android:taskAffinity="app.genkan.core" />
+
+        <service
+            android:name=".core.CoreHostService"
+            android:exported="false" />
+
         <service
             android:name=".capture.CaptureService"
             android:exported="false"

@@ -271,6 +271,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.AZAHAR_RPC -> lifecycleScope.launch {
                 viewModel.azaharText.setEnabled(!viewModel.azaharText.enabled.first())
             }
+            SetupAction.BUILT_IN_PLAYER -> lifecycleScope.launch {
+                viewModel.playerSettings.setEnabled(!viewModel.playerSettings.isEnabled())
+            }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

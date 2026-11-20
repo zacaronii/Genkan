@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Genkan"
 include(":app")
+include(":libretrodroid")
