@@ -80,15 +80,56 @@ object MemoryScan {
      * [bytes] of a script split into the pages the player sees: at page tags (`<PAGE>`) and at
      * terminators, each cleaned of markup. Pages that show nothing are left out.
      */
-    fun pages(bytes: ByteArray, charset: Charset): List<Page> {
+    fun pages(bytes: ByteArray, charset: Charset): List<Page> = spans(bytes, charset).map { Page(it.offset, it.text) }
+
+    /**
+     * The run of adjacent pages in [bytes] that reads most like OCR's [line], joined, with the
+     * stray characters at its ends OCR didn't see trimmed off; and how alike the two are. Some
+     * games keep each line of a text box as a string of its own, a few control bytes from the
+     * next, whose bytes also decode as stray characters (`ｽK` before a line, `’` after it).
+     */
+    fun bestRun(bytes: ByteArray, charset: Charset, line: String): Pair<Page, Double>? {
+        val seen = line.filter { !it.isWhitespace() }
+        if (seen.isEmpty()) return null
+        val spans = spans(bytes, charset)
+        var best: Pair<Page, Double>? = null
+        for (first in spans.indices) {
+            var text = ""
+            for (last in first until minOf(spans.size, first + MAX_RUN)) {
+                if (last > first && spans[last].offset - spans[last - 1].end > RUN_GAP) break
+                // Each string's own strays come off, or they'd end up between the lines.
+                text += trimStrays(spans[last].text, seen)
+                // Far longer than what OCR saw: more strings only make it worse.
+                if (text.length > seen.length * 2 + 8) break
+                val score = similarity(text.filter { !it.isWhitespace() }, seen)
+                if (score > (best?.second ?: 0.0)) best = Page(spans[first].offset, text) to score
+            }
+        }
+        return best
+    }
+
+    /** [text] without the characters at either end that aren't Japanese and OCR didn't see. */
+    internal fun trimStrays(text: String, seen: String): String {
+        fun stray(c: Char) = !isJapanese(c) && c !in seen
+        return text.dropWhile(::stray).dropLastWhile(::stray)
+    }
+
+    /** Kana, kanji, Japanese and full-width punctuation (not half-width katakana). */
+    private fun isJapanese(c: Char): Boolean =
+        c in '\u3000'..'\u30FF' || c in '\u4E00'..'\u9FFF' || c in '\uFF01'..'\uFF5E' || c == '…' || c == '‥'
+
+    /** A page and where its bytes end. */
+    private class Span(val offset: Int, val end: Int, val text: String)
+
+    private fun spans(bytes: ByteArray, charset: Charset): List<Span> {
         val width = if (charset == Charsets.UTF_16LE) 2 else 1
         val breaks = PAGE_BREAKS.map { it.toByteArray(charset) }
-        val pages = mutableListOf<Page>()
+        val spans = mutableListOf<Span>()
         var start = 0
         var i = 0
         fun close(end: Int, skip: Int) {
             val text = clean(PspHooks.decode(bytes.copyOfRange(start, end), charset))
-            if (text.isNotEmpty()) pages += Page(start, text)
+            if (text.isNotEmpty()) spans += Span(start, end, text)
             start = end + skip
         }
         while (i < bytes.size) {
@@ -100,7 +141,7 @@ object MemoryScan {
             }
         }
         close(bytes.size, 0)
-        return pages
+        return spans
     }
 
     /**
@@ -147,6 +188,12 @@ object MemoryScan {
 
     /** Markup in game scripts: `<E003 20>`, `<PAGE>`, `<CNTR>`. */
     private val TAG = Regex("<[A-Za-z][A-Za-z0-9_ ]*>")
+
+    /** At most this many adjacent strings make one text box. */
+    private const val MAX_RUN = 4
+
+    /** Strings at most this many bytes apart can be lines of one text box. */
+    private const val RUN_GAP = 16
 
     /** Tags that end a page of a script. */
     private val PAGE_BREAKS = listOf("<PAGE>")

@@ -131,10 +131,8 @@ class MemoryText(
         val from = maxOf(region.first, (address - window) and 1L.inv())
         val to = minOf(region.last + 1, address + window)
         val bytes = readSpan(memory, from, (to - from).toInt()) ?: return null
-        val seen = line.filter { !it.isWhitespace() }
-        val best = MemoryScan.pages(bytes, charset).maxByOrNull { MemoryScan.similarity(it.text.filter { c -> !c.isWhitespace() }, seen) }
-            ?: return null
-        if (MemoryScan.similarity(best.text.filter { !it.isWhitespace() }, seen) < PAGE_SIMILARITY) return null
+        val (best, score) = MemoryScan.bestRun(bytes, charset, line) ?: return null
+        if (score < PAGE_SIMILARITY) return null
         return ScriptPage(from + best.offset, charset, best.text)
     }
 

@@ -188,6 +188,12 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                             .putExtra(CoreActivity.EXTRA_PLATFORM, intent.getStringExtra("platform"))
                         withContext(Dispatchers.Main) { context.startActivity(start, topScreenOptions()) }
                     }
+                    "app.genkan.debug.PLAYER_DUMP" -> player.memory()?.use { memory ->
+                        val bytes = memory.read(intent.getLongExtra("address", 0), intent.getIntExtra("size", 4096))
+                        val out = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "genkan-dump.bin")
+                        bytes?.let(out::writeBytes)
+                        Log.i(TAG, "Dumped ${bytes?.size} bytes to $out")
+                    }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
                     }

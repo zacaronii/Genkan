@@ -95,4 +95,26 @@ class MemoryScanTest {
             MemoryScan.pages(bytes, Charsets.UTF_16LE),
         )
     }
+
+    @Test
+    fun `a text box kept as one string a line is found whole, without the bytes between`() {
+        val sjis = MemoryScan.SHIFT_JIS
+        // Memories Off (PS1): each line is `10 xx 4B`, the text, `’` and NUL, then 16 (same box) or 17 (box ends).
+        fun line(text: String, next: Int) =
+            byteArrayOf(0x10, 0xBC.toByte(), 0x4B) + "$text’".toByteArray(sjis) + byteArrayOf(0, next.toByte())
+        val bytes = line("ずっと昔から変わらなかった。", 0x16) + line("春のうららかな日々を経て、移りゆく季節を共に過ごす事。", 0x17) +
+            line("何の疑いも無く、ありきたりな日常を経て……", 0x16)
+        val ocr = "ずっと昔から変わらなかった。春のうららかな日々を経て、移りゆく季節を共に「ごす事。"
+        val (page, score) = MemoryScan.bestRun(bytes, sjis, ocr)!!
+        assertEquals("ずっと昔から変わらなかった。春のうららかな日々を経て、移りゆく季節を共に過ごす事。", page.text)
+        assertEquals(0, page.offset)
+        assertTrue(score > 0.9)
+    }
+
+    @Test
+    fun `stray characters OCR didn't see come off the ends, Japanese stays`() {
+        assertEquals("経て……", MemoryScan.trimStrays("ｽK経て……’", "経て……"))
+        assertEquals("「過ごす」", MemoryScan.trimStrays("「過ごす」", "過ごす"))
+        assertEquals("ABC", MemoryScan.trimStrays("xABCx", "ABC"))
+    }
 }
