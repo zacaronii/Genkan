@@ -101,7 +101,7 @@ private fun StatusLines(status: DualScreenStatus) {
     val lines = listOf(
         "Default home" to yesNo(status.isDefaultHome),
         "Home entry enabled" to yesNo(status.homeAliasEnabled),
-        "Second screen" to (status.secondaryDisplayId?.let { "display $it" } ?: "not found"),
+        "Second screen" to (status.secondaryDisplayId?.let { "display $it" } ?: "not found, or switched off"),
         "Companion" to when {
             !status.secondaryUsable -> "refused by the system (single-screen)"
             status.lowerDisplayId != null -> "running on display ${status.lowerDisplayId}"
