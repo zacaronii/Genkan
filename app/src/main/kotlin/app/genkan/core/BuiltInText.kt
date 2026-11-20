@@ -3,6 +3,7 @@ package app.genkan.core
 import app.genkan.memory.FoundText
 import app.genkan.memory.MemoryText
 import app.genkan.memory.MemoryTextStatus
+import app.genkan.memory.TextSamples
 import app.genkan.ocr.OcrReader
 import app.genkan.reader.ReaderSession
 import kotlinx.coroutines.CoroutineScope
@@ -25,9 +26,10 @@ class BuiltInText @Inject constructor(
     session: ReaderSession,
     ocr: OcrReader,
     private val player: BuiltInPlayer,
+    samples: TextSamples,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val text = MemoryText(session, ocr, TAG)
+    private val text = MemoryText(session, ocr, TAG, samples)
     private var started = false
 
     val status: StateFlow<MemoryTextStatus> = text.status

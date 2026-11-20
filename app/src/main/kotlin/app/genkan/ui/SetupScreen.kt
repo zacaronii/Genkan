@@ -31,6 +31,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val pspDebugger by viewModel.ppssppText.enabled.collectAsStateWithLifecycle(false)
     val azaharRpc by viewModel.azaharText.enabled.collectAsStateWithLifecycle(false)
     val builtInPlayer by viewModel.playerSettings.enabled.collectAsStateWithLifecycle(false)
+    val textSamples by viewModel.playerSettings.samples.collectAsStateWithLifecycle(false)
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
 
     Column(
@@ -94,6 +95,15 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
                 "on; GB, GBA, DS, PS1 and PSP games run inside Genkan, which reads their memory, frames and sound directly. Select+Start quits; on a DS game, a stick click swaps its lower screen and the reader"
             } else {
                 "off; every game starts in its installed emulator"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            "Yomikata samples: " + if (textSamples) {
+                "on; when a built-in player game's line isn't in memory as standard text, the places that match its shape are saved, with what OCR read, to Download/Genkan/yomikata-samples (script text: they stay on this device)"
+            } else {
+                "off"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,

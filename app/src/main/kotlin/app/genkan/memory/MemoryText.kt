@@ -39,6 +39,8 @@ class MemoryText(
     private val session: ReaderSession,
     private val ocr: OcrReader,
     private val tag: String,
+    /** Saves lines missing from memory for Yomikata, when switched on (the built-in player). */
+    private val samples: TextSamples? = null,
 ) {
     /** Lines handed in as if OCR had read them (debug builds). */
     val offered = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -71,6 +73,9 @@ class MemoryText(
                         null -> {
                             Log.i(tag, "Not in memory: ${line.take(24)}")
                             _status.value = MemoryTextStatus.NotFound
+                            if (samples != null && samples.enabled()) {
+                                withContext(Dispatchers.IO) { open()?.use { samples.sample(it, session.game.value, line) } }
+                            }
                         }
                         is Found.Script -> {
                             Log.i(tag, "Found a script page at 0x%08x (%s)".format(found.page.address, found.page.charset.name()))

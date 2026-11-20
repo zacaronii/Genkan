@@ -274,6 +274,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.BUILT_IN_PLAYER -> lifecycleScope.launch {
                 viewModel.playerSettings.setEnabled(!viewModel.playerSettings.isEnabled())
             }
+            SetupAction.TEXT_SAMPLES -> lifecycleScope.launch {
+                viewModel.playerSettings.setSamples(!viewModel.playerSettings.samplesEnabled())
+            }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

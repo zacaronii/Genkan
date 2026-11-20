@@ -27,7 +27,17 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         context.playerStore.edit { it[ENABLED] = on }
     }
 
+    /** Whether lines missing from memory are saved as Yomikata samples ([app.genkan.memory.TextSamples]). */
+    val samples: Flow<Boolean> = context.playerStore.data.map { it[SAMPLES] == true }
+
+    suspend fun samplesEnabled(): Boolean = samples.first()
+
+    suspend fun setSamples(on: Boolean) {
+        context.playerStore.edit { it[SAMPLES] = on }
+    }
+
     private companion object {
         val ENABLED = booleanPreferencesKey("enabled")
+        val SAMPLES = booleanPreferencesKey("yomikata_samples")
     }
 }

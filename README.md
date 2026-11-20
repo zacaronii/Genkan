@@ -94,6 +94,13 @@ a Yomitan dictionary popup. See
   (`ps-30j.bin`, SCPH-5500) from the platform's firmware in RomM, fetched on first launch;
   without it the core's stand-in BIOS hangs some games. A multi-disc game without an `.m3u`
   gets one, disc 1 first, so discs can be changed.
+- **Yomikata samples (opt-in):** some games (Moonlight Syndrome, Persona 2) keep their text in
+  their own encoding, so memory search can't read it. With *Save memory samples for Yomikata*
+  on, each line OCR reads in the built-in player that isn't in memory as standard text is looked
+  for by its shape (which characters repeat), and the matching places are saved with the bytes
+  around them and what OCR read, in `Download/Genkan/yomikata-samples/<platform>-<serial>.json`.
+  They contain script text, so they stay on the device, for building the game's table in the
+  Yomikata reading catalog.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
   settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
   word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,
