@@ -51,6 +51,13 @@ class MemoryScanTest {
     }
 
     @Test
+    fun `clean keeps the kanji under inline furigana`() {
+        assertEquals("奇跡の仮面による奇跡の力は", MemoryScan.clean("[奇跡/きせき]の[仮面/かめん]による[奇跡/きせき]の[力/ちから]は"))
+        assertEquals("[A] 押す", MemoryScan.clean("[A] 押す"))
+        assertEquals("ルーク、ちょっと待ってくれ。", MemoryScan.clean("<T><M9/1/1>ルーク、ちょっと[待/ま]ってくれ。"))
+    }
+
+    @Test
     fun `clean drops control characters`() {
         assertEquals("一行目二行目", MemoryScan.clean("一行目\n二行目\u0000"))
     }
@@ -116,5 +123,14 @@ class MemoryScanTest {
         assertEquals("経て……", MemoryScan.trimStrays("ｽK経て……’", "経て……"))
         assertEquals("「過ごす」", MemoryScan.trimStrays("「過ごす」", "過ごす"))
         assertEquals("ABC", MemoryScan.trimStrays("xABCx", "ABC"))
+    }
+
+    @Test
+    fun `a table of lines counts as a script, a lone line doesn't`() {
+        val sjis = charset("Shift_JIS")
+        val table = "<T>ルーク、ちょっと[待/ま]ってくれ。\u0000<T>[調査/ちょうさ]モード[中/ちゅう]は\u0000".toByteArray(sjis)
+        assertEquals(2, MemoryScan.scriptLines(table, sjis))
+        val buffer = "今帰りかい？\u0000\u0000\u0000ab\u0000".toByteArray(sjis)
+        assertEquals(1, MemoryScan.scriptLines(buffer, sjis))
     }
 }

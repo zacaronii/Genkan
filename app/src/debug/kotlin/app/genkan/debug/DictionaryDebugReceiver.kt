@@ -23,6 +23,8 @@ import app.genkan.ocr.OcrReader
 import app.genkan.launch.LaunchResult
 import app.genkan.library.LibraryDatabase
 import app.genkan.saves.SaveSync
+import app.genkan.stats.ReadingLogConfig
+import app.genkan.stats.ReadingLogSettings
 import app.genkan.privileged.Privileged
 import app.genkan.reader.NowPlaying
 import dagger.hilt.android.AndroidEntryPoint
@@ -94,6 +96,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var player: BuiltInPlayer
     @Inject lateinit var playerSettings: PlayerSettings
     @Inject lateinit var audio: GameAudioRecorder
+    @Inject lateinit var readingLog: ReadingLogSettings
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -174,6 +177,22 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Card media: frame ${frame?.width}x${frame?.height}, audio ${voice?.size} samples, in $dir")
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
+                    // Test play without sending sessions: the real settings wait in a file until resumed.
+                    "app.genkan.debug.READING_LOG_PAUSE" -> {
+                        val kept = File(context.filesDir, "debug-reading-log")
+                        if (intent.getBooleanExtra("paused", true)) {
+                            if (!kept.exists()) {
+                                val config = readingLog.config.first()
+                                kept.writeText(config.address + "\n" + config.token)
+                                readingLog.save(ReadingLogConfig())
+                            }
+                        } else if (kept.exists()) {
+                            val (address, token) = kept.readText().split("\n", limit = 2)
+                            readingLog.save(ReadingLogConfig(address, token))
+                            kept.delete()
+                        }
+                        Log.i(TAG, "Reading log paused: ${kept.exists()}")
+                    }
                     "app.genkan.debug.PLAYER_FIND" -> {
                         val started = System.currentTimeMillis()
                         val found = builtInText.searchNow(intent.getStringExtra("text").orEmpty())

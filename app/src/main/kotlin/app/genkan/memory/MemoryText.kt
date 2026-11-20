@@ -68,7 +68,10 @@ class MemoryText(
                     lastTry = System.currentTimeMillis()
                     _status.value = MemoryTextStatus.Searching
                     when (val found = runCatching { lockOn(open, line) }.onFailure { Log.w(tag, "Search failed: $it") }.getOrNull()) {
-                        null -> _status.value = MemoryTextStatus.NotFound
+                        null -> {
+                            Log.i(tag, "Not in memory: ${line.take(24)}")
+                            _status.value = MemoryTextStatus.NotFound
+                        }
                         is Found.Script -> {
                             Log.i(tag, "Found a script page at 0x%08x (%s)".format(found.page.address, found.page.charset.name()))
                             script = found.page
@@ -159,6 +162,12 @@ class MemoryText(
             val candidate = results.firstOrNull { MemoryScan.matches(it.text, line) }
                 ?: return@use results.firstNotNullOfOrNull { pageNear(memory, it.hit.address, it.hit.charset, line, PAGE_CONTEXT) }
                     ?.let { Found.Script(it) }
+            // More script right after the line: the game steps through a table of lines (Layton,
+            // Kanken), often with no pointer that moves, so OCR keeps reading and memory corrects it.
+            val after = memory.read(candidate.start, TABLE_PEEK)
+            if (after != null && MemoryScan.scriptLines(after, candidate.hit.charset) >= 2) {
+                pageNear(memory, candidate.start, candidate.hit.charset, line, PAGE_CONTEXT)?.let { return@use Found.Script(it) }
+            }
             // Pointers to anywhere between the guessed start and the hit: the game's own pointer
             // also says where the string really starts.
             val pointers = mutableListOf<Pair<Long, Long>>()
@@ -289,6 +298,8 @@ class MemoryText(
         const val MAX_HITS = 64
         const val MAX_POINTERS = 16
         const val LINE_BYTES = 512
+        /** How far past a found line to look for the next one. */
+        const val TABLE_PEEK = 1024
         const val POLL_MS = 250L
         const val RETRY_MS = 10_000L
         /** How far around the last page the next one is looked for: scenes jump, but not far. */

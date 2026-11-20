@@ -70,8 +70,12 @@ object MemoryScan {
             c in '\u4E00'..'\u9FFF' || c in '\uFF00'..'\uFFEF'
         )
 
-    /** [raw] as shown: markup tags and control characters (line breaks, colour codes' markers) dropped. */
-    fun clean(raw: String): String = raw.replace(TAG, "").filter { it >= ' ' && it != '\uFFFF' }.trim()
+    /**
+     * [raw] as shown: markup tags and control characters (line breaks, colour codes' markers)
+     * dropped, and furigana (`[奇跡/きせき]`, Layton's) reduced to the kanji under it.
+     */
+    fun clean(raw: String): String =
+        raw.replace(TAG, "").replace(FURIGANA, "$1").filter { it >= ' ' && it != '\uFFFF' }.trim()
 
     /** A page of a game's script: where its bytes start in what was read, and what it shows. */
     data class Page(val offset: Int, val text: String)
@@ -109,6 +113,13 @@ object MemoryScan {
     }
 
     /** [text] without the characters at either end that aren't Japanese and OCR didn't see. */
+    /**
+     * How many lines of a script [bytes] hold: strings with some Japanese in them. More than one
+     * right after a line means the game keeps its script as a table of lines.
+     */
+    fun scriptLines(bytes: ByteArray, charset: Charset): Int =
+        spans(bytes, charset).count { span -> span.text.count(::isJapanese) >= MIN_SCRIPT_LINE }
+
     internal fun trimStrays(text: String, seen: String): String {
         fun stray(c: Char) = !isJapanese(c) && c !in seen
         return text.dropWhile(::stray).dropLastWhile(::stray)
@@ -186,8 +197,14 @@ object MemoryScan {
         return commonLength(a, b).toDouble() / maxOf(a.length, b.length)
     }
 
-    /** Markup in game scripts: `<E003 20>`, `<PAGE>`, `<CNTR>`. */
-    private val TAG = Regex("<[A-Za-z][A-Za-z0-9_ ]*>")
+    /** Markup in game scripts: `<E003 20>`, `<PAGE>`, `<CNTR>`, Layton's `<M9/1/1>`. */
+    private val TAG = Regex("<[A-Za-z][A-Za-z0-9_ /]*>")
+
+    /** Ruby written inline as `[base/reading]`. */
+    private val FURIGANA = Regex("""\[([^\[\]/]+)/[^\[\]]*]""")
+
+    /** Japanese characters a string needs to count as a line of a script. */
+    private const val MIN_SCRIPT_LINE = 4
 
     /** At most this many adjacent strings make one text box. */
     private const val MAX_RUN = 4
