@@ -76,6 +76,10 @@ class OcrReader @Inject constructor(
     /** Each new line read, for sources that use OCR to find the text elsewhere (Azahar). */
     val lines: SharedFlow<String> = _lines.asSharedFlow()
 
+    private val _latest = MutableStateFlow<String?>(null)
+    /** The line on screen as OCR last read it, for a search that starts at the current line. */
+    val latest: StateFlow<String?> = _latest.asStateFlow()
+
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
@@ -133,6 +137,7 @@ class OcrReader @Inject constructor(
         // A memory source that has the game's script gives the line in the game's own words.
         val exact = corrector?.let { fix -> runCatching { fix(text) }.onFailure { Log.w(TAG, "Correction failed: $it") }.getOrNull() }
         session.submit(HookMessage(exact ?: text))
+        _latest.value = text
         _lines.tryEmit(text)
     }
 

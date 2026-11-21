@@ -2,6 +2,7 @@ package app.genkan.yomikata
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.regex.Pattern
 
 /**
  * One release's reading rules from the Yomikata catalog (docs/format.md there): its encoding,
@@ -29,11 +30,11 @@ data class CatalogEntry(
     /** Whether an executable with [sha1] is one the entry was made for; true when the entry lists none. */
     fun fits(sha1: String): Boolean = versions.none { it.exeSha1 != null } || versions.any { it.exeSha1 == sha1.lowercase() }
 
-    /** A [hook]'s line after its own cleanup, then the entry's; null when nothing is left (a filtered line). */
+    /** A [hook]'s line after its own cleanup, then the entry's; null when only spaces are left (a filtered line). */
     fun clean(raw: String, hook: Hook? = null): String? {
         var text = raw
         for (step in hook?.cleanup.orEmpty() + cleanup) text = step.apply(text)
-        return text.takeIf { it.isNotEmpty() }
+        return text.takeIf { it.isNotBlank() }
     }
 
     companion object {
@@ -52,17 +53,18 @@ data class CatalogEntry(
                 unit = o.optInt("unit", 1),
                 controls = o.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty(),
                 cleanup = CleanupStep.parse(o.optJSONArray("cleanup")),
-                hooks = o.optJSONArray("hooks").objects().map {
-                    Hook(
-                        address = it.getString("address").removePrefix("0x").removePrefix("0X").toLong(16),
-                        register = it.getString("register"),
-                        charset = it.getString("charset"),
-                        versions = it.optJSONArray("versions").strings(),
-                        cleanup = CleanupStep.parse(it.optJSONArray("cleanup")),
-                    )
-                },
+                hooks = o.optJSONArray("hooks").objects().map(::parseHook),
             )
         }
+
+        /** One hook, as an entry lists it and a hook report carries it. */
+        fun parseHook(o: JSONObject) = Hook(
+            address = o.getString("address").removePrefix("0x").removePrefix("0X").toLong(16),
+            register = o.getString("register"),
+            charset = o.getString("charset"),
+            versions = o.optJSONArray("versions").strings(),
+            cleanup = CleanupStep.parse(o.optJSONArray("cleanup")),
+        )
 
         private fun JSONArray?.objects(): List<JSONObject> = this?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
         private fun JSONArray?.strings(): List<String> = this?.let { a -> List(a.length()) { a.getString(it) } }.orEmpty()
@@ -72,13 +74,15 @@ data class CatalogEntry(
 
 /**
  * One cleanup step, declarative so every client gives the same text: a regex replacement, where
- * `$1`…`$9` insert a group and `$$` is a dollar sign, or single-character remaps.
+ * `$1`…`$9` insert a group and `$$` is a dollar sign, or single-character remaps. It matches the
+ * catalog's reference implementation (tools/src/yomikata/cleanup.py): Unicode classes, as
+ * Python's `\s` and `\w` are, and a group that didn't take part inserts nothing.
  */
 sealed interface CleanupStep {
     fun apply(text: String): String
 
     data class Replace(val regex: Regex, val replacement: String) : CleanupStep {
-        override fun apply(text: String): String = regex.replace(text, replacement)
+        override fun apply(text: String): String = regex.replace(text) { expand(replacement, it) }
     }
 
     data class Remap(val map: Map<Char, String>) : CleanupStep {
@@ -93,21 +97,27 @@ sealed interface CleanupStep {
                     val m = s.getJSONObject("remap")
                     Remap(m.keys().asSequence().filter { it.length == 1 }.associate { it[0] to m.getString(it) })
                 } else {
-                    Replace(Regex(s.getString("regex")), javaReplacement(s.getString("replace")))
+                    Replace(compile(s.getString("regex")), s.getString("replace"))
                 }
             }
         }.orEmpty()
 
-        /** The catalog's `$1` / `$$` replacement syntax in Java's, where a backslash escapes. */
-        internal fun javaReplacement(catalog: String): String = buildString {
+        private fun compile(pattern: String): Regex = try {
+            Pattern.compile(pattern, Pattern.UNICODE_CHARACTER_CLASS).toRegex()
+        } catch (e: IllegalArgumentException) {
+            // A regex engine without the flag (ICU's classes are Unicode already).
+            Regex(pattern)
+        }
+
+        /** The catalog's replacement for one match: `$1`…`$9` a group (empty if unmatched), `$$` a dollar sign. */
+        internal fun expand(replacement: String, match: MatchResult): String = buildString {
             var i = 0
-            while (i < catalog.length) {
-                val c = catalog[i]
+            while (i < replacement.length) {
+                val c = replacement[i]
+                val next = replacement.getOrNull(i + 1)
                 when {
-                    c == '$' && catalog.getOrNull(i + 1) == '$' -> { append("\\$"); i++ }
-                    c == '$' && catalog.getOrNull(i + 1)?.isDigit() == true -> append('$')
-                    c == '$' -> append("\\$")
-                    c == '\\' -> append("\\\\")
+                    c == '$' && next == '$' -> { append('$'); i++ }
+                    c == '$' && next != null && next in '1'..'9' -> { append(match.groups.takeIf { next - '0' < it.size }?.get(next - '0')?.value.orEmpty()); i++ }
                     else -> append(c)
                 }
                 i++

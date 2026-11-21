@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.memory.MemoryTextStatus
+import app.genkan.ppsspp.HookFinderState
 import app.genkan.ppsspp.PpssppStatus
 import app.genkan.reader.HookStatus
 import app.genkan.reader.ReaderLineEntity
@@ -74,6 +75,7 @@ fun ReaderScreen(
     val recording by viewModel.audio.running.collectAsStateWithLifecycle()
     val reading by viewModel.stats.session.collectAsStateWithLifecycle()
     val ppsspp by viewModel.ppsspp.status.collectAsStateWithLifecycle()
+    val finder by viewModel.hookFinder.state.collectAsStateWithLifecycle()
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
@@ -90,6 +92,9 @@ fun ReaderScreen(
                 Text(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
+                        finder is HookFinderState.Working -> (finder as HookFinderState.Working).message
+                        finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
+                        finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
                         ocrOn && !capturing -> "OCR: waiting for capture"
                         builtIn == MemoryTextStatus.Locked -> "Text from the game's memory"
                         builtIn == MemoryTextStatus.Searching -> "Looking for this line in the game's memory…"
@@ -98,7 +103,7 @@ fun ReaderScreen(
                         azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
                         azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
                         ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
-                        ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR"
+                        ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR, or Find hook"
                         ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
                         ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
                             (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "") +
@@ -128,6 +133,12 @@ fun ReaderScreen(
                 if (ocrOn) Chip(engine.name) { viewModel.ocr.nextEngine() }
                 // Sentence audio rides on the capture; it needs the recording permission once.
                 if (capturing && !recording) Chip("Audio") { onAskAudioPermission() }
+                // The hook finder, for a PSP game without a hook; it needs OCR to compare lines with.
+                when (finder) {
+                    is HookFinderState.Working -> Chip("Stop") { viewModel.hookFinder.stop() }
+                    is HookFinderState.Found, is HookFinderState.Failed -> Chip("OK") { viewModel.hookFinder.dismiss() }
+                    HookFinderState.Idle -> if (ppsspp is PpssppStatus.NoProfile) Chip("Find hook") { viewModel.hookFinder.start() }
+                }
                 if (threads.isNotEmpty() || chosen != null) {
                     Chip("Thread: ${chosen?.thread ?: "choose"}") { viewModel.openPicker() }
                 }

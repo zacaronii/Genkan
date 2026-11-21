@@ -49,7 +49,26 @@ class CatalogEntryTest {
         )
         assertEquals("こ。天音です", entry.clean("ｺ｡\$t天音@です"))
         assertEquals("\$100", entry.clean("円100"))
-        assertEquals("a\\\\b", CleanupStep.javaReplacement("a\\b"))
+    }
+
+    @Test
+    fun `cleanup gives what the catalog's reference implementation gives`() {
+        // Expected values from tools/src/yomikata/cleanup.py.
+        val entry = CatalogEntry.parse(
+            """
+            {"id": "NPJH50372", "platform": "psp", "title": "t", "encoding": "utf16le", "status": "auto",
+             "cleanup": [{"regex": "<CLT[^<>\\n]*>", "replace": ""}, {"regex": "\\n", "replace": ""},
+                         {"regex": "^\\s+|\\s+${'$'}", "replace": ""}]}
+            """,
+        )
+        assertEquals("ボクの名前は“苗木誠”だ。", entry.clean("<CLT 4>ボクの名前は<CLT 3>“苗木誠”<CLT>だ。\n<CLT>"))
+        assertEquals("あ", entry.clean("\u3000あ\u3000")) // \s takes the ideographic space, as in Python
+        val unmatched = CatalogEntry.parse(
+            """{"id": "x", "platform": "psp", "title": "t", "encoding": "utf8", "status": "auto",
+                "cleanup": [{"regex": "(x)?b", "replace": "[${'$'}1]${'$'}${'$'}"}]}""",
+        )
+        assertEquals("a[]${'$'}", unmatched.clean("ab"))
+        assertNull(unmatched.clean("  ")) // only spaces left: dropped
     }
 
     @Test

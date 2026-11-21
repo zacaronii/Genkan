@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.genkan.reader.HookMessage
 import app.genkan.reader.NowPlaying
+import app.genkan.yomikata.CatalogEntry
 import app.genkan.yomikata.YomikataCatalog
 import app.genkan.reader.ReaderSession
 import com.squareup.moshi.Moshi
@@ -70,6 +71,8 @@ class PpssppText @Inject constructor(
 
     val enabled: Flow<Boolean> = context.ppssppStore.data.map { it[ENABLED] == true }
 
+    private val held = MutableStateFlow(false)
+
     private val _status = MutableStateFlow<PpssppStatus>(PpssppStatus.Off)
     val status: StateFlow<PpssppStatus> = _status.asStateFlow()
 
@@ -77,7 +80,7 @@ class PpssppText @Inject constructor(
         if (started) return
         started = true
         scope.launch {
-            combine(enabled, nowPlaying.game) { on, game -> on && game.platform == PSP }.collectLatest { active ->
+            combine(enabled, nowPlaying.game, held) { on, game, hold -> on && game.platform == PSP && !hold }.collectLatest { active ->
                 if (!active) {
                     _status.value = PpssppStatus.Off
                     return@collectLatest
@@ -90,6 +93,14 @@ class PpssppText @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Steps aside while [HookFinder] uses the debugger (only the newest connection gets log
+     * events), and connects again after, with any hook it found.
+     */
+    fun hold(on: Boolean) {
+        held.value = on
     }
 
     /** Turns the debugger on in PPSSPP's settings, remembering what was there; off puts it back. */
@@ -154,8 +165,8 @@ class PpssppText @Inject constructor(
                     if (id == gameId) return@collect
                     gameId = id
                     hooks.clear()
-                    // The Yomikata catalog first; Genkan's own profiles when it has none (or is unset).
-                    hooks += catalogHooks(id) ?: PspHooks.byGameId[id].orEmpty()
+                    // The Yomikata catalog first, then a hook found on this device, then Genkan's own profiles.
+                    hooks += catalogHooks(id) ?: foundHooks(id) ?: PspHooks.byGameId[id].orEmpty()
                     if (hooks.isEmpty()) {
                         Log.i(TAG, "No hook profile for $id")
                         _status.value = PpssppStatus.NoProfile(id)
@@ -217,6 +228,10 @@ class PpssppText @Inject constructor(
     /** [id]'s hooks from the Yomikata catalog, or null when it has none Genkan can use. */
     private suspend fun catalogHooks(id: String): List<PspHook>? {
         val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return null
+        return catalogHooks(entry)?.also { Log.i(TAG, "${it.size} hooks for $id from the catalog (${entry.status})") }
+    }
+
+    private fun catalogHooks(entry: CatalogEntry): List<PspHook>? {
         return entry.hooks.mapNotNull { hook ->
             val charset = when (hook.charset) {
                 "shift_jis" -> PspHooks.SHIFT_JIS
@@ -225,7 +240,16 @@ class PpssppText @Inject constructor(
                 else -> return@mapNotNull null // table-coded hooks: not yet
             }
             PspHook(hook.address, hook.register, charset) { entry.clean(it, hook) }
-        }.ifEmpty { null }?.also { Log.i(TAG, "${it.size} hooks for $id from the catalog (${entry.status})") }
+        }.ifEmpty { null }
+    }
+
+    /** The hook [HookFinder] found for [id] on this device, until the catalog has one. */
+    private fun foundHooks(id: String): List<PspHook>? {
+        val file = File(context.filesDir, "found-hooks/$id.json").takeIf { it.isFile } ?: return null
+        val report = runCatching { org.json.JSONObject(file.readText()) }.getOrNull() ?: return null
+        val hook = runCatching { CatalogEntry.parseHook(report.getJSONObject("hook")) }.getOrNull() ?: return null
+        val entry = CatalogEntry(id, "psp", report.optString("title"), hook.charset, "found", hooks = listOf(hook))
+        return catalogHooks(entry)?.also { Log.i(TAG, "Using the hook found on this device for $id") }
     }
 
     /** The debugger's events, a null event first when it opens; completes when it closes. */
@@ -254,24 +278,24 @@ class PpssppText @Inject constructor(
         awaitClose { ws.close() }
     }.flowOn(Dispatchers.IO)
 
-    private companion object {
-        const val TAG = "PpssppText"
-        const val PSP = "psp"
+    companion object {
+        private const val TAG = "PpssppText"
+        private const val PSP = "psp"
         /** Genkan's fixed debugger port; PPSSPP otherwise picks one at random. */
         const val PORT = 45099
-        const val READ_SIZE = 512
-        const val RETRY_MS = 3_000L
-        const val CONNECT_TIMEOUT_MS = 10_000
-        const val MARK = "GENKAN"
-        const val REMOVED = "removed"
-        val HIT = Regex("$MARK(\\d+) ([0-9a-fA-F]{1,8})")
-        const val GENERAL = "General"
-        const val PORT_KEY = "RemoteISOPort"
-        const val STARTUP_KEY = "RemoteDebuggerOnStartup"
+        private const val READ_SIZE = 512
+        private const val RETRY_MS = 3_000L
+        private const val CONNECT_TIMEOUT_MS = 10_000
+        private const val MARK = "GENKAN"
+        private const val REMOVED = "removed"
+        private val HIT = Regex("$MARK(\\d+) ([0-9a-fA-F]{1,8})")
+        private const val GENERAL = "General"
+        private const val PORT_KEY = "RemoteISOPort"
+        private const val STARTUP_KEY = "RemoteDebuggerOnStartup"
         /** Under shared storage: a folder chosen in PPSSPP ("ppsspp"), or PSP/ at its root. */
-        val MEMSTICKS = listOf("ppsspp", "", "PPSSPP")
-        val ENABLED = booleanPreferencesKey("enabled")
-        val SAVED_PORT = stringPreferencesKey("saved_port")
-        val SAVED_ON_STARTUP = stringPreferencesKey("saved_on_startup")
+        private val MEMSTICKS = listOf("ppsspp", "", "PPSSPP")
+        private val ENABLED = booleanPreferencesKey("enabled")
+        private val SAVED_PORT = stringPreferencesKey("saved_port")
+        private val SAVED_ON_STARTUP = stringPreferencesKey("saved_on_startup")
     }
 }
