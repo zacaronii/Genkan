@@ -140,6 +140,10 @@ class LibraryViewModel @Inject constructor(
                 game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
             }.distinctUntilChanged().collect(focusedGame::set)
         }
+        // The bottom screen's Play / Download button does what A does on that game.
+        viewModelScope.launch {
+            focusedGame.playRequests.collect { id -> games.value.firstOrNull { it.id == id }?.let(::primaryAction) }
+        }
         // The artwork of the games around the focused one, so the next few are already here.
         viewModelScope.launch {
             combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }

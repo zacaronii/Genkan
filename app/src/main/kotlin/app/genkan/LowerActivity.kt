@@ -3,7 +3,9 @@
 package app.genkan
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -78,7 +80,11 @@ class LowerActivity : ComponentActivity() {
                 val mode by details.mode.collectAsStateWithLifecycle()
                 val canShowDetails by details.canShowDetails.collectAsStateWithLifecycle()
                 when (mode) {
-                    CompanionMode.DETAILS -> GameDetailsScreen(details, onShowReader = details::showReader)
+                    CompanionMode.DETAILS -> GameDetailsScreen(
+                        viewModel = details,
+                        onShowReader = details::showReader,
+                        onOpenManual = { details.openManual(::openPdf) },
+                    )
                     CompanionMode.READER -> ReaderScreen(
                         viewModel = reader,
                         onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
@@ -87,6 +93,21 @@ class LowerActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Opens a game's manual in the system's PDF viewer. Started from here, the viewer comes up
+     * on the bottom screen, beside the game it belongs to.
+     */
+    private fun openPdf(uri: Uri) {
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/pdf")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(view)
+        } catch (_: ActivityNotFoundException) {
+            details.show("No app on this device opens PDFs")
         }
     }
 

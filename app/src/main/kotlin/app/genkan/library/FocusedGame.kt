@@ -1,7 +1,10 @@
 package app.genkan.library
 
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,7 +19,20 @@ class FocusedGame @Inject constructor() {
     private val _focus = MutableStateFlow<Focus?>(null)
     val focus: StateFlow<Focus?> = _focus.asStateFlow()
 
+    private val _playRequests = MutableSharedFlow<Long>(extraBufferCapacity = 1)
+
+    /**
+     * Game ids whose Play or Download button was tapped on the bottom screen. The library acts
+     * on each as it does on A, so its notices and permission prompts stay on the top screen.
+     */
+    val playRequests: SharedFlow<Long> = _playRequests.asSharedFlow()
+
     fun set(focus: Focus?) {
         _focus.value = focus
+    }
+
+    /** Asks the library to play, download or cancel the download of [gameId], as A would. */
+    fun requestPlay(gameId: Long) {
+        _playRequests.tryEmit(gameId)
     }
 }

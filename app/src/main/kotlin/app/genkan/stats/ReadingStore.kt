@@ -57,8 +57,8 @@ data class ReadingSessionTotals(
     val characters: Long,
 )
 
-/** All reading of one game. */
-data class ReadingGameTotals(val activeMs: Long, val characters: Long)
+/** All reading of one game; [lines] is how many lines the reading stats counted. */
+data class ReadingGameTotals(val activeMs: Long, val characters: Long, val lines: Long = 0)
 
 /** Blocking on purpose: [ActivityTracker] runs on the reader's own background thread. */
 @Dao
@@ -97,7 +97,10 @@ interface ReadingDao {
     )
     suspend fun recentTotals(limit: Int): List<ReadingSessionTotals>
 
-    @Query("SELECT COALESCE(SUM(activeMs), 0) AS activeMs, COALESCE(SUM(characters), 0) AS characters FROM reading_daily WHERE game = :game")
+    @Query(
+        """SELECT COALESCE(SUM(activeMs), 0) AS activeMs, COALESCE(SUM(characters), 0) AS characters,
+           COALESCE(SUM(lines), 0) AS lines FROM reading_daily WHERE game = :game""",
+    )
     fun gameTotals(game: String): Flow<ReadingGameTotals>
 
     @Query("UPDATE reading_sessions SET pushed = :pushed WHERE id = :id")

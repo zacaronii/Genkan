@@ -34,6 +34,11 @@ a Yomitan dictionary popup. See
   back to Genkan. For exact times (sleep and other apps left out), allow *Usage access* from
   Genkan's settings; without it a session runs from launch until Genkan is back in front.
   Sessions under 10 seconds (an emulator that closed straight away) aren't reported.
+- **Game details:** while you browse, the bottom screen shows the focused game: its disc or
+  cartridge and logo over its fan art (or its blurred cover), RomM's details, your play
+  time, reading and save, its summary and screenshots (tap one for the full view, swipe
+  between them). Its buttons play or download the game as A does, open the manual in the
+  system's PDF viewer, and delete the download (tap twice).
 - **Dictionaries:** put Yomitan dictionary zips (JMdict, a frequency list such as JPDB, a
   pitch-accent or kanji dictionary) in `Download/` or a folder directly inside it, then open
   *Dictionaries* in settings and choose *Import dictionaries from Download*. Importing again
@@ -180,9 +185,11 @@ from made-up data (Roborazzi on Robolectric, `app/src/test/kotlin/app/genkan/ui/
 at the Thor's sizes and density: 1920x1080 for the top screen and 1080x1240 for the bottom
 one, both at 369 dpi. The settings page is shot once per group (`settings_<group>.png`).
 The library is shot as the grid and as the shelf: a PlayStation shelf of jewel cases, a DS
-shelf, each with the focused game's disc or card slid out, and a game without a cover. No
-real art is used: the tests draw stand-in covers, spines, logos and discs. Record them after
-a UI change and commit the PNGs with it:
+shelf, each with the focused game's disc or card slid out, and a game without a cover. The
+game details are shot for a game with everything (also scrolled to its screenshots), a sparse
+one and an open screenshot. No real art is used: the tests draw stand-in covers, spines,
+logos, discs, fan art and screenshots. Record them after a UI change and commit the PNGs
+with it:
 
 ```sh
 ./gradlew :app:recordRoborazziDebug     # writes app/src/test/screenshots/*.png
