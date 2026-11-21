@@ -1,9 +1,11 @@
 {
  "name": "table-choices-error",
  "entry": {
-  "unit": 2
+  "unit": 2,
+  "tables": [
+   "tables/test.tbl"
+  ]
  },
- "table": "0050=あ\n0051=い\n0052=う\n0053=え\n0054=お\n0055=か\n0056=き\n0057=く\n0058=け\n0059=こ\n005A=さ\n005B=し\n005C=す\n005D=せ\n005E=そ\n005F=た\n0060=ち\n0061=つ\n0062=て\n0063=と\n0064=な\n0065=に\n0066=ぬ\n0067=ね\n0068=の\n0069=は\n006A=ひ\n006B=ふ\n006C=へ\n006D=ほ\n006E=ま\n006F=み\n0070=む\n0071=め\n0072=も\n0073=や\n0074=ゆ\n0075=よ\n0076=ら\n0077=り\n0078=る\n0079=れ\n007A=ろ\n007B=わ\n007C=を\n007D=ん\n/FFFF\n",
  "layout": {
   "message": {
    "address": "0x80010001",
@@ -54,5 +56,8 @@
    "shown": "0x80040000+4 is outside memory"
   }
  },
- "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588"
+ "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588",
+ "tables": {
+  "tables/test.tbl": "0050=あ\n0051=い\n0052=う\n0053=え\n0054=お\n0055=か\n0056=き\n0057=く\n0058=け\n0059=こ\n005A=さ\n005B=し\n005C=す\n005D=せ\n005E=そ\n005F=た\n0060=ち\n0061=つ\n0062=て\n0063=と\n0064=な\n0065=に\n0066=ぬ\n0067=ね\n0068=の\n0069=は\n006A=ひ\n006B=ふ\n006C=へ\n006D=ほ\n006E=ま\n006F=み\n0070=む\n0071=め\n0072=も\n0073=や\n0074=ゆ\n0075=よ\n0076=ら\n0077=り\n0078=る\n0079=れ\n007A=ろ\n007B=わ\n007C=を\n007D=ん\n/FFFF\n"
+ }
 }

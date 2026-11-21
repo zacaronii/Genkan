@@ -1,7 +1,6 @@
 {
  "name": "sjis-pointer-length-big",
  "entry": {},
- "table": null,
  "layout": {
   "endian": "big",
   "poll": 20,
@@ -61,5 +60,6 @@
   "speaker": "ミカ",
   "choice_cursor": -1
  },
- "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588"
+ "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588",
+ "tables": {}
 }

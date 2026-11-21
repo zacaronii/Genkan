@@ -10,7 +10,11 @@ import java.nio.charset.CodingErrorAction
 /** A read a layout couldn't make: outside memory, a missing key, a table it needs. */
 class LayoutError(message: String) : Exception(message)
 
-/** Memory as a layout reads it: [size] bytes at [address], or a [LayoutError]. */
+/**
+ * Memory as a layout reads it: [size] bytes at [address], or a [LayoutError]. A memory that
+ * fails its own way (a binder or socket error, a short reply) must throw a LayoutError too, so
+ * the failure lands in that field's errors instead of ending the whole read.
+ */
 fun interface LayoutMemory {
     fun read(address: Long, size: Int): ByteArray
 }
@@ -54,11 +58,18 @@ object Layouts {
 
     /**
      * Everything [layout] names, read from [memory]. A field that can't be read is left out and
-     * its reason kept in [LayoutRead.errors]. [unit] and [table] are the entry's, for `table` text.
+     * its reason kept in [LayoutRead.errors]. [unit], [table] and [controls] are the entry's,
+     * for `table` text.
      */
-    fun read(layout: JSONObject, memory: LayoutMemory, unit: Int = 2, table: CharTable? = null): LayoutRead {
+    fun read(
+        layout: JSONObject,
+        memory: LayoutMemory,
+        unit: Int = 2,
+        table: CharTable? = null,
+        controls: Map<String, String> = emptyMap(),
+    ): LayoutRead {
         val order = if (layout.optString("endian", "little") == "big") ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
-        val reader = Reader(memory, order, unit, table)
+        val reader = Reader(memory, order, unit, table, controls)
         val errors = LinkedHashMap<String, String>()
         fun <T> attempt(name: String, read: () -> T): T? = try {
             read()
@@ -107,7 +118,13 @@ object Layouts {
         return LayoutRead(message, speakerName, speakerNumber, shown, waiting, choosing, choices, choiceCount, choiceCursor, onScreen, errors)
     }
 
-    private class Reader(val memory: LayoutMemory, val order: ByteOrder, val unit: Int, val table: CharTable?) {
+    private class Reader(
+        val memory: LayoutMemory,
+        val order: ByteOrder,
+        val unit: Int,
+        val table: CharTable?,
+        val controls: Map<String, String>,
+    ) {
 
         /** The address [spec] names: fixed, or `base` then, for each offset, the pointer there plus it. */
         fun resolve(spec: JSONObject): Long {
@@ -150,9 +167,11 @@ object Layouts {
             val count = rows?.getInt("count") ?: 1
             val stride = rows?.getInt("stride") ?: maxBytes
             var size = minOf(maxBytes, stride)
-            spec.optJSONObject("length")?.let { size = minOf(size, int(it).coerceAtLeast(0).toInt()) }
+            // Clamped before it becomes an Int: a u32 length of 0xFFFFFFFF is not -1.
+            spec.optJSONObject("length")?.let { size = minOf(size.toLong(), int(it).coerceAtLeast(0)).toInt() }
+            val decoder = decoderFor(charset)
             val lines = MutableList(count) { r ->
-                decode(cut(read(start + r.toLong() * stride, size), charset, width, terminator), charset)
+                decode(cut(read(start + r.toLong() * stride, size), charset, width, terminator), charset, width, decoder)
             }
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
@@ -168,33 +187,74 @@ object Layouts {
             var i = 0
             while (i < data.size) {
                 if (terminator != null && i + terminator.size <= data.size && (terminator.indices).all { data[i + it] == terminator[it] }) break
-                val n = charLength(data[i].toInt() and 0xFF, charset, width)
+                val n = charLength(data, i, charset, width)
                 if (i + n > data.size) break
                 i += n
             }
             return data.copyOf(i)
         }
 
-        private fun charLength(b: Int, charset: String, width: Int): Int = when (charset) {
-            "shift_jis" -> if (b in 0x81..0x9F || b in 0xE0..0xFC) 2 else 1
-            "euc_jp" -> if (b == 0x8F) 3 else if (b >= 0x8E) 2 else 1
-            "utf8" -> if (b >= 0xF0) 4 else if (b >= 0xE0) 3 else if (b >= 0xC0) 2 else 1
-            "utf16le", "utf16be" -> 2
-            else -> width
+        /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */
+        private fun charLength(data: ByteArray, i: Int, charset: String, width: Int): Int {
+            val b = data[i].toInt() and 0xFF
+            return when (charset) {
+                "shift_jis" -> if (b in 0x81..0x9F || b in 0xE0..0xFC) 2 else 1
+                "euc_jp" -> if (b == 0x8F) 3 else if (b >= 0x8E) 2 else 1
+                "utf8" -> if (b >= 0xF0) 4 else if (b >= 0xE0) 3 else if (b >= 0xC0) 2 else 1
+                // A surrogate pair is one character, when both halves are there.
+                "utf16le", "utf16be" -> if (i + 4 <= data.size && unit16(data, i, charset) in 0xD800..0xDBFF &&
+                    unit16(data, i + 2, charset) in 0xDC00..0xDFFF
+                ) 4 else 2
+                else -> width
+            }
         }
 
-        private fun decode(data: ByteArray, charset: String): String {
+        private fun unit16(data: ByteArray, i: Int, charset: String): Int {
+            val a = data[i].toInt() and 0xFF
+            val b = data[i + 1].toInt() and 0xFF
+            return if (charset == "utf16le") (b shl 8) or a else (a shl 8) or b
+        }
+
+        private fun decoderFor(charset: String) = if (charset == "table") {
+            null
+        } else {
+            Charset.forName(CODECS[charset] ?: throw LayoutError("unknown charset $charset")).newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+        }
+
+        /**
+         * [data] as text, one character at a time (the format's rule, so every decoder agrees):
+         * a character that doesn't decode is one U+FFFD, and Shift-JIS's single bytes 0x80,
+         * 0xA0 and 0xFD-0xFF are U+FFFD without asking the decoder.
+         */
+        private fun decode(data: ByteArray, charset: String, width: Int, decoder: java.nio.charset.CharsetDecoder?): String {
             if (charset == "table") {
                 val t = table ?: throw LayoutError("a table charset needs the entry's tables")
-                return t.decode(data, unit).trimEnd('\n')
+                return t.decode(data, unit, controls).trimEnd('\n')
             }
-            val codec = CODECS[charset] ?: throw LayoutError("unknown charset $charset")
-            return Charset.forName(codec).newDecoder()
-                .onMalformedInput(CodingErrorAction.REPLACE)
-                .onUnmappableCharacter(CodingErrorAction.REPLACE)
-                .decode(ByteBuffer.wrap(data)).toString()
+            val out = StringBuilder()
+            var i = 0
+            while (i < data.size) {
+                val n = minOf(charLength(data, i, charset, width), data.size - i)
+                val b = data[i].toInt() and 0xFF
+                if (charset == "shift_jis" && n == 1 && (b == 0x80 || b == 0xA0 || b >= 0xFD)) {
+                    out.append(REPLACEMENT)
+                } else {
+                    try {
+                        decoder!!.reset()
+                        out.append(decoder.decode(ByteBuffer.wrap(data, i, n)))
+                    } catch (e: java.nio.charset.CharacterCodingException) {
+                        out.append(REPLACEMENT)
+                    }
+                }
+                i += n
+            }
+            return out.toString()
         }
     }
+
+    private const val REPLACEMENT = '\uFFFD'
 
     private val SIZES = mapOf("u8" to 1, "s8" to 1, "u16" to 2, "s16" to 2, "u32" to 4, "s32" to 4)
 

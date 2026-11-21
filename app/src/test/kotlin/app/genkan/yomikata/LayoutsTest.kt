@@ -51,15 +51,62 @@ class LayoutsTest {
         assertTrue(vectors.isNotEmpty())
         for (vector in vectors) {
             val entry = vector.getJSONObject("entry")
-            val table = vector.optString("table").takeIf { vector.has("table") && !vector.isNull("table") }?.let { CharTable.parse(listOf(it)) }
-            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table)
+            // The entry's tables, in the order it lists them, from the vector's path -> text.
+            val tables = vector.optJSONObject("tables")
+            val paths = entry.optJSONArray("tables")
+            val table = paths?.let { p -> CharTable.parse(List(p.length()) { tables!!.getString(p.getString(it)) }) }
+            val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
+            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls)
             val expected = vector.getJSONObject("expected")
             val actual = asReference(read)
-            assertEquals(vector.getString("name"), expected.keys().asSequence().toSet(), actual.keys().asSequence().toSet())
+            val name = vector.getString("name")
+            assertEquals(name, expected.keys().asSequence().toSet(), actual.keys().asSequence().toSet())
             for (key in expected.keys().asSequence()) {
-                assertEquals("${vector.getString("name")}: $key", expected.get(key).toString(), actual.get(key).toString())
+                // Which fields failed is normative; the messages aren't.
+                if (key == "errors") {
+                    assertEquals("$name: errors", expected.getJSONObject(key).keys().asSequence().toSet(), actual.getJSONObject(key).keys().asSequence().toSet())
+                } else {
+                    assertEquals("$name: $key", expected.get(key).toString(), actual.get(key).toString())
+                }
             }
         }
+    }
+
+    private fun bytesAt(base: Long, vararg data: Int) = LayoutMemory { address, size ->
+        val bytes = data.map { it.toByte() }.toByteArray()
+        val start = (address - base).toInt()
+        if (start < 0 || start + size > bytes.size) throw LayoutError("outside")
+        bytes.copyOfRange(start, start + size)
+    }
+
+    private fun message(spec: String, memory: LayoutMemory): String? =
+        Layouts.read(JSONObject("{\"message\": $spec}"), memory).message
+
+    @Test
+    fun `a huge length is clamped, not turned negative`() {
+        val memory = bytesAt(0x100, 0x41, 0x42, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF)
+        val spec = """{"address": "0x100", "charset": "utf8", "max_bytes": 2, "length": {"address": "0x104", "type": "u32"}}"""
+        assertEquals("AB", message(spec, memory))
+    }
+
+    @Test
+    fun `a character that doesn't decode is one replacement character`() {
+        val sjis = """{"address": "0x0", "charset": "shift_jis", "max_bytes": 3}"""
+        // 81 20 is a Shift-JIS pair that means nothing: one U+FFFD, then A.
+        assertEquals("�A", message(sjis, bytesAt(0, 0x81, 0x20, 0x41)))
+        // Single bytes 0x80 and 0xFD are U+FFFD whatever the decoder makes of them.
+        assertEquals("�A�", message(sjis, bytesAt(0, 0x80, 0x41, 0xFD)))
+    }
+
+    @Test
+    fun `a UTF-16 surrogate pair is one character`() {
+        // 😀 (U+1F600) is D83D DE00 in memory as 3D D8 00 DE.
+        val pair = bytesAt(0, 0x3D, 0xD8, 0x00, 0xDE, 0x41, 0x00)
+        assertEquals("😀A", message("""{"address": "0x0", "charset": "utf16le", "max_bytes": 6}""", pair))
+        // Three bytes can't hold the pair: its first half alone, a lone surrogate, is one U+FFFD.
+        assertEquals("\uFFFD", message("""{"address": "0x0", "charset": "utf16le", "max_bytes": 3}""", pair))
+        // A lone high surrogate is one U+FFFD.
+        assertEquals("�A", message("""{"address": "0x0", "charset": "utf16le", "max_bytes": 4}""", bytesAt(0, 0x3D, 0xD8, 0x41, 0x00)))
     }
 
     @Test

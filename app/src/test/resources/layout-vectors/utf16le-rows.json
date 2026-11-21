@@ -1,7 +1,6 @@
 {
  "name": "utf16le-rows",
  "entry": {},
- "table": null,
  "layout": {
   "poll": "frame",
   "message": {
@@ -51,5 +50,6 @@
   "choosing": false,
   "on_screen": "ボクは立っていた…まずは"
  },
- "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588"
+ "source": "Generated with Yomikata's reference reader, tools/src/yomikata/layout.py at 01c7588",
+ "tables": {}
 }
