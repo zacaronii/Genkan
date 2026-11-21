@@ -136,6 +136,32 @@ class LayoutsTest {
         assertEquals("general", notes(cart, "AXXJ")) // no executable hash to name
     }
 
+    /** Yomikata's `understood`: a layout with a key or named value this reader doesn't know is not there. */
+    @Test
+    fun `a layout with anything unknown is passed over`() {
+        val known = JSONObject("""{"poll": "frame", "message": {"address": "0x0", "charset": "utf16le", "max_bytes": 8,
+            "rows": {"count": 2, "stride": 4, "lengths": {"address": "0x10", "counts": "characters"}},
+            "when": {"address": "0x20", "equals": 2}}, "waiting": {"address": "0x30"}}""")
+        assertTrue(Layouts.understood(known))
+        fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
+        val unknown = listOf(
+            changed { it.put("typing_speed", JSONObject()) },
+            changed { it.getJSONObject("message").put("fade", 1) },
+            changed { it.getJSONObject("message").getJSONObject("rows").put("gap", 2) },
+            changed { it.getJSONObject("message").getJSONObject("rows").getJSONObject("lengths").put("counts", "glyphs") },
+            changed { it.getJSONObject("message").put("charset", "big5") },
+            changed { it.getJSONObject("waiting").put("type", "u64") },
+            // `counts` belongs to lengths, not to a flag.
+            changed { it.getJSONObject("waiting").put("counts", "characters") },
+        )
+        for (layout in unknown) {
+            assertEquals(layout.toString(), false, Layouts.understood(layout))
+            assertEquals(null, Layouts.pick(listOf(layout), null))
+        }
+        // The next layout the reader knows is picked instead.
+        assertEquals(known, Layouts.pick(listOf(unknown[0], known), null))
+    }
+
     @Test
     fun `the layout naming a version wins, else the first naming none`() {
         val general = JSONObject("""{"poll": 20}""")

@@ -49,12 +49,58 @@ object Layouts {
     fun pick(layouts: List<JSONObject>, exeSha1: String?): JSONObject? {
         var general: JSONObject? = null
         for (layout in layouts) {
+            // A layout with a key this reader doesn't know is passed over, not half-read.
+            if (!understood(layout)) continue
             val versions = layout.optJSONArray("versions").strings()
             if (exeSha1 != null && exeSha1 in versions) return layout
             if (versions.isEmpty() && general == null) general = layout
         }
         return general
     }
+
+    /**
+     * Whether this reader knows every key and named value (charset, int type, `counts`) in
+     * [layout]. A newer key can change what the others mean (a text without its `when` would show
+     * what is no longer on screen), so a layout this reader doesn't fully know is treated as not
+     * there (docs/format.md, "Layouts"; Yomikata's `understood`).
+     */
+    fun understood(layout: JSONObject): Boolean {
+        if (!layout.keySet().all { it in FIELDS || it in OTHER_KEYS }) return false
+        if (layout.optString("endian", "little") !in setOf("little", "big")) return false
+        for ((key, kind) in FIELDS) {
+            if (!layout.has(key)) continue
+            val spec = layout.optJSONObject(key) ?: return false
+            val isText = kind == "text" || (kind == "either" && spec.has("charset"))
+            if (!(if (isText) textOk(spec) else numberOk(spec, NUMBER_KEYS))) return false
+        }
+        return true
+    }
+
+    private fun JSONObject.keySet(): Set<String> = keys().asSequence().toSet()
+
+    private fun numberOk(spec: JSONObject?, keys: Set<String>): Boolean =
+        spec != null && spec.keySet().all { it in keys } && spec.optString("type", "u8") in SIZES &&
+            spec.optString("counts", "bytes") in setOf("bytes", "characters")
+
+    private fun textOk(spec: JSONObject): Boolean {
+        if (!spec.keySet().all { it in TEXT_KEYS } || spec.optString("charset") !in CODECS.keys + "table") return false
+        if (spec.has("length") && !numberOk(spec.optJSONObject("length"), LENGTH_KEYS)) return false
+        if (spec.has("when") && !numberOk(spec.optJSONObject("when"), NUMBER_KEYS)) return false
+        if (!spec.has("rows")) return true
+        val rows = spec.optJSONObject("rows") ?: return false
+        if (!rows.keySet().all { it in setOf("count", "stride", "lengths") }) return false
+        return !rows.has("lengths") || numberOk(rows.optJSONObject("lengths"), LENGTH_KEYS)
+    }
+
+    private val WHERE = setOf("address", "base", "offsets")
+    private val NUMBER_KEYS = WHERE + setOf("type", "equals")
+    private val LENGTH_KEYS = WHERE + setOf("type", "counts")
+    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "when", "cleanup")
+    private val FIELDS = mapOf(
+        "message" to "text", "choices" to "text", "speaker" to "either", "shown" to "number", "waiting" to "number",
+        "choosing" to "number", "choice_count" to "number", "choice_cursor" to "number",
+    )
+    private val OTHER_KEYS = setOf("versions", "endian", "poll", "speaker_names", "notes")
 
     /**
      * The layout for a release, for a reader that can't hash its executable (Genkan can't):
@@ -191,10 +237,11 @@ object Layouts {
             return address
         }
 
-        fun int(spec: JSONObject): Long {
+        /** The number [spec] names; [index] picks one of a run of them, each right after the last. */
+        fun int(spec: JSONObject, index: Int = 0): Long {
             val type = spec.optString("type", "u8")
             val size = SIZES[type] ?: throw LayoutError("unknown type $type")
-            val buffer = ByteBuffer.wrap(read(resolve(spec), size)).order(order)
+            val buffer = ByteBuffer.wrap(read(resolve(spec) + index.toLong() * size, size)).order(order)
             return when (type) {
                 "u8" -> buffer.get().toLong() and 0xFF
                 "s8" -> buffer.get().toLong()
@@ -211,6 +258,8 @@ object Layouts {
         }
 
         fun text(spec: JSONObject): String {
+            // What the memory holds isn't on screen now: nothing else of the text is read.
+            spec.optJSONObject("when")?.let { if (!flag(it)) return "" }
             val charset = spec.getString("charset")
             val width = if (charset == "table") unit else 1
             val terminator = spec.optString("terminator").takeIf { spec.has("terminator") }?.let(::bytes)
@@ -219,12 +268,24 @@ object Layouts {
             val rows = spec.optJSONObject("rows")
             val count = rows?.getInt("count") ?: 1
             val stride = rows?.getInt("stride") ?: maxBytes
-            var size = minOf(maxBytes, stride)
-            // Clamped before it becomes an Int: a u32 length of 0xFFFFFFFF is not -1.
-            spec.optJSONObject("length")?.let { size = minOf(size.toLong(), int(it).coerceAtLeast(0)).toInt() }
+            val length = spec.optJSONObject("length")
+            val rowLengths = rows?.optJSONObject("lengths")
             val decoder = decoderFor(charset)
             val lines = MutableList(count) { r ->
-                decode(cut(read(start + r.toLong() * stride, size), charset, width, terminator), charset, width, decoder)
+                var size = minOf(maxBytes, stride)
+                var chars: Long? = null
+                // `length` holds for every row, `rows.lengths` for its own; where both are given, both hold.
+                for ((lengthSpec, index) in listOf(length to 0, rowLengths to r)) {
+                    if (lengthSpec == null) continue
+                    // Clamped before it becomes an Int: a u32 length of 0xFFFFFFFF is not -1.
+                    val n = int(lengthSpec, index).coerceAtLeast(0)
+                    if (lengthSpec.optString("counts", "bytes") == "characters") {
+                        chars = minOf(chars ?: n, n)
+                    } else {
+                        size = minOf(size.toLong(), n).toInt()
+                    }
+                }
+                decode(cut(read(start + r.toLong() * stride, size), charset, width, terminator, chars), charset, width, decoder)
             }
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
@@ -236,14 +297,19 @@ object Layouts {
         private fun read(address: Long, size: Int): ByteArray =
             memory.read(address, size).also { if (it.size < size) throw LayoutError("0x%08X+%d is outside memory".format(address, size)) }
 
-        /** Up to the terminator, matched only where a character starts; no character cut in half. */
-        private fun cut(data: ByteArray, charset: String, width: Int, terminator: ByteArray?): ByteArray {
+        /**
+         * Up to the terminator, matched only where a character starts; no character cut in half;
+         * at most [chars] characters (a table code is one), when a length counts characters.
+         */
+        private fun cut(data: ByteArray, charset: String, width: Int, terminator: ByteArray?, chars: Long? = null): ByteArray {
             var i = 0
-            while (i < data.size) {
+            var count = 0L
+            while (i < data.size && (chars == null || count < chars)) {
                 if (terminator != null && i + terminator.size <= data.size && (terminator.indices).all { data[i + it] == terminator[it] }) break
                 val n = charLength(data, i, charset, width)
                 if (i + n > data.size) break
                 i += n
+                count++
             }
             return data.copyOf(i)
         }
