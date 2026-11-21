@@ -58,8 +58,10 @@ import androidx.tv.material3.Text
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -103,14 +105,14 @@ private fun ManualFile(file: File, onClose: (problem: String?) -> Unit) {
     val close by rememberUpdatedState(onClose)
     var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
     LaunchedEffect(file) {
-        pages = try {
-            PdfManualPages.open(file)
-        } catch (e: CancellationException) {
-            throw e
+        val opened = try {
+            // Not cut short: an open that finishes as the viewer goes is closed just below.
+            withContext(NonCancellable) { PdfManualPages.open(file) }
         } catch (e: Exception) {
             close("Couldn't open the manual: ${e.message}")
-            null
+            return@LaunchedEffect
         }
+        if (isActive) pages = opened else opened.close()
     }
     DisposableEffect(file) {
         onDispose { pages?.close() }

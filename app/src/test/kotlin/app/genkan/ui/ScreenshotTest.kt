@@ -183,7 +183,7 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun manualViewerScrolled() = shoot("manual_viewer_scrolled", BOTTOM_PIXELS) {
-        ManualViewer(FakeManual(pages = 12), onClose = {}, listState = rememberLazyListState(3, 900))
+        ManualViewer(FakeManual(pages = 12), onClose = {}, listState = rememberLazyListState(3, 1010))
     }
 
     /** The first group with the group list focused; the others with the pad on their rows. */

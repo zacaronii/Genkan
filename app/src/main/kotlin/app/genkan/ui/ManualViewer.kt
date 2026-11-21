@@ -64,6 +64,17 @@ private const val SHARP_ZOOM = 1.5f
 /** How far the manual is pulled down from its first page before letting go closes it. */
 private val PULL_CLOSE_DISTANCE = 96.dp
 
+/** Room above the first page for the Close button (about 36 dp) and its 12 dp margin. */
+private val CLOSE_CLEARANCE = 56.dp
+
+/**
+ * Extra space under the last page while zoomed, in pixels. The list is scaled from its top
+ * edge, so at [zoom] only the top 1 / [zoom] of what it lays out is on screen; without this,
+ * scrolling stops while the end of the last page is still below the screen.
+ */
+fun zoomedEndPadding(viewportHeightPx: Int, zoom: Float): Float =
+    viewportHeightPx * (1f - 1f / zoom.coerceAtLeast(1f))
+
 /**
  * A game's manual over the whole bottom screen: its pages one under the other, as wide as the
  * screen, scrolled with a finger. Pinch or double-tap zooms; "page n / N" shows where you are;
@@ -120,9 +131,10 @@ fun ManualViewer(pages: ManualPages, onClose: () -> Unit, listState: LazyListSta
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF2A2A30))) {
         val widthPx = constraints.maxWidth
         val renderWidth = if (zoom > SHARP_ZOOM) widthPx * 2 else widthPx
+        val endPadding = with(LocalDensity.current) { zoomedEndPadding(constraints.maxHeight, zoom).toDp() }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(vertical = 8.dp),
+            contentPadding = PaddingValues(top = CLOSE_CLEARANCE, bottom = 8.dp + endPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .fillMaxSize()

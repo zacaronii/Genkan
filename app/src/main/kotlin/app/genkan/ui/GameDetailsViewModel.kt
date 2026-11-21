@@ -189,10 +189,16 @@ class GameDetailsViewModel @Inject constructor(
         }
     }
 
-    /** Closes the manual viewer; [problem], when given, says why (e.g. the file wouldn't open). */
+    /**
+     * Closes the manual viewer. [problem], when given, says why (the file wouldn't open); the
+     * cached file is then deleted, so the next tap fetches it again.
+     */
     fun closeManual(problem: String? = null) {
+        val file = _manual.value
         _manual.value = null
-        problem?.let(::show)
+        if (problem == null) return
+        file?.let { viewModelScope.launch(Dispatchers.IO) { it.delete() } }
+        show(problem)
     }
 
     /** A message for a few seconds, e.g. that the manual couldn't be fetched. */
