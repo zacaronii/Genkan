@@ -1,6 +1,7 @@
 package app.genkan.ui
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -170,15 +171,19 @@ class GameDetailsViewModel @Inject constructor(
 
     /**
      * Fetches the focused game's manual into the cache (once per version of it) and then emits
-     * its content URI on [manualReady].
+     * its content URI on [manualReady]. When no app here opens PDFs, it says so and fetches
+     * nothing.
      */
     fun openManual() {
         val game = details.value?.focus?.game ?: return
         val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return
         if (manualJob?.isActive == true) return
+        val folder = File(context.cacheDir, MANUALS_FOLDER)
+        val file = File(folder, manualFileName(game))
+        // The URI can be made before the file exists, so the viewer check comes first.
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        pdfNotice(pdfViewers(context, uri))?.let { show(it); return }
         manualJob = viewModelScope.launch {
-            val folder = File(context.cacheDir, MANUALS_FOLDER)
-            val file = File(folder, manualFileName(game))
             if (!file.isFile || file.length() == 0L) {
                 noticeJob?.cancel()
                 _notice.value = "Fetching the manual…"
@@ -192,7 +197,7 @@ class GameDetailsViewModel @Inject constructor(
                 fetched.exceptionOrNull()?.let { show("Couldn't fetch the manual: ${it.message}"); return@launch }
                 _notice.value = null
             }
-            _manualReady.tryEmit(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
+            _manualReady.tryEmit(uri)
         }
     }
 
@@ -233,6 +238,21 @@ class GameDetailsViewModel @Inject constructor(
     companion object {
         private const val NOTICE_MS = 4_000L
         private const val MANUALS_FOLDER = "manuals"
+
+        /** Said instead of opening a manual on a device with no PDF viewer. */
+        const val NO_PDF_VIEWER = "No app on this device opens PDFs"
+
+        /** The intent that shows [uri] as a PDF, with read access granted to the viewer. */
+        fun pdfViewIntent(uri: Uri): Intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/pdf")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+        /** How many apps here would open [uri] as a PDF (the manifest's queries make them visible). */
+        fun pdfViewers(context: Context, uri: Uri): Int =
+            context.packageManager.queryIntentActivities(pdfViewIntent(uri), 0).size
+
+        /** What to say instead of opening a manual, given how many PDF viewers there are; null to go ahead. */
+        fun pdfNotice(viewers: Int): String? = if (viewers <= 0) NO_PDF_VIEWER else null
 
         /**
          * The cached manual's file name: the game's id, then a hash of what identifies this

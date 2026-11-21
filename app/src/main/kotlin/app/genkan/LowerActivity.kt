@@ -105,13 +105,12 @@ class LowerActivity : ComponentActivity() {
      * on the bottom screen, beside the game it belongs to.
      */
     private fun openPdf(uri: Uri) {
-        val view = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/pdf")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Asked again here: a viewer may have gone while the manual downloaded.
+        GameDetailsViewModel.pdfNotice(GameDetailsViewModel.pdfViewers(this, uri))?.let { details.show(it); return }
         try {
-            startActivity(view)
+            startActivity(GameDetailsViewModel.pdfViewIntent(uri))
         } catch (_: ActivityNotFoundException) {
-            details.show("No app on this device opens PDFs")
+            details.show(GameDetailsViewModel.NO_PDF_VIEWER)
         }
     }
 

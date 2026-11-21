@@ -5,6 +5,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +45,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,6 +64,9 @@ import kotlinx.coroutines.delay
  * The reviewer's default; set it to false to always blur the cover.
  */
 private const val FANART_BACKDROP = true
+
+/** How far a screenshot is pulled down before letting go closes the full view. */
+private val SWIPE_CLOSE_DISTANCE = 96.dp
 
 /** How long the delete button waits for its second tap. */
 private const val DELETE_ARMED_MS = 4_000L
@@ -343,13 +351,35 @@ private fun ProgressBar(progress: Float) {
     }
 }
 
-/** Screenshots over the whole screen, one at a time: swipe between them; tap or Back closes. */
+/**
+ * Screenshots over the whole screen, one at a time: swipe sideways between them. A tap on the
+ * picture, the Close button, a swipe down or Back closes it.
+ */
 @Composable
 private fun ScreenshotViewer(screenshots: List<Any>, start: Int, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (screenshots.size - 1).coerceAtLeast(0))) { screenshots.size }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+    // How far the screenshot has been pulled down; past the threshold, letting go closes it.
+    var pulled by remember { mutableFloatStateOf(0f) }
+    val closeAfter = with(LocalDensity.current) { SWIPE_CLOSE_DISTANCE.toPx() }
+    val close by rememberUpdatedState(onClose)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            // Only a vertical drag gets here: the pager keeps horizontal swipes for itself.
+            .pointerInput(closeAfter) {
+                detectVerticalDragGestures(
+                    onDragEnd = { if (pulled > closeAfter) close() else pulled = 0f },
+                    onDragCancel = { pulled = 0f },
+                    onVerticalDrag = { change, dy ->
+                        change.consume()
+                        pulled = (pulled + dy).coerceAtLeast(0f)
+                    },
+                )
+            },
+    ) {
+        HorizontalPager(pager, Modifier.fillMaxSize().graphicsLayer { translationY = pulled }) { page ->
             AsyncImage(
                 model = screenshots[page],
                 contentDescription = "Screenshot ${page + 1}",

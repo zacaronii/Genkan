@@ -178,6 +178,13 @@ class GameDetailsFormatTest {
         assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(fsSizeBytes = 42)))
     }
 
+    @Test
+    fun `no PDF viewer means a notice and no manual`() {
+        assertEquals("No app on this device opens PDFs", GameDetailsViewModel.pdfNotice(0))
+        assertNull(GameDetailsViewModel.pdfNotice(1))
+        assertNull(GameDetailsViewModel.pdfNotice(3))
+    }
+
     /** Compares with no-break spaces read as plain ones, so the expected text stays legible. */
     private fun assertText(expected: String, actual: String?) =
         assertEquals(expected, actual?.replace(GameDetailsFormat.NBSP, ' '))
