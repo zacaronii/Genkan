@@ -218,7 +218,7 @@ class MemoryText(
                 misses = 0
                 val text = MemoryScan.clean(PspHooks.decode(bytes, charset))
                 if (text == previous && text != lastSent && text.isNotEmpty()) {
-                    session.submit(HookMessage(text))
+                    if (!ocr.quiet) session.submit(HookMessage(text))
                     lastSent = text
                 }
                 previous = text

@@ -90,6 +90,12 @@ class ReaderSession @Inject constructor(
             if (chosenThread.value?.thread != message.thread) return
         }
         val now = System.currentTimeMillis()
+        if (message.whole) {
+            // Known to be whole: kept as it is, even a repeat of the line before.
+            val text = Lines.normalise(message.text)
+            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread)
+            return
+        }
         val feed = feeds.getOrPut(message.thread) { LineFeed() }
         feed.take(message.text, now).forEach { handOver(it, message.thread) }
         if (feed.hasPending) {

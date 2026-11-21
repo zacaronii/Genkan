@@ -5,6 +5,9 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
+import app.genkan.yomikata.CatalogEntry
+import app.genkan.yomikata.LayoutRead
+import app.genkan.yomikata.Layouts
 import androidx.core.graphics.createBitmap
 import app.genkan.memory.MemorySource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +44,33 @@ class BuiltInPlayer @Inject constructor() {
         }
         Log.i(TAG, "Playing rom $romId in ${core.displayName}")
         _game.value = game
+    }
+
+    private val _layoutReads = kotlinx.coroutines.flow.MutableSharedFlow<LayoutRead?>(extraBufferCapacity = 16)
+    /** What the watched layout reads, each time it changes (see [watchLayout]); null: the player stopped reading it. */
+    val layoutReads: kotlinx.coroutines.flow.SharedFlow<LayoutRead?> = _layoutReads
+
+    /** The player read the watched layout: something changed; a blank report: it stopped. */
+    fun layoutRead(json: String) {
+        if (json.isBlank()) {
+            _layoutReads.tryEmit(null)
+            return
+        }
+        runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
+    }
+
+    /**
+     * Asks the player to read [layout] between frames (null: stop), with [entry]'s table, unit,
+     * controls and cleanup; whether the player took it.
+     */
+    fun watchLayout(layout: org.json.JSONObject?, entry: CatalogEntry?, tableText: String = ""): Boolean = try {
+        val entryJson = org.json.JSONObject()
+            .put("unit", entry?.unit ?: 2)
+            .put("controls", org.json.JSONObject((entry?.controls ?: emptyMap()) as Map<*, *>))
+            .put("cleanup", entry?.cleanupJson ?: org.json.JSONArray())
+        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, entryJson.toString()) == true
+    } catch (e: RemoteException) {
+        false
     }
 
     /** Asks the player to save and close its game. */

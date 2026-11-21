@@ -53,6 +53,17 @@ class CoreActivity : ComponentActivity() {
     private var lastSaved: ByteArray? = null
     @Volatile private var quitting = false
 
+    /** A Yomikata layout the reader asked for, read between frames. */
+    private val layoutWatch by lazy {
+        LayoutWatch(core) { json ->
+            try {
+                host?.layout(json)
+            } catch (e: RemoteException) {
+                host = null
+            }
+        }
+    }
+
     private var selectDown = false
     private var lowerScreen: LowerScreen? = null
 
@@ -109,6 +120,7 @@ class CoreActivity : ComponentActivity() {
             addView(retroView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         })
         retroView.requestFocus()
+        retroView.afterFrame = { layoutWatch.afterFrame() }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
         }
@@ -200,6 +212,9 @@ class CoreActivity : ComponentActivity() {
             }
             return null
         }
+
+        override fun watchLayout(layoutJson: String, tableText: String, entryJson: String): Boolean =
+            layoutWatch.set(layoutJson, tableText, entryJson)
 
         override fun videoSize(): Long = GenkanTap.videoRamSize()
 

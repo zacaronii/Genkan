@@ -109,6 +109,13 @@ class YomikataCatalog @Inject constructor(
         entry
     }
 
+    /** An entry's table files as one text (later files win, as parsing them in order does), or null. */
+    fun tableText(entry: CatalogEntry): String? {
+        if (entry.tables.isEmpty()) return null
+        val files = entry.tables.map { File(dir, it).takeIf(File::isFile)?.readText() ?: return null }
+        return files.joinToString("\n")
+    }
+
     /** An entry's tables as one, or null when one of them isn't on the device. */
     fun table(entry: CatalogEntry): CharTable? {
         if (entry.tables.isEmpty()) return null

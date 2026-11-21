@@ -26,6 +26,9 @@ class TextSamples @Inject constructor(private val settings: PlayerSettings) {
 
     suspend fun enabled(): Boolean = settings.samplesEnabled()
 
+    /** Whether samples (and snapshots) are on, as it changes. */
+    val enabledFlow: kotlinx.coroutines.flow.Flow<Boolean> get() = settings.samples
+
     /**
      * Looks for OCR's [line] by shape in [memory], trying a few stretches of it, and saves what
      * the first one that is placed found; returns how many places.

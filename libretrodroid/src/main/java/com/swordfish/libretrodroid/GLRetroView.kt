@@ -323,6 +323,9 @@ class GLRetroView(
     private var surfaceWidth = 0
     private var surfaceHeight = 0
 
+    /** Genkan: called after each frame the core runs, on the emulation thread; keep it short. */
+    @Volatile var afterFrame: (() -> Unit)? = null
+
     /** Hands [onFrame] the next frame as shown on screen, on the GL thread; it must copy what it keeps. */
     fun grabFrame(onFrame: (pixels: ByteBuffer, width: Int, height: Int) -> Unit) {
         frameRequest = onFrame
@@ -342,6 +345,8 @@ class GLRetroView(
         override fun onDrawFrame(gl: GL10) = catchExceptions {
             if (isEmulationReady) {
                 LibretroDroid.step(this@GLRetroView)
+                // Genkan: between frames, on the emulation thread, memory is consistent to read.
+                afterFrame?.invoke()
                 readFrame()
                 lifecycle?.coroutineScope?.launch {
                     retroGLEventsSubject.emit(GLRetroEvents.FrameRendered)

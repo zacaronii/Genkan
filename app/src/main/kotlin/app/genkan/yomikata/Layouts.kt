@@ -57,6 +57,22 @@ object Layouts {
     }
 
     /**
+     * The layout for a release, for a reader that can't hash its executable (Genkan can't):
+     * the `exe_sha1` of the only version [entry] lists for [releaseId] (a version without an id
+     * is the entry's own) stands in for the hash, and [pick] chooses as usual. With several
+     * versions of that id, or none, only a layout naming no versions. Yomikata's `pick` with a
+     * release id (docs/format.md, "Which layout").
+     */
+    fun pick(entry: CatalogEntry, releaseId: String?, exeSha1: String? = null): JSONObject? =
+        pick(entry.layouts, exeSha1 ?: versionFor(entry, releaseId))
+
+    /** The `exe_sha1` of the only version [entry] lists for [releaseId], or null. */
+    fun versionFor(entry: CatalogEntry, releaseId: String?): String? {
+        val mine = entry.versions.filter { (it.id ?: entry.id) == releaseId }
+        return mine.singleOrNull()?.exeSha1
+    }
+
+    /**
      * Everything [layout] names, read from [memory]. A field that can't be read is left out and
      * its reason kept in [LayoutRead.errors]. [unit], [table] and [controls] are the entry's,
      * for `table` text; [cleanup] is the entry's, applied to every text after the text's own.
@@ -120,6 +136,40 @@ object Layouts {
         return LayoutRead(message, speakerName, speakerNumber, shown, waiting, choosing, choices, choiceCount, choiceCursor, onScreen, errors)
     }
 
+    /** [read] as JSON, the reference's keys (a speaker number under `speaker` too). */
+    fun toJson(read: LayoutRead): JSONObject = JSONObject().apply {
+        read.message?.let { put("message", it) }
+        read.speakerName?.let { put("speaker", it) }
+        read.speakerNumber?.let { put("speaker", it) }
+        read.shown?.let { put("shown", it) }
+        read.choiceCount?.let { put("choice_count", it) }
+        read.choiceCursor?.let { put("choice_cursor", it) }
+        read.waiting?.let { put("waiting", it) }
+        read.choosing?.let { put("choosing", it) }
+        read.choices?.let { put("choices", JSONArray(it)) }
+        read.onScreen?.let { put("on_screen", it) }
+        if (read.errors.isNotEmpty()) put("errors", JSONObject(read.errors as Map<*, *>))
+    }
+
+    /** What [toJson] wrote, read back. */
+    fun fromJson(json: JSONObject): LayoutRead {
+        val speaker = json.opt("speaker")
+        val errors = json.optJSONObject("errors")
+        return LayoutRead(
+            message = json.optString("message").takeIf { json.has("message") },
+            speakerName = speaker as? String,
+            speakerNumber = (speaker as? Number)?.toLong(),
+            shown = json.optLong("shown").takeIf { json.has("shown") },
+            waiting = json.optBoolean("waiting").takeIf { json.has("waiting") },
+            choosing = json.optBoolean("choosing").takeIf { json.has("choosing") },
+            choices = json.optJSONArray("choices")?.strings(),
+            choiceCount = json.optLong("choice_count").takeIf { json.has("choice_count") },
+            choiceCursor = json.optLong("choice_cursor").takeIf { json.has("choice_cursor") },
+            onScreen = json.optString("on_screen").takeIf { json.has("on_screen") },
+            errors = errors?.let { e -> e.keys().asSequence().associateWith { e.optString(it) } }.orEmpty(),
+        )
+    }
+
     private class Reader(
         val memory: LayoutMemory,
         val order: ByteOrder,
@@ -179,7 +229,7 @@ object Layouts {
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
             // The text's own cleanup, then the entry's, as for a hook.
-            for (step in CleanupStep.parse(spec.optJSONArray("cleanup")) + entryCleanup) text = step.apply(text)
+            for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
             return text
         }
 
@@ -262,6 +312,14 @@ object Layouts {
     }
 
     private const val REPLACEMENT = '\uFFFD'
+
+    /** A text's cleanup, compiled once: a layout is read every frame. */
+    private val cleanups = java.util.concurrent.ConcurrentHashMap<String, List<CleanupStep>>()
+
+    private fun cleanupOf(spec: JSONObject): List<CleanupStep> {
+        val steps = spec.optJSONArray("cleanup") ?: return emptyList()
+        return cleanups.getOrPut(steps.toString()) { CleanupStep.parse(steps) }
+    }
 
     /**
      * EUC-JP codes whose character differs between decoders (Android's follows Microsoft's
