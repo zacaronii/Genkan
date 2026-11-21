@@ -28,8 +28,8 @@ interface ICoreSession {
 
     /**
      * Reads a Yomikata layout (its JSON) after every frame, or at its poll rate, and tells the
-     * host each time what it reads changes; the entry's table text and unit for table text.
+     * host each time what it reads changes; the entry's table text, unit and controls for table text.
      * An empty layout stops it.
      */
-    void watchLayout(String layoutJson, String tableText, int unit) = 9;
+    void watchLayout(String layoutJson, String tableText, int unit, String controlsJson) = 9;
 }

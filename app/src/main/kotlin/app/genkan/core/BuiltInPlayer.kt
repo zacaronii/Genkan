@@ -58,8 +58,8 @@ class BuiltInPlayer @Inject constructor() {
      * Asks the player to read [layout] between frames (null: stop), with the entry's table for
      * table text; returns whether it could.
      */
-    fun watchLayout(layout: org.json.JSONObject?, tableText: String = "", unit: Int = 2): Boolean = try {
-        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, unit) != null
+    fun watchLayout(layout: org.json.JSONObject?, tableText: String = "", unit: Int = 2, controls: Map<String, String> = emptyMap()): Boolean = try {
+        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, unit, org.json.JSONObject(controls as Map<*, *>).toString()) != null
     } catch (e: RemoteException) {
         false
     }

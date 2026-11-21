@@ -14,14 +14,14 @@ import org.json.JSONObject
  * at the layout's poll rate; what it reads goes to [report] only when it changes.
  */
 class LayoutWatch(private val core: CoreDef, private val report: (String) -> Unit) {
-    private class Watched(val layout: JSONObject, val table: CharTable?, val unit: Int, val every: Int)
+    private class Watched(val layout: JSONObject, val table: CharTable?, val unit: Int, val controls: Map<String, String>, val every: Int)
 
     @Volatile private var watched: Watched? = null
     private var frame = 0L
     private var last: String? = null
 
     /** Starts reading [layoutJson] (empty: stops). */
-    fun set(layoutJson: String, tableText: String, unit: Int) {
+    fun set(layoutJson: String, tableText: String, unit: Int, controlsJson: String) {
         if (layoutJson.isBlank()) {
             watched = null
             return
@@ -31,8 +31,10 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
         // "frame", or a rate in Hz: the frames between reads at 60 a second.
         val every = (poll as? Number)?.toInt()?.takeIf { it > 0 }?.let { maxOf(1, FRAMES_PER_SECOND / it) } ?: 1
         val table = tableText.takeIf { it.isNotBlank() }?.let { CharTable.parse(listOf(it)) }
+        val controls = controlsJson.takeIf { it.isNotBlank() }?.let { JSONObject(it) }
+            ?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
         last = null
-        watched = Watched(layout, table, unit, every)
+        watched = Watched(layout, table, unit, controls, every)
         Log.i(TAG, "Watching a layout every $every frame(s)")
     }
 
@@ -40,7 +42,7 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
     fun afterFrame() {
         val w = watched ?: return
         if (frame++ % w.every != 0L) return
-        val json = Layouts.toJson(Layouts.read(w.layout, memory, w.unit, w.table)).toString()
+        val json = Layouts.toJson(Layouts.read(w.layout, memory, w.unit, w.table, w.controls)).toString()
         if (json == last) return
         last = json
         report(json)

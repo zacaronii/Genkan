@@ -101,7 +101,7 @@ class BuiltInText @Inject constructor(
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
                 // The executable's hash isn't known here: the layout naming no version.
                 val layout = Layouts.pick(entry.layouts, null) ?: return
-                val watching = player.watchLayout(layout, catalog.tableText(entry).orEmpty(), entry.unit)
+                val watching = player.watchLayout(layout, catalog.tableText(entry).orEmpty(), entry.unit, entry.controls)
                 _layoutActive.value = watching
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
                 return
@@ -114,7 +114,7 @@ class BuiltInText @Inject constructor(
     suspend fun debugWatch(layoutJson: String) {
         val game = session.game.value
         val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
-        _layoutActive.value = player.watchLayout(org.json.JSONObject(layoutJson), entry?.let(catalog::tableText).orEmpty(), entry?.unit ?: 2)
+        _layoutActive.value = player.watchLayout(org.json.JSONObject(layoutJson), entry?.let(catalog::tableText).orEmpty(), entry?.unit ?: 2, entry?.controls.orEmpty())
     }
 
     private var lastRead: LayoutRead? = null
