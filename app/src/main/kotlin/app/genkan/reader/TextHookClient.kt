@@ -34,6 +34,8 @@ data class HookMessage(
     val hookCode: String = "",
     /** A complete line, as the game holds it (a Yomikata layout's): not a piece to carry on. */
     val whole: Boolean = false,
+    /** For a whole line: the line it grew from, already in the backlog, which it replaces. */
+    val takesBack: String? = null,
 ) {
     companion object {
         fun parse(frame: String): HookMessage? {

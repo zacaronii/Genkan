@@ -171,8 +171,14 @@ class BuiltInText @Inject constructor(
     private val layoutLines = LayoutLines()
     private var settleJob: kotlinx.coroutines.Job? = null
 
-    /** A layout read: the lines [LayoutLines] says are complete go to the backlog. */
-    private fun onLayoutRead(read: LayoutRead) {
+    /** A layout read: the lines [LayoutLines] says are complete go to the backlog; null: the player stopped reading it. */
+    private fun onLayoutRead(read: LayoutRead?) {
+        if (read == null) {
+            // The player gave up on the layout (an error it couldn't read past): OCR again.
+            Log.i(TAG, "The player stopped reading the layout")
+            stopLayout()
+            return
+        }
         lastRead = read
         settleJob?.cancel()
         val step = layoutLines.read(read)
@@ -187,7 +193,7 @@ class BuiltInText @Inject constructor(
 
     /** A whole line, as the game holds it: the backlog's carry rules for pieces don't apply. */
     private fun submitLayoutLine(line: LayoutLines.Line) {
-        session.submit(HookMessage(line.text, whole = true))
+        session.submit(HookMessage(line.text, whole = true, takesBack = line.takesBack))
     }
 
     /** Everything the built-in player can add to a snapshot. */

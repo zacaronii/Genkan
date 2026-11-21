@@ -93,7 +93,7 @@ class ReaderSession @Inject constructor(
         if (message.whole) {
             // Known to be whole: kept as it is, even a repeat of the line before.
             val text = Lines.normalise(message.text)
-            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = null), message.thread)
+            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread)
             return
         }
         val feed = feeds.getOrPut(message.thread) { LineFeed() }

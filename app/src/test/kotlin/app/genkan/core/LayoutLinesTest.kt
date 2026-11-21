@@ -57,6 +57,26 @@ class LayoutLinesTest {
     }
 
     @Test
+    fun `a line that grows after it went goes again, taking back the first part`() {
+        assertEquals(listOf("一文目。"), texts(read("一文目。", waiting = true)))
+        read("一文目。二文目。", waiting = false)
+        val step = read("一文目。二文目。", waiting = true)
+        assertEquals("一文目。二文目。", step.lines.single().text)
+        assertEquals("一文目。", step.lines.single().takesBack)
+        // Then cleared: nothing more, all of it went.
+        assertEquals(emptyList<String>(), texts(read(null)))
+    }
+
+    @Test
+    fun `a grown line replaced before it waited again still goes, taking back the first part`() {
+        read("一文目。", waiting = true)
+        read("一文目。二文目。", waiting = false)
+        val step = read("次の場面", waiting = false)
+        assertEquals("一文目。二文目。", step.lines.single().text)
+        assertEquals("一文目。", step.lines.single().takesBack)
+    }
+
+    @Test
     fun `a line with neither flag nor count settles`() {
         val step = read("静かな行")
         assertTrue(step.settle)

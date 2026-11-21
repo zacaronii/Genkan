@@ -46,12 +46,16 @@ class BuiltInPlayer @Inject constructor() {
         _game.value = game
     }
 
-    private val _layoutReads = kotlinx.coroutines.flow.MutableSharedFlow<LayoutRead>(extraBufferCapacity = 16)
-    /** What the watched layout reads, each time it changes (see [watchLayout]). */
-    val layoutReads: kotlinx.coroutines.flow.SharedFlow<LayoutRead> = _layoutReads
+    private val _layoutReads = kotlinx.coroutines.flow.MutableSharedFlow<LayoutRead?>(extraBufferCapacity = 16)
+    /** What the watched layout reads, each time it changes (see [watchLayout]); null: the player stopped reading it. */
+    val layoutReads: kotlinx.coroutines.flow.SharedFlow<LayoutRead?> = _layoutReads
 
-    /** The player read the watched layout: something changed. */
+    /** The player read the watched layout: something changed; a blank report: it stopped. */
     fun layoutRead(json: String) {
+        if (json.isBlank()) {
+            _layoutReads.tryEmit(null)
+            return
+        }
         runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
     }
 

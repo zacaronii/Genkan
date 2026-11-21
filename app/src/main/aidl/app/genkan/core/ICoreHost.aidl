@@ -10,6 +10,6 @@ interface ICoreHost {
     /** Mono 16-bit little-endian samples the game just played, the newest at endMs (wall clock). */
     oneway void audio(in byte[] pcm, int sampleRate, long endMs) = 2;
 
-    /** What the watched layout reads now (LayoutWatch's JSON), sent when it changes. */
+    /** What the watched layout reads now (LayoutWatch's JSON), sent when it changes; blank: it stopped. */
     oneway void layout(String readJson) = 3;
 }

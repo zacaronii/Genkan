@@ -70,6 +70,8 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
         } catch (e: Exception) {
             Log.w(TAG, "Stopped watching the layout: $e")
             watched = null
+            // A blank report tells the reader the layout no longer gives the lines.
+            report("")
         }
     }
 
