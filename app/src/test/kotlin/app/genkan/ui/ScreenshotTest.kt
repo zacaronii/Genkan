@@ -119,7 +119,7 @@ class ScreenshotTest {
             notice = null,
             coverModel = { game -> game.coverPath?.let { "fake:$it" } },
             artModel = { path -> path?.let { "fake:$it" } },
-            emulatorFor = { "DuckStation" },
+            emulatorFor = { slug -> mapOf("psx" to "DuckStation", "nds" to "melonDS", "psp" to "PPSSPP")[slug] },
             onSelectPlatform = {},
             onColumns = {},
             onSelectGame = {},

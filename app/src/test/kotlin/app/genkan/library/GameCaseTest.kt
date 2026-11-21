@@ -19,6 +19,45 @@ class GameCaseTest {
         assertEquals(GameCase.DEFAULT, GameCase.specFor(null))
     }
 
+    /** The owner's library: Japanese releases under RomM's western slugs. */
+    @Test
+    fun `the Japanese library's consoles`() {
+        fun check(slug: String, style: CaseStyle, aspect: Float) {
+            val spec = GameCase.specFor(slug)
+            assertEquals(slug, style, spec.style)
+            assertEquals(slug, aspect, spec.aspect, 0.001f)
+        }
+        // Consoles with games.
+        check("psx", CaseStyle.JEWEL_CASE, 1.0f)
+        check("ps2", CaseStyle.KEEP_CASE, 0.71f)
+        check("nds", CaseStyle.CARD_CASE, 0.89f)
+        check("3ds", CaseStyle.CARD_CASE, 0.89f)
+        check("psp", CaseStyle.KEEP_CASE, 0.59f)
+        check("snes", CaseStyle.CARDBOARD_BOX, 1.8f)
+        check("fds", CaseStyle.CARDBOARD_BOX, 1.42f)
+        // Consoles whose case changed for Japanese packaging.
+        check("nes", CaseStyle.CARDBOARD_BOX, 1.42f)
+        check("tg16", CaseStyle.JEWEL_CASE, 1.0f)
+        check("turbografx-cd", CaseStyle.JEWEL_CASE, 1.0f)
+        check("gba", CaseStyle.CARDBOARD_BOX, 1.55f)
+        check("gamegear", CaseStyle.CARDBOARD_BOX, 0.75f)
+        check("genesis", CaseStyle.KEEP_CASE, 0.72f)
+        // Japanese DS cases are black; the 3DS keeps the white one.
+        assertEquals(0xFF1E1E22, GameCase.specFor("nds").color)
+        assertEquals(0xFFF0F0F2, GameCase.specFor("3ds").color)
+    }
+
+    @Test
+    fun `cardboard boxes follow the cover within fixed bounds`() {
+        val famicom = GameCase.specFor("nes")
+        // A tall Famicom box is kept tall, well past a plastic case's tolerance.
+        assertEquals(0.7f, GameCase.aspectFor(famicom, 0.7f), 0.001f)
+        assertEquals(1.85f, GameCase.aspectFor(famicom, 1.85f), 0.001f)
+        assertEquals(GameCase.BOX_MIN_ASPECT, GameCase.aspectFor(famicom, 0.3f), 0.001f)
+        assertEquals(GameCase.BOX_MAX_ASPECT, GameCase.aspectFor(famicom, 3f), 0.001f)
+        assertEquals(famicom.aspect, GameCase.aspectFor(famicom, null), 0.001f)
+    }
+
     @Test
     fun `cases have their consoles' proportions`() {
         assertEquals(1.0f, GameCase.specFor("psx").aspect, 0.001f)

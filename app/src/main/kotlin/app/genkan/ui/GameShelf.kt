@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -188,6 +189,10 @@ internal fun GameShelf(
     }
     val mediaNow = remember(media) { { media.value } }
 
+    // Each cover's measured proportions, by game id, kept for the console's whole shelf: a case
+    // that leaves the window and comes back is the right width from its first frame.
+    val coverAspects = remember(shelfId) { mutableStateMapOf<Long, Float>() }
+
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val maxCaseHeight = maxHeight * ShelfDefaults.CASE_HEIGHT
@@ -232,6 +237,8 @@ internal fun GameShelf(
                                 logo = artModel(game.logoPath),
                                 physical = artModel(game.physicalPath),
                                 download = downloads[game.id],
+                                coverAspect = coverAspects[game.id],
+                                onCoverAspect = { coverAspects[game.id] = it },
                                 showMedia = index == focused && active,
                                 badgeOnLeft = index < focused,
                                 mediaOut = mediaNow,
@@ -310,7 +317,8 @@ private fun partsOf(style: CaseStyle) = when (style) {
 
 /**
  * One game's case: its console's shape, a spine down the left, the cover behind the plastic, and
- * the download state on top. The case takes the real cover's proportions once it has loaded. On
+ * the download state on top. The case takes the real cover's proportions ([coverAspect], kept by
+ * the shelf) once it has loaded. On
  * the focused game ([showMedia]) the disc or cartridge sits behind the case and slides out as
  * [mediaOut] goes from 0 to 1.
  */
@@ -325,6 +333,8 @@ private fun ShelfCase(
     logo: Any?,
     physical: Any?,
     download: DownloadEntity?,
+    coverAspect: Float?,
+    onCoverAspect: (Float) -> Unit,
     showMedia: Boolean,
     badgeOnLeft: Boolean,
     mediaOut: () -> Float,
@@ -332,7 +342,6 @@ private fun ShelfCase(
     modifier: Modifier,
 ) {
     val density = LocalDensity.current
-    var coverAspect by remember { mutableStateOf<Float?>(null) }
     val aspect = GameCase.aspectFor(spec, coverAspect)
     val (width, height) = with(density) {
         val (w, h) = GameCase.fit(aspect, maxWidth.toPx(), maxHeight.toPx())
@@ -381,7 +390,7 @@ private fun ShelfCase(
                             contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 val image = state.result.image
-                                if (image.width > 0 && image.height > 0) coverAspect = image.width.toFloat() / image.height
+                                if (image.width > 0 && image.height > 0) onCoverAspect(image.width.toFloat() / image.height)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
