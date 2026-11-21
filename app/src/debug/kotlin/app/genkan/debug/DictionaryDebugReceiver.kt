@@ -54,6 +54,8 @@ import javax.inject.Inject
  * (writes, lists and deletes a probe file in DuckStation's memory card folder through Shizuku)
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (looks for on-screen text in the running 3DS game's memory, through Azahar's RPC)
+ *   adb shell am broadcast -a app.genkan.debug.SCAN -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
+ *     logs the words a line's marks would cover.
  *   adb shell am broadcast -a app.genkan.debug.LINE -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
  *     puts a line in the reader's backlog, as a texthooker would.
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
@@ -168,6 +170,12 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         }
                     }
                     "app.genkan.debug.AZAHAR_OFFER" -> azahar.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.SCAN" -> {
+                        val text = intent.getStringExtra("text").orEmpty()
+                        val started = System.nanoTime()
+                        val words = dictionaries.scan(text)
+                        Log.i(TAG, "Scan in ${(System.nanoTime() - started) / 1_000_000} ms: " + words.joinToString(" ") { "${text.substring(it.start, it.end)}→${it.expression}【${it.reading}】" })
+                    }
                     "app.genkan.debug.LINE" -> readerSession.submit(HookMessage(intent.getStringExtra("text").orEmpty()))
                     "app.genkan.debug.AUDIO_CLIP" -> {
                         val now = System.currentTimeMillis()

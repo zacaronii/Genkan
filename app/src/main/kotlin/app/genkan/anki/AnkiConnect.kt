@@ -75,6 +75,24 @@ class AnkiConnect @Inject constructor(okHttp: OkHttpClient) {
         return (invoke(config, "findNotes", mapOf("query" to query)) as List<Number>).map { it.toLong() }
     }
 
+    /** Note ids for an Anki search [query]. */
+    @Suppress("UNCHECKED_CAST")
+    suspend fun search(config: AnkiConfig, query: String): List<Long> =
+        (invoke(config, "findNotes", mapOf("query" to query)) as List<Number>).map { it.toLong() }
+
+    /** Each note's fields, by name, in its note type's order: (note id, [(field, value)]). */
+    @Suppress("UNCHECKED_CAST")
+    suspend fun noteFields(config: AnkiConfig, ids: List<Long>): List<Pair<Long, List<Pair<String, String>>>> {
+        val notes = invoke(config, "notesInfo", mapOf("notes" to ids)) as List<Map<String, Any?>>
+        return notes.mapNotNull { note ->
+            val id = (note["noteId"] as? Number)?.toLong() ?: return@mapNotNull null
+            val fields = (note["fields"] as? Map<String, Map<String, Any?>>).orEmpty()
+                .entries.sortedBy { (it.value["order"] as? Number)?.toInt() ?: 0 }
+                .map { it.key to (it.value["value"] as? String).orEmpty() }
+            id to fields
+        }
+    }
+
     /** Stores a file in Anki's media folder, as [filename]; [base64] is its content. */
     suspend fun storeMediaFile(config: AnkiConfig, filename: String, base64: String) {
         invoke(config, "storeMediaFile", mapOf("filename" to filename, "data" to base64))

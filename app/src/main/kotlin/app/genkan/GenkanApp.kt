@@ -4,6 +4,7 @@ import android.app.Application
 import app.genkan.download.DownloadQueue
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
+import app.genkan.words.WordMarks
 import app.genkan.stats.ReadingLogPusher
 import app.genkan.saves.SaveSync
 import app.genkan.azahar.AzaharText
@@ -34,6 +35,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var azaharText: Lazy<AzaharText>
     @Inject lateinit var builtInText: Lazy<BuiltInText>
     @Inject lateinit var downloadQueue: Lazy<DownloadQueue>
+    @Inject lateinit var wordMarks: Lazy<WordMarks>
 
     override fun onCreate() {
         super.onCreate()
@@ -49,6 +51,8 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         ppssppText.get().start()
         azaharText.get().start()
         builtInText.get().start()
+        // Which words Anki has, for the backlog's marks; asked again after each card reaches Anki.
+        wordMarks.get().start(ankiMiner.get().deliveries)
         downloadQueue.get().resume()
     }
 

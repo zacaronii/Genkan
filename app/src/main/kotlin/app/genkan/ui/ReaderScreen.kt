@@ -27,6 +27,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.genkan.words.WordMarkState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
@@ -76,6 +82,7 @@ fun ReaderScreen(
     val reading by viewModel.stats.session.collectAsStateWithLifecycle()
     val ppsspp by viewModel.ppsspp.status.collectAsStateWithLifecycle()
     val finder by viewModel.hookFinder.state.collectAsStateWithLifecycle()
+    val marks by viewModel.lineMarks.collectAsStateWithLifecycle()
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
@@ -152,7 +159,7 @@ fun ReaderScreen(
             } else if (picking || needsChoice) {
                 ThreadPicker(threads, chosen?.thread, onChoose = viewModel::choose, onClose = viewModel::closePicker.takeIf { !needsChoice })
             } else {
-                Backlog(lines, lookup, panelHeight, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
+                Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
             }
             lookup?.let { current ->
                 LookupPanel(
@@ -187,6 +194,7 @@ private fun Backlog(
     lines: List<ReaderLineEntity>,
     lookup: Lookup?,
     panelHeight: Dp,
+    marks: Map<Long, List<LineMark>>,
     onTap: (ReaderLineEntity, Int) -> Unit,
     onBackground: () -> Unit,
 ) {
@@ -221,14 +229,14 @@ private fun Backlog(
     ) {
         items(lines, key = { it.id }) { line ->
             val highlight = lookup?.takeIf { it.lineId == line.id }
-            TappableLine(line.text, highlight?.start, highlight?.end) { onTap(line, it) }
+            TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty()) { onTap(line, it) }
         }
     }
 }
 
 /** A line whose characters can be tapped; the looked-up word is highlighted. */
 @Composable
-private fun TappableLine(text: String, start: Int?, end: Int?, onTapAt: (Int) -> Unit) {
+private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineMark>, onTapAt: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
     val annotated = buildAnnotatedString {
@@ -244,13 +252,38 @@ private fun TappableLine(text: String, start: Int?, end: Int?, onTapAt: (Int) ->
         annotated,
         style = MaterialTheme.typography.headlineSmall.copy(color = colors.onBackground, fontSize = 26.sp, lineHeight = 38.sp),
         onTextLayout = { layout.value = it },
-        modifier = Modifier.fillMaxWidth().pointerInput(text) {
+        modifier = Modifier.fillMaxWidth().drawBehind { layout.value?.let { drawMarks(it, marks, text.length) } }.pointerInput(text) {
             detectTapGestures { position ->
                 layout.value?.let { onTapAt(it.getOffsetForPosition(position).coerceAtMost(text.length - 1)) }
             }
         },
     )
 }
+
+/**
+ * Hachidori's word marks under the words: solid for a word not in Anki, dashed for one being
+ * learned, in its default colours. Drawn from the layout, since text styles can't dash a line.
+ */
+private fun DrawScope.drawMarks(layout: TextLayoutResult, marks: List<LineMark>, length: Int) {
+    val stroke = 2.dp.toPx()
+    for (mark in marks) {
+        val end = mark.end.coerceAtMost(length)
+        if (mark.start >= end) continue
+        val color = if (mark.state == WordMarkState.NOT_IN_ANKI) NOT_IN_ANKI else LEARNING
+        val effect = if (mark.state == WordMarkState.LEARNING) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())) else null
+        // One stroke per visual line the word spans.
+        (mark.start until end).groupBy { layout.getLineForOffset(it) }.forEach { (line, offsets) ->
+            val left = offsets.minOf { layout.getBoundingBox(it).left }
+            val right = offsets.maxOf { layout.getBoundingBox(it).right }
+            val y = layout.getLineBottom(line) - stroke * 2
+            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = stroke, pathEffect = effect)
+        }
+    }
+}
+
+/** Hachidori's default mark colours. */
+private val NOT_IN_ANKI = Color(0xFFC67D80)
+private val LEARNING = Color(0xFFC29A65)
 
 @Composable
 private fun ThreadPicker(threads: List<ThreadSample>, chosen: String?, onChoose: (ThreadSample) -> Unit, onClose: (() -> Unit)?) {

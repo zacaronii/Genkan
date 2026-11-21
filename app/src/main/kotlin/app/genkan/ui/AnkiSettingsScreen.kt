@@ -87,5 +87,24 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
         refused.take(5).forEach {
             Text("Refused: ${it.expression}: ${it.error}", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
         }
+        Text("Word marks", style = MaterialTheme.typography.titleMedium, color = colors.primary)
+        Text(
+            "Underlines in the reader's backlog, as Hachidori draws them: solid for a word not in Anki, dashed " +
+                "for one you're learning, none once its card is mature (a review interval of 21 days or more) or " +
+                "you've marked it known or ignored. From the deck above, and any decks chosen here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionRow("Underline words by Anki state: " + if (form.marksWords) "on" else "off", focused = null, onClick = viewModel::toggleMarks)
+            val decks = choices?.decks?.filter { it != form.deck }
+            if (decks == null) {
+                Text("Other decks: listed once Anki answers.", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+            } else {
+                for (deck in decks) {
+                    ActionRow((if (deck in form.markDecks) "✓ " else "    ") + "Also mark words from $deck", focused = null, onClick = { viewModel.toggleMarkDeck(deck) })
+                }
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.genkan.anki.AnkiConfig
 import app.genkan.anki.AnkiConnect
 import app.genkan.anki.AnkiMiner
+import app.genkan.words.WordMarks
 import app.genkan.anki.AnkiSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,7 @@ class AnkiSettingsViewModel @Inject constructor(
     private val settings: AnkiSettings,
     private val anki: AnkiConnect,
     val miner: AnkiMiner,
+    private val wordMarks: WordMarks,
 ) : ViewModel() {
 
     private val _form = MutableStateFlow(AnkiConfig())
@@ -45,6 +47,21 @@ class AnkiSettingsViewModel @Inject constructor(
 
     private suspend fun loadChoices(config: AnkiConfig): AnkiChoices =
         AnkiChoices(anki.deckNames(config).sorted(), anki.modelNames(config).sorted()).also { _choices.value = it }
+
+    /** Word marks on or off, saved now. */
+    fun toggleMarks() = saveMarks { it.copy(marksWords = !it.marksWords) }
+
+    /** [deck] counted for word marks or not, saved now. */
+    fun toggleMarkDeck(deck: String) = saveMarks { c -> c.copy(markDecks = if (deck in c.markDecks) c.markDecks - deck else c.markDecks + deck) }
+
+    private fun saveMarks(change: (AnkiConfig) -> AnkiConfig) {
+        viewModelScope.launch {
+            val saved = change(settings.current())
+            settings.save(saved)
+            _form.value = _form.value.copy(marksWords = saved.marksWords, markDecks = saved.markDecks)
+            wordMarks.refreshSoon()
+        }
+    }
 
     fun edit(change: (AnkiConfig) -> AnkiConfig) {
         _form.value = change(_form.value)

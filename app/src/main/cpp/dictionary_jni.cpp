@@ -7,6 +7,7 @@
 
 #include <jni.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -190,6 +191,44 @@ Session* Of(jlong handle) {
     return reinterpret_cast<Session*>(handle);
 }
 
+/// One code point of UTF-8 text, with where it starts in the text's UTF-16 (Kotlin's indices).
+struct CodePoint {
+    char32_t value;
+    size_t byte;
+    size_t utf16;
+};
+
+std::vector<CodePoint> Decode(const std::string& text) {
+    std::vector<CodePoint> out;
+    size_t i = 0, utf16 = 0;
+    while (i < text.size()) {
+        const auto b = static_cast<unsigned char>(text[i]);
+        const size_t n = b < 0x80 ? 1 : b < 0xE0 ? 2 : b < 0xF0 ? 3 : 4;
+        char32_t c = n == 1 ? b : b & (0xFF >> (n + 1));
+        for (size_t k = 1; k < n && i + k < text.size(); ++k) c = (c << 6) | (static_cast<unsigned char>(text[i + k]) & 0x3F);
+        out.push_back({c, i, utf16});
+        utf16 += c > 0xFFFF ? 2 : 1;
+        i += n;
+    }
+    return out;
+}
+
+bool IsKanji(char32_t c) {
+    return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0xF900 && c <= 0xFAFF) ||
+           (c >= 0x20000 && c <= 0x2FA1F) || c == 0x3005;
+}
+bool IsHiragana(char32_t c) { return c >= 0x3041 && c <= 0x309F; }
+bool IsKatakana(char32_t c) { return (c >= 0x30A1 && c <= 0x30FF) || (c >= 0xFF66 && c <= 0xFF9F); }
+
+/// How many code points UTF-8 [text] holds.
+size_t CodePoints(hd_str text) {
+    size_t n = 0;
+    for (size_t i = 0; i < text.len; ++i) {
+        if ((static_cast<unsigned char>(text.ptr[i]) & 0xC0) != 0x80) ++n;
+    }
+    return n;
+}
+
 } // namespace
 
 extern "C" {
@@ -277,6 +316,73 @@ JNIEXPORT jbyteArray JNICALL Java_app_genkan_dictionary_NativeDictionaries_looku
     }
     json.Close(']');
     if (r != nullptr) hd_lookup_results_free(r);
+    return Bytes(env, json.Take());
+}
+
+/**
+ * The words of a line, for marking them (Amatsubame's word scanner, after Hachidori's): at each
+ * kanji, katakana, or hiragana right before a kanji, the longest dictionary match after
+ * deinflection (the first, most frequent, result among the longest). Only spans with a kanji,
+ * or katakana words of two or more, are kept, so particles and grammar cost nothing. Each word
+ * as {"s": UTF-16 start, "l": UTF-16 length, "e": headword, "r": reading}.
+ */
+JNIEXPORT jbyteArray JNICALL Java_app_genkan_dictionary_NativeDictionaries_scan(
+    JNIEnv* env, jobject, jlong handle, jbyteArray text, jint scanLength, jbyteArray frequencyDictionary) {
+    const std::string input = Utf8(env, text), freq = Utf8(env, frequencyDictionary);
+    const std::vector<CodePoint> points = Decode(input);
+    hd_lookup_options options{};
+    options.frequency_dictionary = hd_str{freq.data(), freq.size()};
+    options.frequency_order = freq.empty() ? HD_LOOKUP_FREQUENCY_ORDER_DISABLED : HD_LOOKUP_FREQUENCY_ORDER_AUTO;
+    Json json;
+    json.Open('[');
+    size_t i = 0;
+    while (i < points.size()) {
+        const char32_t c = points[i].value;
+        const bool starts = IsKanji(c) || IsKatakana(c) || (IsHiragana(c) && i + 1 < points.size() && IsKanji(points[i + 1].value));
+        if (!starts) {
+            ++i;
+            continue;
+        }
+        const size_t end = std::min(points.size(), i + static_cast<size_t>(scanLength));
+        const size_t endByte = end < points.size() ? points[end].byte : input.size();
+        const std::string window = input.substr(points[i].byte, endByte - points[i].byte);
+        const hd_lookup_result* results = nullptr;
+        size_t count = 0;
+        hd_lookup_results* r = hd_lookup_run_with_options(Of(handle)->lookup, window.c_str(), 8,
+                                                          static_cast<size_t>(scanLength), &options, &results, &count);
+        size_t best = 0;
+        const hd_lookup_result* chosen = nullptr;
+        for (size_t k = 0; r != nullptr && k < count; ++k) {
+            const size_t length = CodePoints(results[k].matched);
+            if (length > best) {
+                best = length;
+                chosen = &results[k];
+            }
+        }
+        bool keep = false;
+        if (chosen != nullptr && best > 0 && i + best <= points.size()) {
+            bool kanji = false, katakana = true;
+            for (size_t k = i; k < i + best; ++k) {
+                kanji = kanji || IsKanji(points[k].value);
+                katakana = katakana && (IsKatakana(points[k].value) || points[k].value == 0x30FC);
+            }
+            keep = kanji || (katakana && best >= 2);
+        }
+        if (keep) {
+            const size_t startUtf16 = points[i].utf16;
+            const size_t endUtf16 = i + best < points.size() ? points[i + best].utf16
+                                                              : points.back().utf16 + (points.back().value > 0xFFFF ? 2 : 1);
+            json.Open('{');
+            json.Key("s").Int(static_cast<long long>(startUtf16));
+            json.Key("l").Int(static_cast<long long>(endUtf16 - startUtf16));
+            json.Field("e", chosen->term.expression).Field("r", chosen->term.reading).Close('}');
+            i += best;
+        } else {
+            ++i;
+        }
+        if (r != nullptr) hd_lookup_results_free(r);
+    }
+    json.Close(']');
     return Bytes(env, json.Take());
 }
 

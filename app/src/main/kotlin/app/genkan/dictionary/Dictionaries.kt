@@ -42,6 +42,7 @@ class Dictionaries @Inject constructor(
 
     private val importAdapter = moshi.adapter(ImportReport::class.java)
     private val hitsAdapter = moshi.adapter<List<TermHit>>(Types.newParameterizedType(List::class.java, TermHit::class.java))
+    private val scannedAdapter = moshi.adapter<List<ScannedWord>>(Types.newParameterizedType(List::class.java, ScannedWord::class.java))
     private val kanjiAdapter = moshi.adapter<List<KanjiEntry>>(Types.newParameterizedType(List::class.java, KanjiEntry::class.java))
     private val stylesAdapter =
         moshi.adapter<List<DictionaryStyle>>(Types.newParameterizedType(List::class.java, DictionaryStyle::class.java))
@@ -166,6 +167,18 @@ class Dictionaries @Inject constructor(
         }
     }
 
+    /**
+     * The words of [text] worth marking, each with its dictionary form: the longest match at each
+     * kanji or katakana (see NativeDictionaries.scan). Empty while no dictionary is open.
+     */
+    suspend fun scan(text: String): List<ScannedWord> = withContext(native) {
+        lock.withLock {
+            val session = session() ?: return@withLock emptyList()
+            val json = String(NativeDictionaries.scan(session, text.encodeToByteArray(), SCAN_LENGTH, frequencyDictionary.encodeToByteArray()))
+            scannedAdapter.fromJson(json).orEmpty()
+        }
+    }
+
     suspend fun kanji(character: String): List<KanjiEntry> = kanjiAdapter.fromJson(kanjiJson(character)).orEmpty()
 
     /** The kanji dictionaries' entries for [character], as JSON for the popup page. */
@@ -221,5 +234,7 @@ class Dictionaries @Inject constructor(
     private companion object {
         const val TAG = "Dictionaries"
         const val MAX_RESULTS = 16
+        /** Characters a word scan hands the engine at each start: words longer than this are rare. */
+        const val SCAN_LENGTH = 12
     }
 }

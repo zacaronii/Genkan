@@ -19,6 +19,10 @@ data class AnkiConfig(
     val apiKey: String = "",
     val deck: String = "Mining",
     val noteType: String = "Lapis",
+    /** Underline the backlog's words by their Anki state (Hachidori's word marks). */
+    val marksWords: Boolean = true,
+    /** Decks besides [deck] whose notes count as words being learned or known (first field). */
+    val markDecks: List<String> = emptyList(),
 ) {
     val configured: Boolean get() = address.isNotBlank()
 
@@ -45,6 +49,8 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
             apiKey = it[API_KEY].orEmpty(),
             deck = it[DECK] ?: AnkiConfig().deck,
             noteType = it[NOTE_TYPE] ?: AnkiConfig().noteType,
+            marksWords = it[MARKS_WORDS] ?: true,
+            markDecks = it[MARK_DECKS]?.split('\n')?.filter { d -> d.isNotBlank() }.orEmpty(),
         )
     }
 
@@ -56,6 +62,8 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
             it[API_KEY] = config.apiKey.trim()
             it[DECK] = config.deck.trim()
             it[NOTE_TYPE] = config.noteType.trim()
+            it[MARKS_WORDS] = config.marksWords
+            it[MARK_DECKS] = config.markDecks.joinToString("\n")
         }
     }
 
@@ -64,5 +72,7 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
         val API_KEY = stringPreferencesKey("apiKey")
         val DECK = stringPreferencesKey("deck")
         val NOTE_TYPE = stringPreferencesKey("noteType")
+        val MARKS_WORDS = androidx.datastore.preferences.core.booleanPreferencesKey("marksWords")
+        val MARK_DECKS = stringPreferencesKey("markDecks")
     }
 }

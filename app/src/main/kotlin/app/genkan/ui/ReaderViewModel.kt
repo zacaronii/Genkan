@@ -23,7 +23,10 @@ import app.genkan.dictionary.LookupResult
 import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ReaderSession
 import app.genkan.reader.ThreadSample
+import app.genkan.dictionary.ScannedWord
 import app.genkan.words.LookupCounts
+import app.genkan.words.WordMarkState
+import app.genkan.words.WordMarks
 import app.genkan.words.WordSettings
 import app.genkan.words.WordStatus
 import app.genkan.words.WordStatuses
@@ -32,8 +35,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** A word in a backlog line to underline: where it is, and how Anki has it. */
+data class LineMark(val start: Int, val end: Int, val state: WordMarkState)
 
 /** A word looked up in the backlog: where it starts, and what the dictionaries found there. */
 data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, val lineText: String = "") {
@@ -58,7 +66,15 @@ class ReaderViewModel @Inject constructor(
     private val words: WordStatuses,
     private val counts: LookupCounts,
     private val wordSettings: WordSettings,
+    private val wordMarks: WordMarks,
 ) : ViewModel(), PopupActions {
+
+    /** Each backlog line's words, as scanned for its text (scanning is the slow part, done once). */
+    private val scanned = HashMap<Long, Pair<String, List<ScannedWord>>>()
+
+    private val _lineMarks = MutableStateFlow<Map<Long, List<LineMark>>>(emptyMap())
+    /** The underlines for each backlog line, by line id: words not in Anki, or being learned. */
+    val lineMarks: StateFlow<Map<Long, List<LineMark>>> = _lineMarks.asStateFlow()
 
     /** The entries the popup shows now (a link can replace the tapped word's). */
     private var shownResult: LookupResult? = null
@@ -67,6 +83,24 @@ class ReaderViewModel @Inject constructor(
         // A card queued offline reaching Anki later turns its badge to "In Anki".
         viewModelScope.launch { miner.deliveries.collect { refreshStates() } }
         viewModelScope.launch { words.marks.collect { refreshMarks() } }
+        viewModelScope.launch {
+            combine(session.lines, wordMarks.revision, wordMarks.enabled) { lines, _, on -> lines to on }.collectLatest { (lines, on) ->
+                if (!on) {
+                    _lineMarks.value = emptyMap()
+                    return@collectLatest
+                }
+                // Marks restyle without scanning again; new lines are scanned newest first.
+                publishMarks(lines)
+                var fresh = 0
+                for (line in lines.asReversed()) {
+                    if (scanned[line.id]?.first == line.text) continue
+                    scanned[line.id] = line.text to dictionaries.scan(line.text)
+                    if (++fresh % PUBLISH_EVERY == 0) publishMarks(lines)
+                }
+                scanned.keys.retainAll(lines.map { it.id }.toSet())
+                publishMarks(lines)
+            }
+        }
     }
 
     private val _editingArea = MutableStateFlow<Bitmap?>(null)
@@ -160,6 +194,15 @@ class ReaderViewModel @Inject constructor(
         val hit = result.hits.getOrNull(index) ?: return
         val mark = runCatching { WordStatus.valueOf(status) }.getOrNull() ?: return
         viewModelScope.launch { words.toggle(hit.expression, mark) }
+    }
+
+    private fun publishMarks(lines: List<ReaderLineEntity>) {
+        _lineMarks.value = lines.associate { line ->
+            val words = scanned[line.id]?.takeIf { it.first == line.text }?.second.orEmpty()
+            line.id to words.mapNotNull { w ->
+                wordMarks.state(w.expression, w.reading)?.takeIf { it != WordMarkState.KNOWN }?.let { LineMark(w.start, w.end, it) }
+            }
+        }
     }
 
     /** The shown entries' marks, again: a mark changed (here, or in settings). */
@@ -264,6 +307,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     private companion object {
+        /** Lines scanned between showing their marks, on a full backlog. */
+        const val PUBLISH_EVERY = 10
         const val LEAD_MS = 2_500L
         const val MAX_CLIP_MS = 20_000L
     }

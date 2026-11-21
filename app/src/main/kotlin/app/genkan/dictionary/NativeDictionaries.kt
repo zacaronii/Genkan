@@ -25,6 +25,9 @@ internal object NativeDictionaries {
 
     external fun lookup(handle: Long, text: ByteArray, maxResults: Int, scanLength: Int, frequencyDictionary: ByteArray): ByteArray
 
+    /** The words of a line, for marking them: JSON [{"s", "l", "e", "r"}] (see dictionary_jni.cpp). */
+    external fun scan(handle: Long, text: ByteArray, scanLength: Int, frequencyDictionary: ByteArray): ByteArray
+
     external fun kanji(handle: Long, character: ByteArray): ByteArray
 
     external fun styles(handle: Long): ByteArray

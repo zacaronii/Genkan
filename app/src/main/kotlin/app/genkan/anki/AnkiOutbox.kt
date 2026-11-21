@@ -61,6 +61,9 @@ interface AnkiDao {
     @Upsert
     suspend fun mined(word: MinedWord)
 
+    @Query("SELECT expression FROM anki_mined")
+    suspend fun minedExpressions(): List<String>
+
     @Query("SELECT expression FROM anki_mined WHERE expression IN (:expressions)")
     suspend fun minedAmong(expressions: List<String>): List<String>
 }

@@ -1,5 +1,6 @@
 package app.genkan.dictionary
 
+import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /** What hoshidicts reports after importing one Yomitan zip. */
@@ -65,6 +66,17 @@ data class TermHit(
     val frequencies: List<FrequencyEntry> = emptyList(),
     val pitches: List<PitchEntry> = emptyList(),
 )
+
+/** A word found in a line for marking: where it is (UTF-16), and its dictionary headword and reading. */
+@JsonClass(generateAdapter = true)
+data class ScannedWord(
+    @Json(name = "s") val start: Int,
+    @Json(name = "l") val length: Int,
+    @Json(name = "e") val expression: String,
+    @Json(name = "r") val reading: String = "",
+) {
+    val end: Int get() = start + length
+}
 
 /** A lookup's hits, plus the JSON they came from for the popup page. */
 data class LookupResult(val text: String, val hits: List<TermHit>, val json: String) {
