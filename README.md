@@ -37,8 +37,10 @@ a Yomitan dictionary popup. See
 - **Game details:** while you browse, the bottom screen shows the focused game: its disc or
   cartridge and logo over its fan art (or its blurred cover), RomM's details, your play
   time, reading and save, its summary and screenshots (tap one for the full view, swipe
-  between them). Its buttons play or download the game as A does, open the manual in the
-  system's PDF viewer, and delete the download (tap twice).
+  between them). Its buttons play or download the game as A does, open the manual, and
+  delete the download (tap twice). The manual opens on the bottom screen: scroll through its
+  pages, pinch or double-tap to zoom, and close it with Close or by pulling down from the
+  first page.
 - **Dictionaries:** put Yomitan dictionary zips (JMdict, a frequency list such as JPDB, a
   pitch-accent or kanji dictionary) in `Download/` or a folder directly inside it, then open
   *Dictionaries* in settings and choose *Import dictionaries from Download*. Importing again
@@ -187,8 +189,9 @@ one, both at 369 dpi. The settings page is shot once per group (`settings_<group
 The library is shot as the grid and as the shelf: a PlayStation shelf of jewel cases, a DS
 shelf, each with the focused game's disc or card slid out, and a game without a cover. The
 game details are shot for a game with everything (also scrolled to its screenshots), a sparse
-one and an open screenshot. No real art is used: the tests draw stand-in covers, spines,
-logos, discs, fan art and screenshots. Record them after a UI change and commit the PNGs
+one and an open screenshot, and the manual viewer at its first page and scrolled. No real
+art is used: the tests draw stand-in covers, spines, logos, discs, fan art, screenshots and
+manual pages. Record them after a UI change and commit the PNGs
 with it:
 
 ```sh

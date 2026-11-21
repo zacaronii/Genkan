@@ -6,10 +6,12 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.IntSize
 import app.genkan.dictionary.DictionaryEntity
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
@@ -168,6 +170,20 @@ class ScreenshotTest {
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsScreenshot() = shoot("game_details_screenshot", BOTTOM_PIXELS) {
         GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, initialScreenshot = 1)
+    }
+
+    /** A twelve-page manual open in the viewer, at its first page; [FakeManual] draws the pages. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualViewer() = shoot("manual_viewer", BOTTOM_PIXELS) {
+        ManualViewer(FakeManual(pages = 12), onClose = {})
+    }
+
+    /** The same manual scrolled to where page 4 ends and page 5 begins. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualViewerScrolled() = shoot("manual_viewer_scrolled", BOTTOM_PIXELS) {
+        ManualViewer(FakeManual(pages = 12), onClose = {}, listState = rememberLazyListState(3, 900))
     }
 
     /** The first group with the group list focused; the others with the pad on their rows. */
@@ -620,4 +636,42 @@ private fun FakeCovers.disc(model: String): Bitmap {
     paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
     canvas.drawCircle(c, c, c * 0.1f, paint)
     return bitmap
+}
+
+/**
+ * A manual of US letter pages drawn on the spot, standing in for [PdfManualPages] (Robolectric
+ * has no PDF renderer): a title band, a picture box and grey bars for lines of text.
+ */
+private class FakeManual(pages: Int) : ManualPages {
+    override val pageSizes: List<IntSize> = List(pages) { IntSize(612, 792) }
+
+    override suspend fun render(index: Int, widthPx: Int): Bitmap {
+        val (width, height) = PdfManualPages.renderSize(612, 792, widthPx)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val u = width / 100f
+        canvas.drawColor(android.graphics.Color.WHITE)
+        paint.color = 0xFF8A2E2E.toInt()
+        canvas.drawRect(0f, 0f, width.toFloat(), 14 * u, paint)
+        paint.color = android.graphics.Color.WHITE
+        paint.textSize = 6 * u
+        paint.isFakeBoldText = true
+        canvas.drawText("HOW TO PLAY  ${index + 1}", 6 * u, 9.5f * u, paint)
+        paint.color = 0xFFDCE3EC.toInt()
+        canvas.drawRect(6 * u, 20 * u, 46 * u, 50 * u, paint)
+        paint.color = 0xFF9AA5B4.toInt()
+        canvas.drawCircle(26 * u, 35 * u, 8 * u, paint)
+        paint.color = 0xFFB0B0B0.toInt()
+        var y = 21 * u
+        while (y < height - 8 * u) {
+            val left = if (y < 52 * u) 52 * u else 6 * u
+            val right = if ((y / u).toInt() % 7 == 0) 70 * u else 94 * u
+            canvas.drawRect(left, y, right, y + 1.6f * u, paint)
+            y += 4 * u
+        }
+        return bitmap
+    }
+
+    override fun close() {}
 }

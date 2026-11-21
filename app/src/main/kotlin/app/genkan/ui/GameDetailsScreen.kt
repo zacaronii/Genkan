@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -57,7 +58,9 @@ import androidx.tv.material3.Text
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.io.File
 
 /**
  * Whether a game's fan art, when it has one, is the backdrop instead of its blurred cover.
@@ -87,6 +90,37 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
         notice = notice,
         factsScroll = scroll,
     )
+    val manual by viewModel.manual.collectAsStateWithLifecycle()
+    manual?.let { file -> ManualFile(file, onClose = viewModel::closeManual) }
+}
+
+/**
+ * Opens [file] with [PdfManualPages] for [ManualViewer], and closes it again when the viewer
+ * goes. A file that won't open closes the viewer with a notice.
+ */
+@Composable
+private fun ManualFile(file: File, onClose: (problem: String?) -> Unit) {
+    val close by rememberUpdatedState(onClose)
+    var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
+    LaunchedEffect(file) {
+        pages = try {
+            PdfManualPages.open(file)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            close("Couldn't open the manual: ${e.message}")
+            null
+        }
+    }
+    DisposableEffect(file) {
+        onDispose { pages?.close() }
+    }
+    when (val open = pages) {
+        null -> Box(Modifier.fillMaxSize().background(Color(0xFF2A2A30)), contentAlignment = Alignment.Center) {
+            Text("Opening the manual…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+        }
+        else -> ManualViewer(open, onClose = { close(null) })
+    }
 }
 
 /**
