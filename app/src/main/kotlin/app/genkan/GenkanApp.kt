@@ -19,6 +19,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
@@ -61,11 +62,21 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
+        // Images get their own dispatcher: the shared one allows 5 requests per host, so the
+        // fifteen-odd covers and spines of a shelf, plus the warmer's, queued behind each other
+        // (and behind anything else on the shared client) for seconds after the focus stopped.
+        val dispatcher = Dispatcher().apply { maxRequestsPerHost = IMAGE_REQUESTS_PER_HOST }
         val client = okHttpClient.get().newBuilder()
+            .dispatcher(dispatcher)
             .addInterceptor(RomMImageAuthInterceptor(rommSession.get()::credentials))
             .build()
         return ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
             .build()
+    }
+
+    private companion object {
+        /** Parallel image fetches from the RomM server. */
+        const val IMAGE_REQUESTS_PER_HOST = 12
     }
 }

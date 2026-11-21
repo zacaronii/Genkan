@@ -27,7 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -169,12 +171,34 @@ internal fun GameShelf(
     val spec = GameCase.specFor(games.first().platformSlug)
     val local = LocalShelves.isLocal(games.first())
 
+    // Read once per shelf: whether to log what each step costs (see ShelfTrace).
+    val trace = remember { ShelfTrace.enabled() }
+    if (trace) SideEffect { ShelfTrace.shelfComposed(focused) }
+
+    // Each cover's measured proportions, by game id, for the console's whole shelf, so a case
+    // that leaves the window and comes back is the right width from its first frame. A plain map:
+    // a cover loading mid-flight writes no state. The next step's recomposition, which happens
+    // anyway, passes the new proportions down; [settled] picks up the ones that load once the shelf
+    // stands still.
+    val coverAspects = remember(shelfId) { HashMap<Long, Float>() }
+    val settled = remember(shelfId) { mutableIntStateOf(0) }
+
     // A new console starts on its first case without sliding across from the old one's position.
     val position = remember(shelfId) { Animatable(focused.toFloat()) }
     LaunchedEffect(shelfId, focused) {
         position.animateTo(focused.toFloat(), spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+        settled.intValue++
     }
     val positionNow = remember(position) { { position.value } }
+    val onCoverAspect = remember(coverAspects, position) {
+        { id: Long, aspect: Float ->
+            val old = coverAspects.put(id, aspect)
+            val changed = old == null || abs(old - aspect) > 0.005f
+            if (trace && changed) ShelfTrace.aspectMeasured(stateWrite = !position.isRunning)
+            // At rest nothing else recomposes the shelf, so ask for it; mid-flight the next step will.
+            if (changed && !position.isRunning) settled.intValue++
+        }
+    }
 
     val media = remember(shelfId) { Animatable(0f) }
     LaunchedEffect(shelfId, focused, active, staticMedia) {
@@ -188,10 +212,6 @@ internal fun GameShelf(
         media.animateTo(1f, tween(ShelfDefaults.MEDIA_SLIDE_MS, easing = FastOutSlowInEasing))
     }
     val mediaNow = remember(media) { { media.value } }
-
-    // Each cover's measured proportions, by game id, kept for the console's whole shelf: a case
-    // that leaves the window and comes back is the right width from its first frame.
-    val coverAspects = remember(shelfId) { mutableStateMapOf<Long, Float>() }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -209,6 +229,8 @@ internal fun GameShelf(
         Layout(
             modifier = Modifier.fillMaxSize(),
             content = {
+                // Read here so a bump re-runs only this loop, where the proportions are passed down.
+                settled.intValue
                 for (index in range) {
                     val game = games[index]
                     key(game.id) {
@@ -224,6 +246,17 @@ internal fun GameShelf(
                             cameraDistance = 14f * density.density
                         }
                         val select = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                        // The models are built once per game. Coil's models are plain Any, which
+                        // Compose compares by identity, so a fresh URL string on each step would
+                        // recompose every case in the window.
+                        val art = remember(game, coverModel, artModel) {
+                            CaseArt(
+                                cover = artModel(game.coverLargePath) ?: coverModel(game),
+                                spine = artModel(game.box2dSidePath),
+                                logo = artModel(game.logoPath),
+                                physical = artModel(game.physicalPath),
+                            )
+                        }
                         if (local) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
                         } else {
@@ -232,18 +265,16 @@ internal fun GameShelf(
                                 spec = spec,
                                 maxWidth = maxCaseWidth,
                                 maxHeight = maxCaseHeight,
-                                cover = artModel(game.coverLargePath) ?: coverModel(game),
-                                spine = artModel(game.box2dSidePath),
-                                logo = artModel(game.logoPath),
-                                physical = artModel(game.physicalPath),
+                                art = art,
                                 download = downloads[game.id],
                                 coverAspect = coverAspects[game.id],
-                                onCoverAspect = { coverAspects[game.id] = it },
+                                onCoverAspect = onCoverAspect,
                                 showMedia = index == focused && active,
                                 badgeOnLeft = index < focused,
                                 mediaOut = mediaNow,
                                 shade = { ShelfGeometry.shade(index - positionNow()) },
                                 modifier = transform.then(select),
+                                trace = trace,
                             )
                         }
                     }
@@ -305,6 +336,14 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
     }
 }
 
+/**
+ * What Coil loads for one case: the cover, the spine, the title logo and the disc or cartridge
+ * cut-out, each null when the game has none. Compared by value, so a case whose art hasn't
+ * changed skips recomposition.
+ */
+@Immutable
+private data class CaseArt(val cover: Any?, val spine: Any?, val logo: Any?, val physical: Any?)
+
 /** The proportions of a case's parts, as shares of its width, per [CaseStyle]. */
 private class CaseParts(val corner: Float, val spine: Float, val frame: Float, val plastic: Boolean)
 
@@ -328,19 +367,18 @@ private fun ShelfCase(
     spec: CaseSpec,
     maxWidth: Dp,
     maxHeight: Dp,
-    cover: Any?,
-    spine: Any?,
-    logo: Any?,
-    physical: Any?,
+    art: CaseArt,
     download: DownloadEntity?,
     coverAspect: Float?,
-    onCoverAspect: (Float) -> Unit,
+    onCoverAspect: (Long, Float) -> Unit,
     showMedia: Boolean,
     badgeOnLeft: Boolean,
     mediaOut: () -> Float,
     shade: () -> Float,
     modifier: Modifier,
+    trace: Boolean = false,
 ) {
+    if (trace) SideEffect { ShelfTrace.caseComposed() }
     val density = LocalDensity.current
     val aspect = GameCase.aspectFor(spec, coverAspect)
     val (width, height) = with(density) {
@@ -356,7 +394,7 @@ private fun ShelfCase(
             .size(width, height)
             .drawBehind { drawFloorShadow() },
     ) {
-        if (showMedia) PhysicalMedia(MediaKind.forSlug(game.platformSlug), physical, logo, game.name, caseColor, width, height, mediaOut)
+        if (showMedia) PhysicalMedia(MediaKind.forSlug(game.platformSlug), art.physical, art.logo, game.name, caseColor, width, height, mediaOut)
         Box(
             Modifier
                 .fillMaxSize()
@@ -368,7 +406,7 @@ private fun ShelfCase(
                 .background(caseColor),
         ) {
             Row(Modifier.fillMaxSize()) {
-                Spine(spec.style, spine, caseColor, Modifier.width(width * parts.spine).fillMaxHeight())
+                Spine(spec.style, art.spine, caseColor, Modifier.width(width * parts.spine).fillMaxHeight())
                 Box(
                     Modifier
                         .weight(1f)
@@ -383,19 +421,27 @@ private fun ShelfCase(
                         .background(caseColor),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (cover != null) {
+                    if (art.cover != null) {
+                        // The title shows until the cover has loaded, and stays if it never does.
+                        // Plain text under the image: no request, no state to flip on load.
+                        CaseTitle(game.name, caseColor)
+                        // Coil decodes at this box's laid-out size, the cover as the focused case
+                        // draws it, never the full-size file. The neighbours draw the same bitmap
+                        // at 0.8 through their graphics layer: decoding them smaller would mean a
+                        // second request for every case as it passes through the focus.
                         AsyncImage(
-                            model = cover,
+                            model = art.cover,
                             contentDescription = game.name,
                             contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 val image = state.result.image
-                                if (image.width > 0 && image.height > 0) onCoverAspect(image.width.toFloat() / image.height)
+                                if (trace) ShelfTrace.coverLoaded(state.result.dataSource.name)
+                                if (image.width > 0 && image.height > 0) onCoverAspect(game.id, image.width.toFloat() / image.height)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        BlankCover(game.name, logo, caseColor)
+                        BlankCover(game.name, art.logo, caseColor)
                     }
                 }
             }
@@ -468,6 +514,20 @@ private fun CardboardEdge() {
         drawRect(Color(0x33FFFFFF), size = Size(size.width, 1.5.dp.toPx()))
         drawRect(Color(0x26000000), topLeft = Offset(0f, size.height - 1.5.dp.toPx()), size = Size(size.width, 1.5.dp.toPx()))
     }
+}
+
+/** The title on a case whose cover hasn't loaded, in ink that reads on the case's colour. */
+@Composable
+private fun CaseTitle(title: String, caseColor: Color) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        color = if (caseColor.luminance() > 0.5f) Color(0xFF1C1C21) else Color(0xFFEDEDED),
+        textAlign = TextAlign.Center,
+        maxLines = 4,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(10.dp),
+    )
 }
 
 /** No cover: the case's own colour with the title logo, or failing that the title. */

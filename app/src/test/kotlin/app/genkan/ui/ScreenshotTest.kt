@@ -107,6 +107,14 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 5, staticMedia = true)
     }
 
+    /** Covers on their way: the focused game and the ones after it show their titles until they load. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfLoading() = shoot("shelf_loading", TOP_PIXELS) {
+        val games = FakeData.psxGames.mapIndexed { index, game -> if (index >= 7) game.copy(coverPath = "/loading/$index.png") else game }
+        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 8, staticMedia = false)
+    }
+
     /** The library on [platforms][FakeData.platforms] index [platformIndex], showing [games]. */
     @Composable
     private fun library(view: LibraryView, platformIndex: Int, games: List<GameEntity>, gameIndex: Int, staticMedia: Boolean? = null) {
@@ -469,6 +477,8 @@ private object FakeCovers {
             model.startsWith("fake-screenshot:") -> landscape(model, 480, 272, textBox = true)
             path.startsWith("/spines/") -> spine(model)
             path.startsWith("/logos/") -> logo(path.removePrefix("/logos/"))
+            // A cover still loading draws nothing, as Coil does before the image arrives.
+            path.startsWith("/loading/") -> Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888)
             path.startsWith("/physical/") -> disc(model)
             path.startsWith("/covers/psx/") -> cover(model, 400, 400)
             path.startsWith("/covers/nds/") -> cover(model, 360, 400)
