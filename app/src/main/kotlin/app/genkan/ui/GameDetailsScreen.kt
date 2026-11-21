@@ -34,6 +34,12 @@ import java.util.Date
 @Composable
 fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit) {
     val details by viewModel.details.collectAsStateWithLifecycle()
+    GameDetailsContent(details, onShowReader)
+}
+
+/** The details drawn from plain state; null [details] is an empty screen. */
+@Composable
+fun GameDetailsContent(details: GameDetails?, onShowReader: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val current = details ?: return Box(Modifier.fillMaxSize().background(colors.background))
     val game = current.focus.game

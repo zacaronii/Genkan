@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -50,7 +51,14 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric needs the merged resources and manifest for the screenshot tests.
+        unitTests.isIncludeAndroidResources = true
     }
+}
+
+// Screenshot tests record here (./gradlew :app:recordRoborazziDebug); see the README.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
 
 kotlin {
@@ -103,6 +111,11 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 }
 
 /**

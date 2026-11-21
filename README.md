@@ -170,6 +170,22 @@ dictionary engine in `third_party/hoshidicts`.
 
 `local.properties` (gitignored) must point `sdk.dir` at your SDK, or set `ANDROID_HOME`.
 
+### Screenshots
+
+The library, the settings page and the bottom screen's game details are drawn on the JVM
+from made-up data (Roborazzi on Robolectric, `app/src/test/kotlin/app/genkan/ui/ScreenshotTest.kt`),
+at the Thor's sizes: 1920x1080 for the top screen and 1080x1240 for the bottom one, both
+at xhdpi. Record them after a UI change and commit the PNGs with it:
+
+```sh
+./gradlew :app:recordRoborazziDebug     # writes app/src/test/screenshots/*.png
+./gradlew :app:verifyRoborazziDebug     # fails if the screens no longer match them
+```
+
+Open the PNGs in `app/src/test/screenshots`, or see them in a pull request's diff. CI
+records them too and uploads them as the `screenshots` artifact of each run; it doesn't
+fail on differences yet, since fonts can render slightly differently on Linux.
+
 ### Try it on the emulator
 
 ```sh
