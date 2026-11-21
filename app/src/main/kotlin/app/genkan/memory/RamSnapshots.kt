@@ -147,8 +147,3 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         }
     }
 }
-
-/** Layout-free text, for telling lines apart. */
-internal object HookSearchText {
-    fun normalise(text: String): String = text.filterNot { it.isWhitespace() || it == '﻿' }
-}
