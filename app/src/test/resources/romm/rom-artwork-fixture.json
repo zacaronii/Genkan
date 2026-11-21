@@ -1,0 +1,111 @@
+{
+  "id": 4242,
+  "platform_id": 7,
+  "platform_slug": "psx",
+  "platform_display_name": "PlayStation",
+  "name": "Example Quest",
+  "slug": "example-quest",
+  "fs_name": "Example Quest (Japan).m3u",
+  "fs_size_bytes": 1234567,
+  "hltb_id": 98765,
+  "summary": "  A made-up game for the parser tests.  ",
+  "metadatum": {
+    "genres": ["Role-playing (RPG)", "Adventure"],
+    "franchises": ["Example Saga"],
+    "companies": ["Example Works", "Sample Soft"],
+    "developers": ["Example Works"],
+    "publishers": ["Sample Soft", "Placeholder Inc."],
+    "game_modes": ["Single player", "Multiplayer"],
+    "player_count": "1-2",
+    "age_ratings": ["CERO A"],
+    "first_release_date": 851990400000,
+    "average_rating": 81.5
+  },
+  "hltb_metadata": {
+    "main_story": 108000,
+    "main_plus_extra": 151200,
+    "completionist": 0,
+    "all_styles": 140400,
+    "main_story_count": 12,
+    "review_score": 78,
+    "review_count": 40
+  },
+  "ss_metadata": {
+    "box2d_path": "roms/7/4242/box2d/box2d.png",
+    "box2d_url": "https://scraper.example.com/media/box2d.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "box2d_side_path": "roms/7/4242/box2d_side/box2d_side.png",
+    "box2d_side_url": "https://scraper.example.com/media/side.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "box2d_back_path": "roms/7/4242/box2d_back/box2d_back.png",
+    "box2d_back_url": "https://scraper.example.com/media/back.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "box3d_path": "roms/7/4242/box3d/box3d.png",
+    "box3d_url": "https://scraper.example.com/media/box3d.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "logo_path": "roms/7/4242/logo/logo.png",
+    "logo_url": "https://scraper.example.com/media/wheel.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "physical_path": "roms/7/4242/physical/physical.png",
+    "physical_url": "https://scraper.example.com/media/support.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "physical_disc": 1,
+    "physical_extra_discs": [
+      {
+        "disc": 2,
+        "path": "roms/7/4242/physical/physical_2.png",
+        "url": "https://scraper.example.com/media/support2.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET"
+      }
+    ],
+    "title_screen_path": "roms/7/4242/title_screen/title_screen.png",
+    "title_screen_url": "https://scraper.example.com/media/sstitle.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "marquee_path": "roms/7/4242/marquee/marquee.png",
+    "marquee_url": "https://scraper.example.com/media/marquee.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "fanart_path": "roms/7/4242/fanart/fanart.jpg",
+    "fanart_url": "https://scraper.example.com/media/fanart.jpg?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "miximage_path": null,
+    "miximage_url": "https://scraper.example.com/media/mix.png?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "video_path": null,
+    "video_url": "https://scraper.example.com/media/video.mp4?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "manual_url": "https://scraper.example.com/media/manual.pdf?devid=EXAMPLE_DEV&devpassword=EXAMPLE_SECRET",
+    "ss_score": "18"
+  },
+  "path_cover_small": "/assets/romm/resources/roms/7/4242/cover/small.png?ts=2026-01-02 03:04:05",
+  "path_cover_large": "/assets/romm/resources/roms/7/4242/cover/big.png?ts=2026-01-02 03:04:05",
+  "url_cover": "https://images.example.com/cover.jpg",
+  "regions": ["Japan"],
+  "languages": ["Japanese"],
+  "merged_screenshots": [
+    "/assets/romm/resources/roms/7/4242/screenshots/0.jpg",
+    "/assets/romm/resources/roms/7/4242/screenshots/1.jpg"
+  ],
+  "rom_user": {
+    "id": 1,
+    "user_id": 1,
+    "rom_id": 4242,
+    "rating": 8,
+    "difficulty": 4,
+    "completion": 60,
+    "status": "incomplete",
+    "backlogged": false,
+    "now_playing": true,
+    "hidden": false,
+    "last_played": "2026-03-04T05:06:07.123456+00:00",
+    "is_main_sibling": true
+  },
+  "youtube_video_id": "exampleVid01",
+  "has_manual": true,
+  "path_manual": "/assets/romm/resources/roms/7/4242/manual/4242.pdf",
+  "has_multiple_files": true,
+  "files": [
+    {
+      "id": 1, "rom_id": 4242, "file_name": "Example Quest (Japan) (Disc 1).chd",
+      "file_path": "psx/Example Quest", "file_size_bytes": 600000,
+      "full_path": "psx/Example Quest/Example Quest (Japan) (Disc 1).chd"
+    },
+    {
+      "id": 2, "rom_id": 4242, "file_name": "Example Quest (Japan) (Disc 2).chd",
+      "file_path": "psx/Example Quest", "file_size_bytes": 600000,
+      "full_path": "psx/Example Quest/Example Quest (Japan) (Disc 2).chd"
+    },
+    {
+      "id": 3, "rom_id": 4242, "file_name": "Example Quest (Japan).m3u",
+      "file_path": "psx/Example Quest", "file_size_bytes": 100,
+      "full_path": "psx/Example Quest/Example Quest (Japan).m3u"
+    }
+  ]
+}

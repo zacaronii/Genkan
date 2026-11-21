@@ -68,6 +68,25 @@ object RomMApiFactory {
         return "$withScheme/"
     }
 
+    /**
+     * A file under the server's resources folder, as a server-relative asset path like the
+     * covers' `path_cover_large`, so [assetUrl] and the image loader's authorization treat it the
+     * same way. ScreenScraper's `*_path` fields are relative ("roms/13/283/physical/physical.png")
+     * and gain the "/assets/romm/resources/" prefix; a path that already starts with "/assets/"
+     * (a screenshot or a manual) is kept as it is. Genkan stores the result, never the raw path.
+     *
+     * An absolute URL gives null: these fields should only ever hold paths on the RomM server,
+     * and a URL here could be ScreenScraper's, which carries credentials.
+     */
+    fun resourcePath(path: String?): String? {
+        val trimmed = path?.trim()
+        if (trimmed.isNullOrEmpty() || "://" in trimmed) return null
+        val relative = trimmed.trimStart('/')
+        return if (relative.startsWith("assets/")) "/$relative" else "$RESOURCES_PREFIX$relative"
+    }
+
+    private const val RESOURCES_PREFIX = "/assets/romm/resources/"
+
     /** RomM returns asset paths like "/assets/...?ts=2026-10-05 01:54:31" with a raw space. */
     fun assetUrl(baseUrl: String, path: String?): String? {
         if (path.isNullOrBlank()) return null

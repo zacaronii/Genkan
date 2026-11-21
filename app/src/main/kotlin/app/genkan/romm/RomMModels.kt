@@ -338,11 +338,17 @@ data class RomMMetadatum(
     @Json(name = "age_ratings") val ageRatings: List<String>? = null
 )
 
+/**
+ * HowLongToBeat's times, in seconds, and its review score. The server sends an empty object when
+ * HowLongToBeat has no match, and 0 for a time it doesn't know.
+ */
 @JsonClass(generateAdapter = true)
 data class RomMHltbMetadata(
     @Json(name = "main_story") val mainStorySec: Int? = null,
     @Json(name = "main_plus_extra") val mainPlusExtraSec: Int? = null,
-    @Json(name = "completionist") val completionistSec: Int? = null
+    @Json(name = "completionist") val completionistSec: Int? = null,
+    @Json(name = "all_styles") val allStylesSec: Int? = null,
+    @Json(name = "review_score") val reviewScore: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -356,6 +362,15 @@ data class RomMGamelistMetadata(
     @Json(name = "box3d_path") val box3dPath: String? = null
 )
 
+/**
+ * ScreenScraper's media for a rom, as files on the RomM server. The paths are relative to the
+ * server's resources folder ("roms/13/283/physical/physical.png"); see
+ * [RomMApiFactory.resourcePath].
+ *
+ * Only the `*_path` fields are read. ScreenScraper's `*_url` fields carry the server operator's
+ * ScreenScraper credentials in their query strings, so they are deliberately left out of this
+ * model: Moshi skips them, and nothing in Genkan may parse, store, log or request them.
+ */
 @JsonClass(generateAdapter = true)
 data class RomMSsMetadata(
     @Json(name = "box2d_path") val box2dPath: String? = null,
@@ -364,8 +379,22 @@ data class RomMSsMetadata(
     @Json(name = "box2d_side_path") val box2dSidePath: String? = null,
     @Json(name = "logo_path") val logoPath: String? = null,
     @Json(name = "fanart_path") val fanartPath: String? = null,
-    @Json(name = "fanart_url") val fanartUrl: String? = null,
-    @Json(name = "video_normalized_path") val videoNormalizedPath: String? = null
+    @Json(name = "title_screen_path") val titleScreenPath: String? = null,
+    @Json(name = "marquee_path") val marqueePath: String? = null,
+    @Json(name = "video_normalized_path") val videoNormalizedPath: String? = null,
+    /** The disc or cartridge cut-out: a transparent PNG of about 600x600. */
+    @Json(name = "physical_path") val physicalPath: String? = null,
+    /** Which disc [physicalPath] shows, for a game on several discs. */
+    @Json(name = "physical_disc") val physicalDisc: Int? = null,
+    /** The cut-outs of a multi-disc game's other discs. */
+    @Json(name = "physical_extra_discs") val physicalExtraDiscs: List<RomMSsPhysicalDisc>? = null
+)
+
+/** One more disc of a multi-disc game. Its `url` is ScreenScraper's and is not read. */
+@JsonClass(generateAdapter = true)
+data class RomMSsPhysicalDisc(
+    @Json(name = "disc") val disc: Int,
+    @Json(name = "path") val path: String? = null
 )
 
 @JsonClass(generateAdapter = true)

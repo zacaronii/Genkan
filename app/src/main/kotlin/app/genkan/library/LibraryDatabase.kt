@@ -65,7 +65,74 @@ data class GameEntity(
     @ColumnInfo(defaultValue = "NULL") val genres: String? = null,
     @ColumnInfo(defaultValue = "NULL") val releaseYear: Int? = null,
     @ColumnInfo(defaultValue = "NULL") val developer: String? = null,
-)
+    /**
+     * Artwork, for the shelf and the details screen. Every `*Path` here is a server-relative
+     * asset path ("/assets/romm/resources/..."), stored already prefixed by
+     * [app.genkan.romm.RomMApiFactory.resourcePath], so each one becomes a URL with
+     * [app.genkan.romm.RomMApiFactory.assetUrl] exactly as [coverPath] does.
+     */
+    @ColumnInfo(defaultValue = "NULL") val coverLargePath: String? = null,
+    /** The disc or cartridge cut-out, a transparent PNG. */
+    @ColumnInfo(defaultValue = "NULL") val physicalPath: String? = null,
+    /** The title logo ("wheel"), a transparent PNG. */
+    @ColumnInfo(defaultValue = "NULL") val logoPath: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val box2dPath: String? = null,
+    /** The case's spine. */
+    @ColumnInfo(defaultValue = "NULL") val box2dSidePath: String? = null,
+    /** The case's back cover. */
+    @ColumnInfo(defaultValue = "NULL") val box2dBackPath: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val box3dPath: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val titleScreenPath: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val marqueePath: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val fanartPath: String? = null,
+    /** Screenshot asset paths, one per line; read them with [screenshotPathList]. */
+    @ColumnInfo(defaultValue = "NULL") val screenshotPaths: String? = null,
+    /** Set only when the server says the manual exists. */
+    @ColumnInfo(defaultValue = "NULL") val manualPath: String? = null,
+    /** The lists below are one entry per line; read them with [splitList]. */
+    @ColumnInfo(defaultValue = "NULL") val regions: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val franchises: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val publishers: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val gameModes: String? = null,
+    /** As the server words it, e.g. "1-2". */
+    @ColumnInfo(defaultValue = "NULL") val playerCount: String? = null,
+    /** The metadata providers' average rating, out of 100. */
+    @ColumnInfo(defaultValue = "NULL") val averageRating: Float? = null,
+    /** The first release date, in epoch milliseconds (UTC). */
+    @ColumnInfo(defaultValue = "NULL") val releaseDateMillis: Long? = null,
+    @ColumnInfo(defaultValue = "NULL") val youtubeVideoId: String? = null,
+    /** How many discs the game has, when the server's data says; null for unknown or one. */
+    @ColumnInfo(defaultValue = "NULL") val discCount: Int? = null,
+    /** HowLongToBeat's times in seconds; null where it has none. */
+    @ColumnInfo(defaultValue = "NULL") val hltbId: Long? = null,
+    @ColumnInfo(defaultValue = "NULL") val hltbMainStorySec: Int? = null,
+    @ColumnInfo(defaultValue = "NULL") val hltbMainPlusExtraSec: Int? = null,
+    @ColumnInfo(defaultValue = "NULL") val hltbCompletionistSec: Int? = null,
+    @ColumnInfo(defaultValue = "NULL") val hltbAllStylesSec: Int? = null,
+    @ColumnInfo(defaultValue = "NULL") val hltbReviewScore: Int? = null,
+    /** The signed-in RomM user's own data for the game (`rom_user`). */
+    @ColumnInfo(defaultValue = "NULL") val lastPlayedMillis: Long? = null,
+    @ColumnInfo(defaultValue = "0") val backlogged: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val nowPlaying: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val userRating: Int = 0,
+    @ColumnInfo(defaultValue = "0") val userDifficulty: Int = 0,
+    @ColumnInfo(defaultValue = "0") val userCompletion: Int = 0,
+    @ColumnInfo(defaultValue = "NULL") val userStatus: String? = null,
+    @ColumnInfo(defaultValue = "0") val userHidden: Boolean = false,
+) {
+    /** [screenshotPaths] as a list. */
+    val screenshotPathList: List<String> get() = splitList(screenshotPaths)
+
+    companion object {
+        /** Joins a list for a one-per-line column; an empty or missing list is null. */
+        fun joinList(items: List<String>?): String? =
+            items?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }?.joinToString("\n")
+
+        /** Reads a one-per-line column back. */
+        fun splitList(column: String?): List<String> =
+            column?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
+    }
+}
 
 @Dao
 interface LibraryDao {
@@ -117,13 +184,14 @@ interface LibraryDao {
         OutboxCard::class, MinedWord::class,
         ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class, SaveFileEntity::class,
         WordStatusEntity::class, LookupCountEntity::class, AnkiWordEntity::class],
-    version = 15,
+    version = 16,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11),
-        AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15)],
+        AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15),
+        AutoMigration(from = 15, to = 16)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
