@@ -85,12 +85,21 @@ object GameDetailsFormat {
         return rommLastPlayed?.let { "Last played ${date(it)}" }
     }
 
-    /** "Main story about 32 h  ·  played 5 h 42 min", when HowLongToBeat has a main story time. */
-    fun hltbLine(mainStorySec: Int?, playedMs: Long): String? {
+    /** "Main story about 32 h", when HowLongToBeat has a main story time. */
+    fun hltbLine(mainStorySec: Int?): String? {
         val seconds = mainStorySec?.takeIf { it > 0 } ?: return null
         val estimate = if (seconds >= 3600) "${(seconds + 1800) / 3600}${NBSP}h" else "${seconds / 60}${NBSP}min"
-        val played = if (playedMs >= 60_000) "${SEPARATOR}played ${duration(playedMs)}" else ""
-        return "Main story about $estimate$played"
+        return "Main story about $estimate"
+    }
+
+    /**
+     * How far the time played goes toward HowLongToBeat's main story, from 0 to 1 (full at or
+     * past it); null when there is no main story time or nothing was played.
+     */
+    fun hltbProgress(mainStorySec: Int?, playedMs: Long): Float? {
+        val seconds = mainStorySec?.takeIf { it > 0 } ?: return null
+        if (playedMs <= 0) return null
+        return (playedMs / (seconds * 1000.0)).coerceAtMost(1.0).toFloat()
     }
 
     /** The RomM user's own status, completion, rating and flags for the game. */

@@ -1,5 +1,6 @@
 package app.genkan.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,10 +36,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -59,7 +65,7 @@ private const val DELETE_ARMED_MS = 4_000L
 
 /** The bottom screen while browsing: the focused game's artwork, details, history and actions. */
 @Composable
-fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit, onOpenManual: () -> Unit) {
+fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit) {
     val details by viewModel.details.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     // Each game's details start at the top.
@@ -68,7 +74,7 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit,
         details = details,
         onShowReader = onShowReader,
         onPlay = viewModel::play,
-        onOpenManual = onOpenManual,
+        onOpenManual = viewModel::openManual,
         onDelete = viewModel::deleteDownload,
         notice = notice,
         factsScroll = scroll,
@@ -260,50 +266,87 @@ private fun DetailsButton(label: String, style: ButtonStyle, onClick: () -> Unit
 private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int) -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     val game = details.focus.game
-    val history = listOfNotNull(
+    val played = listOfNotNull(
         GameDetailsFormat.downloadLine(game, details.download),
         GameDetailsFormat.playLine(details.play, game.lastPlayedMillis),
-        GameDetailsFormat.hltbLine(game.hltbMainStorySec, details.play?.totalMs ?: 0),
+    )
+    val hltb = GameDetailsFormat.hltbLine(game.hltbMainStorySec)
+    val hltbProgress = GameDetailsFormat.hltbProgress(game.hltbMainStorySec, details.play?.totalMs ?: 0)
+    val rest = listOfNotNull(
         GameDetailsFormat.rommLine(game),
         GameDetailsFormat.readingLine(details.reading),
         GameDetailsFormat.saveLine(details.save),
     )
+    val line = @Composable { text: String -> Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface) }
 
-    Column(modifier.verticalScroll(scroll),verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(game.name, style = MaterialTheme.typography.headlineSmall, color = colors.primary)
-        GameDetailsFormat.detailLine(game)?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-        }
-        if (history.isNotEmpty()) {
-            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                history.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface) }
+    Box(modifier.topFade(scroll.value > 0)) {
+        Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(game.name, style = MaterialTheme.typography.headlineSmall, color = colors.primary)
+            GameDetailsFormat.detailLine(game)?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
-        }
-        game.summary?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface, modifier = Modifier.padding(top = 6.dp))
-        }
-        if (details.art.screenshots.isNotEmpty()) {
-            LazyRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(details.art.screenshots) { index, shot ->
-                    AsyncImage(
-                        model = shot,
-                        contentDescription = "Screenshot ${index + 1}",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .height(80.dp)
-                            .aspectRatio(4f / 3f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onScreenshot(index) },
-                    )
+            if (played.isNotEmpty() || hltb != null || rest.isNotEmpty()) {
+                Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    played.forEach { line(it) }
+                    hltb?.let {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            line(it)
+                            hltbProgress?.let { progress -> ProgressBar(progress) }
+                        }
+                    }
+                    rest.forEach { line(it) }
+                }
+            }
+            game.summary?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (details.art.screenshots.isNotEmpty()) {
+                LazyRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(details.art.screenshots) { index, shot ->
+                        AsyncImage(
+                            model = shot,
+                            contentDescription = "Screenshot ${index + 1}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .height(80.dp)
+                                .aspectRatio(4f / 3f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onScreenshot(index) },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** Screenshots over the whole screen, one at a time: swipe between them, tap to close. */
+/**
+ * Once [enabled], fades the content's top [height] out to nothing, so scrolled text melts into
+ * whatever backdrop is behind it instead of being cut off.
+ */
+private fun Modifier.topFade(enabled: Boolean, height: Dp = 20.dp): Modifier = if (!enabled) this else
+    graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
+        drawContent()
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = height.toPx()),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+/** A thin bar filled to [progress] (0 to 1), e.g. the time played against HowLongToBeat's. */
+@Composable
+private fun ProgressBar(progress: Float) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    Box(Modifier.fillMaxWidth().height(4.dp).clip(shape).background(colors.onSurface.copy(alpha = 0.15f))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(colors.primary))
+    }
+}
+
+/** Screenshots over the whole screen, one at a time: swipe between them; tap or Back closes. */
 @Composable
 private fun ScreenshotViewer(screenshots: List<Any>, start: Int, onClose: () -> Unit) {
+    BackHandler(onBack = onClose)
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (screenshots.size - 1).coerceAtLeast(0))) { screenshots.size }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->

@@ -26,9 +26,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -42,6 +45,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import javax.inject.Inject
 
 /** What the bottom screen shows: the focused game while browsing, the reader otherwise. */
@@ -125,6 +129,13 @@ class GameDetailsViewModel @Inject constructor(
     private var noticeJob: Job? = null
     private var manualJob: Job? = null
 
+    private val _manualReady = MutableSharedFlow<Uri>(extraBufferCapacity = 1)
+    /**
+     * A fetched manual, ready for a PDF viewer. The activity collects it while started, so the
+     * download never holds on to the activity.
+     */
+    val manualReady: SharedFlow<Uri> = _manualReady.asSharedFlow()
+
     init {
         viewModelScope.launch { launcher.inFront.drop(1).collect { readerPinned.value = false } }
         // A message about one game means nothing once another is focused.
@@ -158,23 +169,30 @@ class GameDetailsViewModel @Inject constructor(
     }
 
     /**
-     * Fetches the focused game's manual into the cache (once) and hands [open] a content URI
-     * for it, on the main thread.
+     * Fetches the focused game's manual into the cache (once per version of it) and then emits
+     * its content URI on [manualReady].
      */
-    fun openManual(open: (Uri) -> Unit) {
+    fun openManual() {
         val game = details.value?.focus?.game ?: return
         val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return
         if (manualJob?.isActive == true) return
         manualJob = viewModelScope.launch {
-            val file = File(context.cacheDir, "manuals/${game.id}.pdf")
+            val folder = File(context.cacheDir, MANUALS_FOLDER)
+            val file = File(folder, manualFileName(game))
             if (!file.isFile || file.length() == 0L) {
                 noticeJob?.cancel()
                 _notice.value = "Fetching the manual…"
-                val fetched = withContext(Dispatchers.IO) { runCatching { fetch(url, file) } }
+                val fetched = withContext(Dispatchers.IO) {
+                    runCatching {
+                        fetch(url, file)
+                        // Earlier versions of this game's manual are no longer wanted.
+                        folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name != file.name }?.forEach { it.delete() }
+                    }
+                }
                 fetched.exceptionOrNull()?.let { show("Couldn't fetch the manual: ${it.message}"); return@launch }
                 _notice.value = null
             }
-            open(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
+            _manualReady.tryEmit(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
         }
     }
 
@@ -212,7 +230,19 @@ class GameDetailsViewModel @Inject constructor(
         if (!part.renameTo(file)) throw IOException("couldn't save it")
     }
 
-    private companion object {
-        const val NOTICE_MS = 4_000L
+    companion object {
+        private const val NOTICE_MS = 4_000L
+        private const val MANUALS_FOLDER = "manuals"
+
+        /**
+         * The cached manual's file name: the game's id, then a hash of what identifies this
+         * version of the manual, so a changed manual is fetched again. Games carry no updated
+         * time, so the hash covers the manual's path (RomM adds a timestamp to some asset paths)
+         * and the game's file size.
+         */
+        fun manualFileName(game: GameEntity): String {
+            val digest = MessageDigest.getInstance("SHA-1").digest("${game.manualPath}|${game.fsSizeBytes}".toByteArray())
+            return "${game.id}-${digest.take(6).joinToString("") { "%02x".format(it) }}.pdf"
+        }
     }
 }

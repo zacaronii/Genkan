@@ -9,7 +9,9 @@ import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.Locale
@@ -89,15 +91,21 @@ class GameDetailsFormatTest {
     }
 
     @Test
-    fun `the HowLongToBeat line rounds to hours and adds the time played`() {
-        assertText(
-            "Main story about 32 h  ·  played 5 h 42 min",
-            GameDetailsFormat.hltbLine(32 * 3600 + 10 * 60, 5 * 3_600_000L + 42 * 60_000L),
-        )
-        assertText("Main story about 33 h", GameDetailsFormat.hltbLine(32 * 3600 + 30 * 60, 0))
-        assertText("Main story about 45 min", GameDetailsFormat.hltbLine(45 * 60, 30_000))
-        assertNull(GameDetailsFormat.hltbLine(null, 3_600_000L))
-        assertNull(GameDetailsFormat.hltbLine(0, 3_600_000L))
+    fun `the HowLongToBeat line rounds to hours, with no second number`() {
+        assertText("Main story about 32 h", GameDetailsFormat.hltbLine(32 * 3600 + 10 * 60))
+        assertText("Main story about 33 h", GameDetailsFormat.hltbLine(32 * 3600 + 30 * 60))
+        assertText("Main story about 45 min", GameDetailsFormat.hltbLine(45 * 60))
+        assertNull(GameDetailsFormat.hltbLine(null))
+        assertNull(GameDetailsFormat.hltbLine(0))
+    }
+
+    @Test
+    fun `HowLongToBeat progress is the time played over the main story, capped at full`() {
+        assertEquals(0.25f, GameDetailsFormat.hltbProgress(8 * 3600, 2 * 3_600_000L)!!, 0.0001f)
+        assertEquals(1f, GameDetailsFormat.hltbProgress(8 * 3600, 20 * 3_600_000L)!!, 0.0001f)
+        assertNull(GameDetailsFormat.hltbProgress(8 * 3600, 0))
+        assertNull(GameDetailsFormat.hltbProgress(null, 3_600_000L))
+        assertNull(GameDetailsFormat.hltbProgress(0, 3_600_000L))
     }
 
     @Test
@@ -156,6 +164,16 @@ class GameDetailsFormatTest {
         assertNull(GameDetailsFormat.saveLine(null))
         assertText("Save: in step with RomM (uploaded, 9:00)", GameDetailsFormat.saveLine(SaveStatus.Synced(0, "uploaded")) { "9:00" })
         assertText("Save sync failed: offline", GameDetailsFormat.saveLine(SaveStatus.Failed(0, "offline")))
+    }
+
+    @Test
+    fun `a cached manual's name changes with the manual`() {
+        val first = game().copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf")
+        val name = GameDetailsViewModel.manualFileName(first)
+        assertTrue(name, name.startsWith("1-") && name.endsWith(".pdf"))
+        assertEquals(name, GameDetailsViewModel.manualFileName(first.copy(name = "Renamed")))
+        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
+        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(fsSizeBytes = 42)))
     }
 
     /** Compares with no-break spaces read as plain ones, so the expected text stays legible. */
