@@ -9,6 +9,8 @@ plugins {
 }
 
 android {
+    // The layout conformance vectors run on the device too, from the instrumented test's assets.
+    sourceSets.getByName("androidTest").assets.srcDir("src/test/resources")
     namespace = "app.genkan"
     compileSdk = 37
     ndkVersion = "29.0.14206865"
@@ -19,6 +21,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.1"
+        // Instrumented tests: what must hold on the device's own libraries (its charset decoders).
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // The Thor and the arm64 test emulator.
             abiFilters += "arm64-v8a"
@@ -92,6 +96,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
