@@ -101,7 +101,7 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Text(
             "Yomikata samples: " + if (textSamples) {
-                "on; when a built-in player game's line isn't in memory as standard text, the places that match its shape are saved, with what OCR read, to Download/Genkan/yomikata-samples (script text: they stay on this device)"
+                "on; built-in player lines that aren't in memory as standard text are saved with what OCR read, for your Yomikata inbox (see Yomikata)"
             } else {
                 "off"
             },

@@ -38,6 +38,9 @@ import app.genkan.ui.AnkiSettingsViewModel
 import app.genkan.ui.AppViewModel
 import app.genkan.ui.ReadingLogScreen
 import app.genkan.ui.ReadingLogViewModel
+import app.genkan.memory.SampleInbox
+import app.genkan.ui.YomikataSettingsScreen
+import app.genkan.ui.YomikataSettingsViewModel
 import app.genkan.ui.DictionariesScreen
 import app.genkan.ui.DictionariesViewModel
 import app.genkan.ui.LibraryScreen
@@ -58,7 +61,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -67,6 +70,7 @@ class HomeActivity : ComponentActivity() {
     @Inject lateinit var dualScreen: DualScreenState
     @Inject lateinit var sessionTracker: SessionTracker
     @Inject lateinit var launcher: LauncherPresence
+    @Inject lateinit var sampleInbox: SampleInbox
 
     private val viewModel: SetupViewModel by viewModels()
     private val appViewModel: AppViewModel by viewModels()
@@ -75,6 +79,7 @@ class HomeActivity : ComponentActivity() {
     private val dictionariesViewModel: DictionariesViewModel by viewModels()
     private val ankiSettingsViewModel: AnkiSettingsViewModel by viewModels()
     private val readingLogViewModel: ReadingLogViewModel by viewModels()
+    private val yomikataSettingsViewModel: YomikataSettingsViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -115,6 +120,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.DICTIONARIES -> DictionariesScreen(dictionariesViewModel)
                     Screen.ANKI -> AnkiSettingsScreen(ankiSettingsViewModel)
                     Screen.READING_LOG -> ReadingLogScreen(readingLogViewModel)
+                    Screen.YOMIKATA -> YomikataSettingsScreen(yomikataSettingsViewModel)
                 }
             }
         }
@@ -144,6 +150,8 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             if (sessionTracker.onLauncherResumed()) reclaimFocusAfterGame()
         }
+        // Back from a game: memory samples it saved go to the Yomikata inbox, if one is set.
+        lifecycleScope.launch { sampleInbox.send() }
     }
 
     /**
@@ -223,7 +231,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA -> when (pad) {
                 // B closes the keyboard first, and only then the page.
                 PadKey.B -> if (!hideKeyboard()) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -261,6 +269,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.DICTIONARIES -> appViewModel.openPage(Screen.DICTIONARIES)
             SetupAction.ANKI -> appViewModel.openPage(Screen.ANKI)
             SetupAction.READING_LOG -> appViewModel.openPage(Screen.READING_LOG)
+            SetupAction.YOMIKATA -> appViewModel.openPage(Screen.YOMIKATA)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )
@@ -273,9 +282,6 @@ class HomeActivity : ComponentActivity() {
             }
             SetupAction.BUILT_IN_PLAYER -> lifecycleScope.launch {
                 viewModel.playerSettings.setEnabled(!viewModel.playerSettings.isEnabled())
-            }
-            SetupAction.TEXT_SAMPLES -> lifecycleScope.launch {
-                viewModel.playerSettings.setSamples(!viewModel.playerSettings.samplesEnabled())
             }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()

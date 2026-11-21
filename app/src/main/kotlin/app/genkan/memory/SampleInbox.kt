@@ -1,0 +1,168 @@
+package app.genkan.memory
+
+import android.content.Context
+import android.util.Log
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import app.genkan.romm.KeystoreTokenCipher
+import app.genkan.romm.TokenCipher
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** A Yomikata sample inbox (`yomikata serve`) and the token it expects. */
+data class InboxConfig(val address: String = "", val token: String = "") {
+    val configured: Boolean get() = address.isNotBlank() && token.isNotBlank()
+
+    /** A bare host gets https; a full URL is used as written. */
+    val endpoint: String
+        get() {
+            val base = address.trim().removeSuffix("/")
+            return (if ("://" in base) base else "https://$base") + "/api/samples"
+        }
+}
+
+sealed interface InboxStatus {
+    data object NotSet : InboxStatus
+    data object Idle : InboxStatus
+    data class Sent(val files: Int, val added: Int) : InboxStatus
+    data class Unreachable(val reason: String) : InboxStatus
+    data class Refused(val reason: String) : InboxStatus
+}
+
+private val Context.yomikataStore: DataStore<Preferences> by preferencesDataStore(name = "yomikata")
+
+/**
+ * Sends the memory sample files ([TextSamples]) to a Yomikata inbox, so they needn't be copied
+ * off the device by hand. A file goes whole, as written, whenever it has more samples than last
+ * sent (the inbox skips the ones it has); one that can't be sent waits for the next try. The
+ * files stay on the device either way. The token is sealed with a Keystore key, like RomM's.
+ */
+@Singleton
+class SampleInbox @Inject constructor(
+    @ApplicationContext private val context: Context,
+    okHttp: OkHttpClient,
+    private val samples: TextSamples,
+) {
+    private val client = okHttp.newBuilder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+    private val cipher: TokenCipher = KeystoreTokenCipher("genkan_yomikata_token")
+    private val lock = Mutex()
+
+    private val _status = MutableStateFlow<InboxStatus>(InboxStatus.Idle)
+    val status: StateFlow<InboxStatus> = _status.asStateFlow()
+
+    val config: Flow<InboxConfig> = context.yomikataStore.data.map {
+        InboxConfig(it[ADDRESS].orEmpty(), it[TOKEN]?.let(cipher::decrypt).orEmpty())
+    }
+
+    suspend fun save(config: InboxConfig) {
+        context.yomikataStore.edit {
+            it[ADDRESS] = config.address.trim()
+            if (config.token.isBlank()) it.remove(TOKEN) else it[TOKEN] = cipher.encrypt(config.token.trim())
+        }
+    }
+
+    /** The sample files on this device and how many samples each holds. */
+    suspend fun local(): Map<File, Int> = withContext(Dispatchers.IO) {
+        samples.dir.listFiles { f -> f.isFile && f.name.endsWith(".json") }.orEmpty()
+            .associateWith { f -> runCatching { JSONObject(f.readText()).getJSONArray("samples").length() }.getOrDefault(0) }
+            .filterValues { it > 0 }
+    }
+
+    /** Sends every file that grew since it was last sent; [all] sends them all again. */
+    suspend fun send(all: Boolean = false) = lock.withLock {
+        val config = config.first()
+        if (!config.configured) {
+            _status.value = InboxStatus.NotSet
+            return@withLock
+        }
+        val sent = context.yomikataStore.data.first()
+        var files = 0
+        var added = 0
+        for ((file, count) in local()) {
+            val key = sentKey(file)
+            if (!all && (sent[key] ?: 0) >= count) continue
+            val answer = try {
+                post(config, file)
+            } catch (e: IOException) {
+                _status.value = InboxStatus.Unreachable(e.message ?: e.javaClass.simpleName)
+                return@withLock
+            }
+            when (answer.code) {
+                200 -> {
+                    files++
+                    added += runCatching { JSONObject(answer.body).optInt("added") }.getOrDefault(0)
+                    context.yomikataStore.edit { it[key] = count }
+                }
+                401 -> {
+                    _status.value = InboxStatus.Refused("the inbox didn't accept the token")
+                    return@withLock
+                }
+                else -> {
+                    // A file the inbox refuses (too large, malformed) is left for the next try.
+                    val detail = runCatching { JSONObject(answer.body).optString("detail") }.getOrNull()
+                    _status.value = InboxStatus.Refused("${file.name}: HTTP ${answer.code}${detail?.let { " $it" }.orEmpty()}")
+                    Log.i(TAG, "Inbox refused ${file.name}: ${answer.code} $detail")
+                    return@withLock
+                }
+            }
+        }
+        _status.value = if (files > 0) InboxStatus.Sent(files, added) else InboxStatus.Idle
+        if (files > 0) Log.i(TAG, "Sent $files sample files to the inbox, $added new samples")
+    }
+
+    /** How many games the inbox holds samples for; throws when it can't be reached or refuses. */
+    suspend fun check(config: InboxConfig): Int = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(config.endpoint).header("Authorization", "Bearer ${config.token.trim()}").build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 401) throw IOException("the inbox didn't accept the token")
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            JSONObject(response.body.string()).optJSONArray("games")?.length() ?: 0
+        }
+    }
+
+    private class Answer(val code: Int, val body: String)
+
+    private suspend fun post(config: InboxConfig, file: File): Answer = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(config.endpoint)
+            .header("Authorization", "Bearer ${config.token.trim()}")
+            .post(file.readBytes().toRequestBody(JSON))
+            .build()
+        client.newCall(request).execute().use { Answer(it.code, it.body.string()) }
+    }
+
+    private fun sentKey(file: File) = intPreferencesKey("sent:${file.name}")
+
+    private companion object {
+        const val TAG = "SampleInbox"
+        val ADDRESS = stringPreferencesKey("inbox_address")
+        val TOKEN = stringPreferencesKey("inbox_token")
+        val JSON = "application/json".toMediaType()
+    }
+}
