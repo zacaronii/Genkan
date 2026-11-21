@@ -108,7 +108,7 @@ class MeikiOcr @Inject constructor(@ApplicationContext private val context: Cont
                     scores.copyOfRange(i * per, (i + 1) * per),
                     vertical,
                 )
-                OcrLine(text, line.box.top, line.box.left, line.box.height)
+                OcrLine(text, line.box.top, line.box.left, line.box.height, line.box.width)
             }.filter { it.text.isNotBlank() }
         }
     }

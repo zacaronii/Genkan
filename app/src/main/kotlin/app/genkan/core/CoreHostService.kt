@@ -27,6 +27,10 @@ class CoreHostService : Service() {
         override fun layout(readJson: String) {
             player.layoutRead(readJson)
         }
+
+        override fun overlayTap(text: String, offset: Int) {
+            player.overlayTapped(text, offset)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder = binder

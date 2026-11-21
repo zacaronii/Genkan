@@ -33,4 +33,7 @@ interface ICoreSession {
      * player took the layout.
      */
     boolean watchLayout(String layoutJson, String tableText, String entryJson) = 9;
+
+    /** The lines to box over the game (ScreenText's JSON); blank or "[]": none. */
+    oneway void showOverlay(String screenTextJson) = 10;
 }

@@ -12,4 +12,7 @@ interface ICoreHost {
 
     /** What the watched layout reads now (LayoutWatch's JSON), sent when it changes; blank: it stopped. */
     oneway void layout(String readJson) = 3;
+
+    /** A tap on the overlay: [text] is the line tapped, [offset] the character in it. */
+    oneway void overlayTap(String text, int offset) = 4;
 }

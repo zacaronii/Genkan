@@ -13,6 +13,7 @@ import app.genkan.capture.CaptureService
 import app.genkan.capture.ScreenCapture
 import app.genkan.stats.ReadingStats
 import app.genkan.azahar.AzaharText
+import app.genkan.core.GameOverlay
 import app.genkan.core.BuiltInText
 import app.genkan.ppsspp.HookFinder
 import app.genkan.ppsspp.PpssppText
@@ -67,6 +68,7 @@ class ReaderViewModel @Inject constructor(
     private val counts: LookupCounts,
     private val wordMarks: WordMarks,
     private val popupPrefs: PopupPrefsSource,
+    val overlay: GameOverlay,
 ) : ViewModel(), PopupActions {
 
     /** Each backlog line's words, as scanned for its text (scanning is the slow part, done once). */
@@ -83,6 +85,7 @@ class ReaderViewModel @Inject constructor(
         // A card queued offline reaching Anki later turns its badge to "In Anki".
         viewModelScope.launch { miner.deliveries.collect { refreshStates() } }
         viewModelScope.launch { words.marks.collect { refreshMarks() } }
+        viewModelScope.launch { overlay.taps.collect { lookUpOnScreen(it.text, it.offset) } }
         viewModelScope.launch {
             combine(session.lines, wordMarks.revision, wordMarks.enabled) { lines, _, on -> lines to on }.collectLatest { (lines, on) ->
                 if (!on) {
@@ -155,17 +158,29 @@ class ReaderViewModel @Inject constructor(
     private var lookupJob: Job? = null
 
     /** A tap at [offset] in [line]: look up the text from there to the end of the line. */
-    fun lookUp(line: ReaderLineEntity, offset: Int) {
-        if (offset !in line.text.indices) return
+    fun lookUp(line: ReaderLineEntity, offset: Int) = lookUp(line.id, line.text, offset)
+
+    /**
+     * A tap on the overlay over the game, at [offset] in the [text] OCR read there (one row of
+     * the box): the same lookup, on the newest backlog line holding that row when there is one
+     * (it's highlighted there, and the whole line and its voice go on a card), else on the row.
+     */
+    fun lookUpOnScreen(text: String, offset: Int) {
+        val line = session.lines.value.lastOrNull { text in it.text }
+        if (line != null) lookUp(line.id, line.text, line.text.indexOf(text) + offset) else lookUp(SCREEN_LINE, text, offset)
+    }
+
+    private fun lookUp(lineId: Long, text: String, offset: Int) {
+        if (offset !in text.indices) return
         // Start on a whole character: never between the halves of a surrogate pair (𠮟).
-        val start = if (offset > 0 && line.text[offset].isLowSurrogate()) offset - 1 else offset
+        val start = if (offset > 0 && text[offset].isLowSurrogate()) offset - 1 else offset
         lookupJob?.cancel()
-        _lookup.value = Lookup(line.id, start, null, line.text)
+        _lookup.value = Lookup(lineId, start, null, text)
         _popup.value = null
         stats.onInteraction()
         lookupJob = viewModelScope.launch {
-            val result = dictionaries.lookup(line.text.substring(start), popupPrefs.prefs.value.maxResults)
-            _lookup.value = Lookup(line.id, start, result, line.text)
+            val result = dictionaries.lookup(text.substring(start), popupPrefs.prefs.value.maxResults)
+            _lookup.value = Lookup(lineId, start, result, text)
             show(result)
         }
     }
@@ -326,6 +341,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     private companion object {
+        /** The line id of a lookup from the overlay whose text isn't in the backlog. */
+        const val SCREEN_LINE = -1L
         /** Lines scanned between showing their marks, on a full backlog. */
         const val PUBLISH_EVERY = 10
         const val NOTICE_MS = 5_000L

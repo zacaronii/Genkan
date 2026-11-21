@@ -66,6 +66,8 @@ class CoreActivity : ComponentActivity() {
 
     private var selectDown = false
     private var lowerScreen: LowerScreen? = null
+    /** The overlay over the game, for a core with one picture (not yet a DS's two screens). */
+    private var overlay: OverlayView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,8 +118,11 @@ class CoreActivity : ComponentActivity() {
             override fun handleOnBackPressed() = quit()
         })
         lifecycle.addObserver(retroView)
+        // OCR reads the view's own frame (see frame()), so its fractions are the view's.
+        if (!def.splitScreens) overlay = OverlayView(this) { hit -> tapped(hit) }
         setContentView(FrameLayout(this).apply {
             addView(retroView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            this@CoreActivity.overlay?.let { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
         })
         retroView.requestFocus()
         retroView.afterFrame = { layoutWatch.afterFrame() }
@@ -135,6 +140,15 @@ class CoreActivity : ComponentActivity() {
             }
         }
         Log.i(TAG, "Playing ${rom.name} in ${def.displayName}; save at $saveFile")
+    }
+
+    /** A tap on the overlay: the reader looks the word up. */
+    private fun tapped(hit: app.genkan.ocr.ScreenText.Hit) {
+        try {
+            host?.overlayTap(hit.text, hit.offset)
+        } catch (e: RemoteException) {
+            host = null
+        }
     }
 
     private val connection = object : ServiceConnection {
@@ -200,6 +214,11 @@ class CoreActivity : ComponentActivity() {
 
         override fun quit() {
             runOnUiThread { quit() }
+        }
+
+        override fun showOverlay(screenTextJson: String) {
+            val text = runCatching { app.genkan.ocr.ScreenText.fromJson(screenTextJson) }.getOrNull() ?: return
+            runOnUiThread { overlay?.show(text) }
         }
 
         override fun nativeFrame(): Bundle? {
