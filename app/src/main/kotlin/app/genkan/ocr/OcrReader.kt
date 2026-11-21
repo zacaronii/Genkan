@@ -1,6 +1,7 @@
 package app.genkan.ocr
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.util.Log
 import app.genkan.capture.ScreenCapture
 import app.genkan.reader.HookMessage
@@ -80,13 +81,22 @@ class OcrReader @Inject constructor(
     /** The line on screen as OCR last read it, for a search that starts at the current line. */
     val latest: StateFlow<String?> = _latest.asStateFlow()
 
+    private val _screen = MutableStateFlow(ScreenText.EMPTY)
+    /** Where OCR's last read lines sit on the top screen, for the overlay over the game. */
+    val screen: StateFlow<ScreenText> = _screen.asStateFlow()
+
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
 
     fun setEnabled(on: Boolean) {
         _enabled.value = on
-        if (on) start() else job?.cancel()
+        if (on) {
+            start()
+        } else {
+            job?.cancel()
+            _screen.value = ScreenText.EMPTY
+        }
     }
 
     suspend fun saveRegion(region: OcrRegion) {
@@ -114,24 +124,28 @@ class OcrReader @Inject constructor(
                 // Nothing to read while Genkan's own launcher is on the top screen.
                 if (!capture.running.value || launcher.inFront.value) continue
                 val frame = capture.frame() ?: continue
-                val box = crop(frame, region.value) ?: continue
+                val area = area(frame, region.value) ?: continue
+                val box = Bitmap.createBitmap(frame, area.left, area.top, area.width(), area.height())
                 val pixels = IntArray(box.width * box.height)
                 box.getPixels(pixels, 0, box.width, 0, 0, box.width, box.height)
                 if (!latch.onFrame(FrameLatch.signature(pixels, box.width, box.height), System.currentTimeMillis())) continue
-                read(box)
+                read(box, area, frame.width, frame.height)
             }
         }
     }
 
-    private suspend fun read(box: Bitmap) {
+    /** Reads [box], cut from [area] of a [frameWidth] by [frameHeight] frame. */
+    private suspend fun read(box: Bitmap, area: Rect, frameWidth: Int, frameHeight: Int) {
         val engine = engine.value
         val started = System.nanoTime()
-        val text = try {
-            OcrText.join(engine.read(box))
+        val lines = try {
+            engine.read(box)
         } catch (e: Exception) {
             Log.w(TAG, "OCR failed: $e")
             return
         }
+        _screen.value = ScreenText.of(lines, area.left, area.top, frameWidth, frameHeight)
+        val text = OcrText.join(lines)
         val ms = (System.nanoTime() - started) / 1_000_000
         _lastReadMs.value = ms
         Log.i(TAG, "${engine.name} read ${text.length} characters in $ms ms: $text")
@@ -144,14 +158,15 @@ class OcrReader @Inject constructor(
         _lines.tryEmit(text)
     }
 
-    private fun crop(frame: Bitmap, region: OcrRegion): Bitmap? {
+    /** The part of [frame] that [region] covers, in pixels. */
+    private fun area(frame: Bitmap, region: OcrRegion): Rect? {
         val r = region.cleaned() ?: return null
         val left = (r.left * frame.width).toInt()
         val top = (r.top * frame.height).toInt()
         val width = ((r.right - r.left) * frame.width).toInt().coerceAtMost(frame.width - left)
         val height = ((r.bottom - r.top) * frame.height).toInt().coerceAtMost(frame.height - top)
         if (width <= 0 || height <= 0) return null
-        return Bitmap.createBitmap(frame, left, top, width, height)
+        return Rect(left, top, left + width, top + height)
     }
 
     private companion object {

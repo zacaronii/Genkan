@@ -90,6 +90,8 @@ fun ReaderScreen(
     val sampling by viewModel.builtIn.sampling.collectAsStateWithLifecycle(false)
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
+    val overlayOn by viewModel.overlay.enabled.collectAsStateWithLifecycle()
+    val overlayAvailable by viewModel.overlay.available.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -153,6 +155,8 @@ fun ReaderScreen(
                     is HookFinderState.Found, is HookFinderState.Failed -> Chip("OK") { viewModel.hookFinder.dismiss() }
                     HookFinderState.Idle -> if (ppsspp is PpssppStatus.NoProfile) Chip("Find hook") { viewModel.hookFinder.start() }
                 }
+                // Boxes over the game's text, to tap there (the built-in player's games).
+                if (overlayAvailable) Chip(if (overlayOn) "Overlay on" else "Overlay") { viewModel.overlay.toggle() }
                 // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
                 if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
                 if (threads.isNotEmpty() || chosen != null) {

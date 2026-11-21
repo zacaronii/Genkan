@@ -10,8 +10,14 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** One line OCR found, with where it sits so lines can be put in reading order. */
-data class OcrLine(val text: String, val top: Int, val left: Int, val height: Int)
+/**
+ * One line OCR found, with where it sits so lines can be put in reading order (and drawn over the
+ * game). [ends]: where each character the engine boxed ends, along the line, when it gives them.
+ */
+data class OcrLine(val text: String, val top: Int, val left: Int, val height: Int, val width: Int = 0, val ends: List<CharEnd> = emptyList())
+
+/** The character at [offset] in its line ends at [end] (pixels: x across a line, y down a vertical one). */
+data class CharEnd(val offset: Int, val end: Int)
 
 interface OcrEngine {
     val name: String
@@ -29,6 +35,9 @@ object OcrText {
     }
 }
 
+/** Boxes taller than this many widths hold vertical text. */
+const val VERTICAL_ASPECT = 1.5f
+
 /** Google's on-device Japanese recogniser, bundled with the app: no download, no network. */
 @Singleton
 class MlKitJapaneseOcr @Inject constructor() : OcrEngine {
@@ -43,7 +52,18 @@ class MlKitJapaneseOcr @Inject constructor() : OcrEngine {
                     text.textBlocks.flatMap { block ->
                         block.lines.map { line ->
                             val box = line.boundingBox
-                            OcrLine(line.text, box?.top ?: 0, box?.left ?: 0, box?.height() ?: 0)
+                            val width = box?.width() ?: 0
+                            val height = box?.height() ?: 0
+                            val vertical = height > width * VERTICAL_ASPECT
+                            // Each symbol's place in the line's text, found in order, with its far edge.
+                            var at = 0
+                            val ends = line.elements.flatMap { it.symbols }.mapNotNull { symbol ->
+                                val edge = symbol.boundingBox ?: return@mapNotNull null
+                                val offset = line.text.indexOf(symbol.text, at).takeIf { it >= 0 } ?: return@mapNotNull null
+                                at = offset + symbol.text.length
+                                CharEnd(offset, if (vertical) edge.bottom else edge.right)
+                            }
+                            OcrLine(line.text, box?.top ?: 0, box?.left ?: 0, height, width, ends)
                         }
                     },
                 )

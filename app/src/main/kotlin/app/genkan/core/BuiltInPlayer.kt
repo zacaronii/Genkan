@@ -59,6 +59,14 @@ class BuiltInPlayer @Inject constructor() {
         runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
     }
 
+    private val _overlayTaps = kotlinx.coroutines.flow.MutableSharedFlow<app.genkan.ocr.ScreenText.Hit>(extraBufferCapacity = 4)
+    /** Taps on the overlay over the game: a line and the character in it, to look up. */
+    val overlayTaps: kotlinx.coroutines.flow.SharedFlow<app.genkan.ocr.ScreenText.Hit> = _overlayTaps
+
+    fun overlayTapped(text: String, offset: Int) {
+        _overlayTaps.tryEmit(app.genkan.ocr.ScreenText.Hit(text, offset))
+    }
+
     /**
      * Asks the player to read [layout] between frames (null: stop), with [entry]'s table, unit,
      * controls and cleanup; whether the player took it.
