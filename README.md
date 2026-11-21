@@ -53,7 +53,10 @@ a Yomitan dictionary popup. See
   being learned, none once mature (interval 21 days or more) or marked; from the mining deck and
   any decks chosen in *Anki* settings. Under *Words* in settings, a Hachidori host's relay
   (`ws://host:8771/link`, the Hachidori Relay add-on) shares the marks and counts both ways; what's
-  made offline waits on the device. Lookups and cards stay on the device.
+  made offline waits on the device. Lookups and cards stay on the device. While linked, the popup
+  follows Hachidori's settings (counts, results, frequency dictionary, its brief definitions), and
+  the host's dictionaries can be fetched one by one, installed as Hachidori compiled them. A
+  Hachidori backup in Download adds its dictionaries, marked words and lookup counts.
 - **OCR:** for games without a texthooker, *OCR* on the reader's bar reads the top screen
   (Android asks once per session to allow screen capture). *Area* sets the part of the
   screen to read for each game, drawn over a picture of the top screen; by default it's the

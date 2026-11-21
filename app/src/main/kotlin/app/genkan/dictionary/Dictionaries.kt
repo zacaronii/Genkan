@@ -89,6 +89,50 @@ class Dictionaries @Inject constructor(
         Log.i(TAG, "Imported $imported dictionaries from $folder ($skipped already there, ${failed.size} failed)")
     }
 
+    /**
+     * Installs [dictionary]'s compiled folder from a Hachidori archive as it is (the engines are
+     * the same); one of the same title is replaced in place, keeping its position. Returns
+     * whether it was installed: false when the same revision is already here.
+     */
+    suspend fun install(archive: HachidoriArchive, dictionary: HachidoriArchive.Dictionary, source: String): Boolean = withContext(native) {
+        val existing = dao.byTitle(dictionary.title)
+        if (existing != null && existing.revision == dictionary.revision && File(existing.folder).isDirectory) return@withContext false
+        val output = File(root, "d${System.currentTimeMillis()}").apply { mkdirs() }
+        val folder = File(output, "dictionary")
+        try {
+            archive.extract(dictionary, folder)
+        } catch (e: Exception) {
+            output.deleteRecursively()
+            throw e
+        }
+        val entity = DictionaryEntity(
+            title = dictionary.title,
+            revision = dictionary.revision,
+            folder = folder.path,
+            sourceName = source,
+            terms = dictionary.terms,
+            frequencies = dictionary.frequencies,
+            pitches = dictionary.pitches,
+            kanji = dictionary.kanji,
+            position = existing?.position ?: (dao.lastPosition() + 1),
+            enabled = existing?.enabled ?: dictionary.enabled,
+            importedAt = System.currentTimeMillis(),
+        )
+        lock.withLock {
+            if (existing != null) {
+                dao.delete(existing.id)
+                File(existing.folder).parentFile?.deleteRecursively()
+            }
+            dao.insert(entity)
+            loaded = false
+        }
+        Log.i(TAG, "Installed ${dictionary.title} (${dictionary.revision}) from $source")
+        true
+    }
+
+    /** What's installed, by title and revision. */
+    suspend fun installed(): Map<String, String> = dao.list().associate { it.title to it.revision }
+
     private suspend fun importOne(zip: DictionaryZip, position: Int?): DictionaryEntity? {
         // Each import gets its own folder: hoshidicts names its index after the title, and
         // two dictionaries can share one.

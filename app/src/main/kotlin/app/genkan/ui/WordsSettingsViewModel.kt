@@ -3,7 +3,9 @@ package app.genkan.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.genkan.words.HachidoriConfig
+import app.genkan.words.HachidoriImports
 import app.genkan.words.HachidoriLink
+import app.genkan.words.HostDictionary
 import app.genkan.words.LookupCounts
 import app.genkan.words.PopupPrefs
 import app.genkan.words.PopupPrefsSource
@@ -28,7 +30,44 @@ class WordsSettingsViewModel @Inject constructor(
     val settings: WordSettings,
     val hachidori: HachidoriLink,
     popupPrefs: PopupPrefsSource,
+    val imports: HachidoriImports,
 ) : ViewModel() {
+
+    private val _hostDictionaries = MutableStateFlow<List<HostDictionary>?>(null)
+    /** The linked host's dictionaries, once asked for. */
+    val hostDictionaries: StateFlow<List<HostDictionary>?> = _hostDictionaries.asStateFlow()
+
+    fun loadHostDictionaries() {
+        viewModelScope.launch {
+            _hostDictionaries.value = try {
+                imports.hostDictionaries()
+            } catch (e: Exception) {
+                _message.value = "Couldn't list Hachidori's dictionaries: ${e.message ?: e.javaClass.simpleName}"
+                null
+            }
+        }
+    }
+
+    fun getDictionary(dictionary: HostDictionary) {
+        if (dictionary.installed) return
+        viewModelScope.launch {
+            imports.get(dictionary)
+            _hostDictionaries.value = runCatching { imports.hostDictionaries() }.getOrNull() ?: _hostDictionaries.value
+        }
+    }
+
+    /** Imports the newest Hachidori backup in Download. */
+    fun importBackup() {
+        viewModelScope.launch {
+            val file = imports.findBackup()
+            if (file == null) {
+                _message.value = "No Hachidori backup in Download (a .zip with \"hachidori\" in its name)"
+                return@launch
+            }
+            imports.importBackup(file)
+            _counted.value = counts.size()
+        }
+    }
 
     /** What the popup uses now: these settings, or a linked Hachidori's. */
     val prefs: StateFlow<PopupPrefs> = popupPrefs.prefs

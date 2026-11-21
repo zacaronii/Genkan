@@ -88,6 +88,31 @@ class LookupCounts @Inject constructor(private val dao: LookupCountDao) {
         )
     }
 
+    /**
+     * Counts from a Hachidori backup: each word keeps the larger of its two counts and the
+     * earlier first lookup. They stay here: Hachidori has no way to take past lookups.
+     */
+    suspend fun importRows(rows: List<Triple<Pair<String, String>, Int, Pair<Long?, Long?>>>): Int {
+        var changed = 0
+        for ((key, count, times) in rows) {
+            val term = WordStatuses.key(key.first)
+            val reading = WordStatuses.key(key.second)
+            val row = dao.get(term, reading)
+            if (row != null && row.lookupCount >= count) continue
+            val now = System.currentTimeMillis()
+            dao.upsert(
+                LookupCountEntity(
+                    term, reading, count,
+                    minOf(times.first ?: now, row?.firstLookedUpAt ?: now),
+                    maxOf(times.second ?: 0, row?.lastLookedUpAt ?: 0),
+                    row?.pendingHost ?: 0,
+                ),
+            )
+            changed++
+        }
+        return changed
+    }
+
     suspend fun pending(): List<LookupCountEntity> = dao.pending()
 
     suspend fun sentOne(term: String, reading: String) = dao.sentOne(term, reading)

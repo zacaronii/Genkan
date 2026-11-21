@@ -52,8 +52,16 @@ data class HachidoriConfig(val address: String = "", val enabled: Boolean = fals
             return if (':' in a) "ws://$a/link" else "ws://$a:$PORT/link"
         }
 
+    /** The host's Yomitan-style API (port 19633), where it serves its dictionaries. */
+    val apiBase: String?
+        get() {
+            val host = address.trim().substringAfter("://").substringBefore('/').substringBefore(':')
+            return if (host.isEmpty()) null else "http://$host:$API_PORT"
+        }
+
     private companion object {
         const val PORT = 8771
+        const val API_PORT = 19633
     }
 }
 

@@ -34,6 +34,8 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
     val link by viewModel.link.collectAsStateWithLifecycle()
     val linkStatus by viewModel.hachidori.status.collectAsStateWithLifecycle()
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    val hostDictionaries by viewModel.hostDictionaries.collectAsStateWithLifecycle()
+    val importing by viewModel.imports.progress.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -93,7 +95,23 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
             GenkanTextField(link.address, { v -> viewModel.editLink { it.copy(address = v) } }, "Hachidori host (host, or a ws:// URL)")
             ActionRow(if (link.enabled) "Save and relink" else "Link to Hachidori", focused = null, onClick = { viewModel.saveLink(true) })
             if (link.enabled) ActionRow("Unlink", focused = null, onClick = { viewModel.saveLink(false) })
+            if (link.enabled) {
+                val list = hostDictionaries
+                if (list == null) {
+                    ActionRow("Show Hachidori's dictionaries", focused = null, onClick = viewModel::loadHostDictionaries)
+                } else {
+                    for (d in list) {
+                        ActionRow(
+                            if (d.installed) "✓ ${d.title} (${d.revision}) is here" else "Get ${d.title} (${d.revision})",
+                            focused = null,
+                            onClick = { viewModel.getDictionary(d) },
+                        )
+                    }
+                }
+            }
+            ActionRow("Import a Hachidori backup from Download", focused = null, onClick = viewModel::importBackup)
         }
+        importing?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }
         Text(
             "Hachidori: " + when (val s = linkStatus) {
                 HachidoriStatus.Off -> "not linked"

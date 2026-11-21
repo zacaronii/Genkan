@@ -13,7 +13,7 @@ Each phase ends with a check that takes minutes to run.
 | **6** | Save sync through RomM's device-sync protocol | A save made on the device shows up in RomM and can be pulled back |
 | **7** | Text from emulator memory over IPC (PPSSPP debugger, Azahar RPC) | One PSP and one 3DS game produce lines with OCR off |
 | **8** | Built-in libretro cores with memory, audio and frame access | Card audio and frames come from the core directly |
-| **9** | [Hachidori](https://github.com/bee-san/hachidori) features and sync: known/ignored words, lookup counts, Anki word marks in the backlog, then a link to a Hachidori host sharing counts and marks both ways (its settings, dictionaries and backup import later) | A lookup made offline shows up in Hachidori after the next sync |
+| **9** | [Hachidori](https://github.com/bee-san/hachidori) features and sync: known/ignored words, lookup counts, Anki word marks in the backlog, then a link to a Hachidori host sharing counts and marks both ways, its popup settings and dictionaries, and backup import | A lookup made offline shows up in Hachidori after the next sync |
 
 A separate spike (phase H, [tools/hookbridge](../tools/hookbridge)) gets a Windows game's
 text out of Wine: a `version.dll` proxy loads [LunaHook](https://github.com/HIllya51/LunaTranslator)

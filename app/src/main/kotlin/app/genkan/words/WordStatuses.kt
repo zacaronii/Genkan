@@ -122,6 +122,18 @@ class WordStatuses @Inject constructor(private val dao: WordStatusDao) {
         return fresh.size
     }
 
+    /** Marks from a Hachidori backup, added to ours (a word marked here keeps its mark); how many were new. */
+    suspend fun importMarks(known: List<String>, ignored: List<String>): Int {
+        val now = System.currentTimeMillis()
+        val rows = (known.map { key(it) to WordStatus.KNOWN } + ignored.map { key(it) to WordStatus.IGNORED })
+            .filter { (word, _) -> word.isNotEmpty() && status(word) == null }
+            .distinctBy { it.first }
+            .map { (word, status) -> WordStatusEntity(word, status, now, linked) }
+        dao.upsert(rows)
+        if (rows.isNotEmpty()) _changed.tryEmit(Unit)
+        return rows.size
+    }
+
     /** Marks waiting for the host. */
     suspend fun pending(): List<WordStatusEntity> = dao.pending()
 
