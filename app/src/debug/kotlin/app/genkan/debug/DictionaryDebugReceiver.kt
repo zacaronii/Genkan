@@ -179,7 +179,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Scan in ${(System.nanoTime() - started) / 1_000_000} ms: " + words.joinToString(" ") { "${text.substring(it.start, it.end)}→${it.expression}【${it.reading}】" })
                     }
                     "app.genkan.debug.LAYOUT" -> builtInText.debugWatch(intent.getStringExtra("json").orEmpty())
-                    "app.genkan.debug.LINE" -> readerSession.submit(HookMessage(intent.getStringExtra("text").orEmpty(), speaker = intent.getStringExtra("speaker")))
+                    "app.genkan.debug.LINE" -> readerSession.submit(
+                        // With a speaker it's a whole line, as a layout's: only those carry one.
+                        HookMessage(intent.getStringExtra("text").orEmpty(), whole = intent.hasExtra("speaker"), speaker = intent.getStringExtra("speaker")),
+                    )
                     "app.genkan.debug.AUDIO_CLIP" -> {
                         val now = System.currentTimeMillis()
                         audio.clip(now - intent.getLongExtra("ms", 3000), now)
