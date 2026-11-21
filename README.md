@@ -94,6 +94,11 @@ a Yomitan dictionary popup. See
   (`ps-30j.bin`, SCPH-5500) from the platform's firmware in RomM, fetched on first launch;
   without it the core's stand-in BIOS hangs some games. A multi-disc game without an `.m3u`
   gets one, disc 1 first, so discs can be changed.
+- **Yomikata catalog:** a catalog of per-release reading rules (encodings, character tables,
+  PSP hooks) kept in a GitHub repository. Set its *owner/name* and, while it's private, a
+  fine-grained read-only token under *Yomikata* in settings. Genkan fetches the index, then each
+  entry when its game starts, and keeps a copy for offline use. PSP hooks come from the catalog
+  first and from Genkan's own profiles otherwise.
 - **Yomikata samples (opt-in):** some games (Moonlight Syndrome, Persona 2) keep their text in
   their own encoding, so memory search can't read it. With *Save samples while playing* on (under
   *Yomikata* in settings), each line OCR reads in the built-in player that isn't in memory as standard text is looked

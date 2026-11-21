@@ -21,6 +21,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.memory.InboxStatus
+import app.genkan.yomikata.CatalogStatus
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
@@ -29,6 +32,9 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
     val local by viewModel.local.collectAsStateWithLifecycle()
     val status by viewModel.inbox.status.collectAsStateWithLifecycle()
     val sampling by viewModel.playerSettings.samples.collectAsStateWithLifecycle(false)
+    val catalogForm by viewModel.catalogForm.collectAsStateWithLifecycle()
+    val catalogCheck by viewModel.catalogCheck.collectAsStateWithLifecycle()
+    val catalogStatus by viewModel.catalog.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val firstField = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstField.requestFocus() } }
@@ -43,6 +49,29 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
     ) {
         Text("Yomikata", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
+            "The catalog says how each release's text is stored: encodings, character tables, PSP hooks. " +
+                "Genkan fetches it from its GitHub repository and keeps a copy; while the repository is private, " +
+                "a fine-grained token with read-only Contents access to it is needed.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GenkanTextField(catalogForm.repo, { v -> viewModel.editCatalog { it.copy(repo = v) } }, "Catalog repository (owner/name)", modifier = Modifier.focusRequester(firstField))
+            GenkanTextField(catalogForm.token, { v -> viewModel.editCatalog { it.copy(token = v) } }, "GitHub token (read-only)", keyboardType = KeyboardType.Password)
+            ActionRow("Save and update catalog", focused = null, onClick = viewModel::saveAndUpdateCatalog)
+        }
+        catalogCheck?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }
+        Text(
+            "Catalog: " + when (val s = catalogStatus) {
+                CatalogStatus.NotSet -> "not set"
+                CatalogStatus.Idle -> "not fetched since Genkan started"
+                is CatalogStatus.Ready -> "${s.entries} releases, fetched " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(s.updatedAt))
+                is CatalogStatus.Failed -> "couldn't fetch (${s.reason}); the last copy is used"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onBackground,
+        )
+        Text(
             "Memory samples help build character tables for games whose text isn't standard: when a built-in " +
                 "player line isn't in memory as Shift-JIS or UTF-16, the places matching its shape are saved with " +
                 "what OCR read. They hold script text, so they go only to your own Yomikata inbox, after each play " +
@@ -55,7 +84,6 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
                 "Save samples while playing: " + if (sampling) "on" else "off",
                 focused = null,
                 onClick = viewModel::toggleSamples,
-                modifier = Modifier.focusRequester(firstField),
             )
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "Inbox address (host, or a full URL)")
             GenkanTextField(form.token, { v -> viewModel.edit { it.copy(token = v) } }, "Inbox token", keyboardType = KeyboardType.Password)

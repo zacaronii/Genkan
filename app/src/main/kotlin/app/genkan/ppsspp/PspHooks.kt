@@ -21,7 +21,7 @@ data class PspHook(
 
 /** Known games, by the disc id PPSSPP reports (game.status), e.g. ULJM06119. */
 object PspHooks {
-    private val SHIFT_JIS: Charset = Charset.forName("Shift_JIS")
+    val SHIFT_JIS: Charset = Charset.forName("Shift_JIS")
 
     val byGameId: Map<String, List<PspHook>> = mapOf(
         // デュナミス15 (5pb./Kaleido): ruby as [reading]base, colour tags %0#rrggbbaa; ... %0#;

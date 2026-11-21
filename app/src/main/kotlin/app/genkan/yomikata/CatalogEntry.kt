@@ -1,0 +1,175 @@
+package app.genkan.yomikata
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * One release's reading rules from the Yomikata catalog (docs/format.md there): its encoding,
+ * and for games with their own codes, a character table, control codes and cleanup. PSP entries
+ * may carry [hooks], the code addresses each line passes through.
+ */
+data class CatalogEntry(
+    val id: String,
+    val platform: String,
+    val title: String,
+    val encoding: String,
+    val status: String,
+    val versions: List<Version> = emptyList(),
+    val tables: List<String> = emptyList(),
+    val unit: Int = 1,
+    val controls: Map<String, String> = emptyMap(),
+    val cleanup: List<CleanupStep> = emptyList(),
+    val hooks: List<Hook> = emptyList(),
+) {
+    /** A printing the entry is known to fit: a boot executable's hash (discs) or a header CRC (cartridges). */
+    data class Version(val id: String?, val exeSha1: String?, val headerCrc32: String?)
+
+    data class Hook(val address: Long, val register: String, val charset: String, val versions: List<String>, val cleanup: List<CleanupStep>)
+
+    /** Whether an executable with [sha1] is one the entry was made for; true when the entry lists none. */
+    fun fits(sha1: String): Boolean = versions.none { it.exeSha1 != null } || versions.any { it.exeSha1 == sha1.lowercase() }
+
+    /** A [hook]'s line after its own cleanup, then the entry's; null when nothing is left (a filtered line). */
+    fun clean(raw: String, hook: Hook? = null): String? {
+        var text = raw
+        for (step in hook?.cleanup.orEmpty() + cleanup) text = step.apply(text)
+        return text.takeIf { it.isNotEmpty() }
+    }
+
+    companion object {
+        fun parse(json: String): CatalogEntry {
+            val o = JSONObject(json)
+            return CatalogEntry(
+                id = o.getString("id"),
+                platform = o.getString("platform"),
+                title = o.optString("title"),
+                encoding = o.getString("encoding"),
+                status = o.optString("status"),
+                versions = o.optJSONArray("versions").objects().map {
+                    Version(it.optStringOrNull("id"), it.optStringOrNull("exe_sha1"), it.optStringOrNull("header_crc32"))
+                },
+                tables = o.optJSONArray("tables").strings(),
+                unit = o.optInt("unit", 1),
+                controls = o.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty(),
+                cleanup = CleanupStep.parse(o.optJSONArray("cleanup")),
+                hooks = o.optJSONArray("hooks").objects().map {
+                    Hook(
+                        address = it.getString("address").removePrefix("0x").removePrefix("0X").toLong(16),
+                        register = it.getString("register"),
+                        charset = it.getString("charset"),
+                        versions = it.optJSONArray("versions").strings(),
+                        cleanup = CleanupStep.parse(it.optJSONArray("cleanup")),
+                    )
+                },
+            )
+        }
+
+        private fun JSONArray?.objects(): List<JSONObject> = this?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
+        private fun JSONArray?.strings(): List<String> = this?.let { a -> List(a.length()) { a.getString(it) } }.orEmpty()
+        private fun JSONObject.optStringOrNull(key: String): String? = if (has(key) && !isNull(key)) getString(key) else null
+    }
+}
+
+/**
+ * One cleanup step, declarative so every client gives the same text: a regex replacement, where
+ * `$1`…`$9` insert a group and `$$` is a dollar sign, or single-character remaps.
+ */
+sealed interface CleanupStep {
+    fun apply(text: String): String
+
+    data class Replace(val regex: Regex, val replacement: String) : CleanupStep {
+        override fun apply(text: String): String = regex.replace(text, replacement)
+    }
+
+    data class Remap(val map: Map<Char, String>) : CleanupStep {
+        override fun apply(text: String): String = buildString { text.forEach { append(map[it] ?: it) } }
+    }
+
+    companion object {
+        fun parse(steps: JSONArray?): List<CleanupStep> = steps?.let { a ->
+            List(a.length()) { i ->
+                val s = a.getJSONObject(i)
+                if (s.has("remap")) {
+                    val m = s.getJSONObject("remap")
+                    Remap(m.keys().asSequence().filter { it.length == 1 }.associate { it[0] to m.getString(it) })
+                } else {
+                    Replace(Regex(s.getString("regex")), javaReplacement(s.getString("replace")))
+                }
+            }
+        }.orEmpty()
+
+        /** The catalog's `$1` / `$$` replacement syntax in Java's, where a backslash escapes. */
+        internal fun javaReplacement(catalog: String): String = buildString {
+            var i = 0
+            while (i < catalog.length) {
+                val c = catalog[i]
+                when {
+                    c == '$' && catalog.getOrNull(i + 1) == '$' -> { append("\\$"); i++ }
+                    c == '$' && catalog.getOrNull(i + 1)?.isDigit() == true -> append('$')
+                    c == '$' -> append("\\$")
+                    c == '\\' -> append("\\\\")
+                    else -> append(c)
+                }
+                i++
+            }
+        }
+    }
+}
+
+/**
+ * A Thingy character table (`0100=学`, `/FFFF` an end code, `*FFFE` a newline), keys in memory
+ * byte order. Several files apply in order, later ones winning, as the catalog lists them.
+ */
+class CharTable private constructor(
+    private val chars: Map<String, String>,
+    private val ends: Set<String>,
+    private val newlines: Set<String>,
+) {
+    val size: Int get() = chars.size
+
+    /**
+     * [bytes] as text, [unit] bytes per code: ends and page breaks become blank lines, newlines
+     * line breaks, other [controls] nothing, and codes the table lacks U+FFFD.
+     */
+    fun decode(bytes: ByteArray, unit: Int, controls: Map<String, String> = emptyMap()): String = buildString {
+        var i = 0
+        while (i + unit <= bytes.size) {
+            val code = hex(bytes, i, unit)
+            when {
+                code in ends || controls[code] == "end" -> append("\n\n")
+                code in newlines || controls[code] == "newline" -> append('\n')
+                controls[code] == "page" || controls[code] == "clear" -> append("\n\n")
+                code in controls -> Unit
+                else -> append(chars[code] ?: "�")
+            }
+            i += unit
+        }
+    }
+
+    companion object {
+        private val LINE = Regex("^([0-9A-Fa-f]{2,8})=(.*)$")
+
+        fun parse(files: List<String>): CharTable {
+            val chars = HashMap<String, String>()
+            val ends = HashSet<String>()
+            val newlines = HashSet<String>()
+            for (text in files) for (raw in text.lines()) {
+                val line = raw.removeSuffix("\r")
+                if (line.isBlank() || line.startsWith("#") || line.startsWith(";")) continue
+                if (line[0] == '/' || line[0] == '*') {
+                    val key = line.substring(1).trim().substringBefore(' ').uppercase()
+                    if (key.isEmpty() || key.length % 2 != 0) continue
+                    (if (line[0] == '/') ends else newlines) += key
+                    continue
+                }
+                val m = LINE.matchEntire(line) ?: continue
+                if (m.groupValues[1].length % 2 != 0) continue
+                chars[m.groupValues[1].uppercase()] = m.groupValues[2]
+            }
+            return CharTable(chars, ends, newlines)
+        }
+
+        private fun hex(bytes: ByteArray, at: Int, unit: Int): String =
+            buildString { for (k in 0 until unit) append("%02X".format(bytes[at + k].toInt() and 0xFF)) }
+    }
+}

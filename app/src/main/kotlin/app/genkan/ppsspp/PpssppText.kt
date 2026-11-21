@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.genkan.reader.HookMessage
 import app.genkan.reader.NowPlaying
+import app.genkan.yomikata.YomikataCatalog
 import app.genkan.reader.ReaderSession
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -60,6 +61,7 @@ class PpssppText @Inject constructor(
     @ApplicationContext private val context: Context,
     private val session: ReaderSession,
     private val nowPlaying: NowPlaying,
+    private val catalog: YomikataCatalog,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Moshi.Builder().build()
@@ -152,7 +154,8 @@ class PpssppText @Inject constructor(
                     if (id == gameId) return@collect
                     gameId = id
                     hooks.clear()
-                    hooks += PspHooks.byGameId[id].orEmpty()
+                    // The Yomikata catalog first; Genkan's own profiles when it has none (or is unset).
+                    hooks += catalogHooks(id) ?: PspHooks.byGameId[id].orEmpty()
                     if (hooks.isEmpty()) {
                         Log.i(TAG, "No hook profile for $id")
                         _status.value = PpssppStatus.NoProfile(id)
@@ -209,6 +212,20 @@ class PpssppText @Inject constructor(
                 }
             }
         }
+    }
+
+    /** [id]'s hooks from the Yomikata catalog, or null when it has none Genkan can use. */
+    private suspend fun catalogHooks(id: String): List<PspHook>? {
+        val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return null
+        return entry.hooks.mapNotNull { hook ->
+            val charset = when (hook.charset) {
+                "shift_jis" -> PspHooks.SHIFT_JIS
+                "utf16le" -> Charsets.UTF_16LE
+                "utf8" -> Charsets.UTF_8
+                else -> return@mapNotNull null // table-coded hooks: not yet
+            }
+            PspHook(hook.address, hook.register, charset) { entry.clean(it, hook) }
+        }.ifEmpty { null }?.also { Log.i(TAG, "${it.size} hooks for $id from the catalog (${entry.status})") }
     }
 
     /** The debugger's events, a null event first when it opens; completes when it closes. */

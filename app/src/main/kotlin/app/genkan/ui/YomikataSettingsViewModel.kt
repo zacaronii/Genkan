@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.genkan.core.PlayerSettings
 import app.genkan.memory.InboxConfig
 import app.genkan.memory.SampleInbox
+import app.genkan.yomikata.CatalogConfig
+import app.genkan.yomikata.YomikataCatalog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +22,15 @@ data class LocalSamples(val games: Int = 0, val samples: Int = 0)
 class YomikataSettingsViewModel @Inject constructor(
     val inbox: SampleInbox,
     val playerSettings: PlayerSettings,
+    val catalog: YomikataCatalog,
 ) : ViewModel() {
+
+    private val _catalogForm = MutableStateFlow(CatalogConfig())
+    val catalogForm: StateFlow<CatalogConfig> = _catalogForm.asStateFlow()
+
+    private val _catalogCheck = MutableStateFlow<String?>(null)
+    /** What the last catalog update found. */
+    val catalogCheck: StateFlow<String?> = _catalogCheck.asStateFlow()
 
     private val _form = MutableStateFlow(InboxConfig())
     val form: StateFlow<InboxConfig> = _form.asStateFlow()
@@ -35,6 +45,7 @@ class YomikataSettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _form.value = inbox.config.first()
+            _catalogForm.value = catalog.config.first()
             countLocal()
         }
     }
@@ -67,6 +78,29 @@ class YomikataSettingsViewModel @Inject constructor(
                     "It answers on your own network only."
             }
             countLocal()
+        }
+    }
+
+    fun editCatalog(change: (CatalogConfig) -> CatalogConfig) {
+        _catalogForm.value = change(_catalogForm.value)
+    }
+
+    /** Saves the catalog's repository and token, then fetches its index. */
+    fun saveAndUpdateCatalog() {
+        val config = _catalogForm.value
+        viewModelScope.launch {
+            catalog.save(config)
+            if (!config.configured) {
+                _catalogCheck.value = "Saved. Set the repository as owner/name to use the catalog."
+                return@launch
+            }
+            _catalogCheck.value = "Fetching the catalog…"
+            val count = catalog.refresh(force = true)
+            _catalogCheck.value = if (count != null) {
+                "The catalog lists $count releases. Entries are fetched when their game starts."
+            } else {
+                "Couldn't fetch the catalog; see the status below."
+            }
         }
     }
 
