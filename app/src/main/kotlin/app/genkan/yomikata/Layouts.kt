@@ -245,6 +245,8 @@ object Layouts {
                 // A single byte from 0x80 up is U+FFFD, except Shift-JIS's half-width kana (A1-DF).
                 if (n == 1 && b >= 0x80 && !(charset == "shift_jis" && b in 0xA1..0xDF)) {
                     out.append(REPLACEMENT)
+                } else if (charset == "euc_jp" && n == 2 && EUC_JP_FIXED.containsKey((b shl 8) or (data[i + 1].toInt() and 0xFF))) {
+                    out.append(EUC_JP_FIXED.getValue((b shl 8) or (data[i + 1].toInt() and 0xFF)))
                 } else {
                     try {
                         decoder!!.reset()
@@ -260,6 +262,15 @@ object Layouts {
     }
 
     private const val REPLACEMENT = '\uFFFD'
+
+    /**
+     * EUC-JP codes whose character differs between decoders (Android's follows Microsoft's
+     * eucJP-ms: A1C1 is ～ U+FF5E there), fixed to JIS X 0208's, as the reference's euc_jp gives.
+     */
+    private val EUC_JP_FIXED = mapOf(
+        0xA1BD to '\u2015', 0xA1C0 to '\uFF3C', 0xA1C1 to '\u301C', 0xA1C2 to '\u2016',
+        0xA1DD to '\u2212', 0xA1F1 to '\u00A2', 0xA1F2 to '\u00A3', 0xA2CC to '\u00AC',
+    )
 
     private val SIZES = mapOf("u8" to 1, "s8" to 1, "u16" to 2, "s16" to 2, "u32" to 4, "s32" to 4)
 
