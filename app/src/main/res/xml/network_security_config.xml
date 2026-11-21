@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Cleartext is allowed: a texthooker (hookbridge) serves ws://127.0.0.1:6677, and AnkiConnect
-    only speaks plain HTTP, on whatever LAN or Tailscale address the user's Anki has. HTTPS
+    only speaks plain HTTP, on whatever LAN or Tailscale address the user's Anki has, as does
+    Hachidori's relay (ws://, port 8771). HTTPS
     servers (RomM) stay HTTPS; this only stops Android refusing http:// outright.
 -->
 <network-security-config xmlns:tools="http://schemas.android.com/tools">

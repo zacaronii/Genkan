@@ -61,11 +61,16 @@ class LookupCounts @Inject constructor(private val dao: LookupCountDao) {
     /** Whether lookups go to a Hachidori host too. */
     @Volatile var linked: Boolean = false
 
+    private val _changed = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** A lookup was counted here: it may be waiting for the host. */
+    val changed: kotlinx.coroutines.flow.SharedFlow<Unit> = _changed
+
     /** One lookup of [term] / [reading] (a popup visit); its count now. */
     suspend fun record(term: String, reading: String): Int {
         val t = WordStatuses.key(term)
         if (t.isEmpty()) return 0
         return dao.record(t, WordStatuses.key(reading), System.currentTimeMillis(), linked).lookupCount
+            .also { _changed.tryEmit(Unit) }
     }
 
     suspend fun count(term: String, reading: String): Int = dao.get(WordStatuses.key(term), WordStatuses.key(reading))?.lookupCount ?: 0

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.words.HachidoriStatus
 import app.genkan.words.WordStatus
 
 /** Known and ignored words, and lookup counts: what the popup's buttons and chip keep. */
@@ -30,6 +31,8 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
     val message by viewModel.message.collectAsStateWithLifecycle()
     val counting by viewModel.settings.counts.collectAsStateWithLifecycle(true)
     val counted by viewModel.counted.collectAsStateWithLifecycle()
+    val link by viewModel.link.collectAsStateWithLifecycle()
+    val linkStatus by viewModel.hachidori.status.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -62,6 +65,31 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
             ActionRow("Mark these known", focused = null, onClick = viewModel::addPasted)
         }
         message?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }
+        Text("Hachidori", style = MaterialTheme.typography.titleMedium, color = colors.primary)
+        Text(
+            "Share these marks and lookup counts with a Hachidori host through its relay (the Hachidori Relay " +
+                "add-on in Anki, port 8771). Lookups and cards stay on this device; marks and counts made offline " +
+                "wait here and go up when the host answers. The relay has no password: use it on your own network " +
+                "or Tailscale.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GenkanTextField(link.address, { v -> viewModel.editLink { it.copy(address = v) } }, "Hachidori host (host, or a ws:// URL)")
+            ActionRow(if (link.enabled) "Save and relink" else "Link to Hachidori", focused = null, onClick = { viewModel.saveLink(true) })
+            if (link.enabled) ActionRow("Unlink", focused = null, onClick = { viewModel.saveLink(false) })
+        }
+        Text(
+            "Hachidori: " + when (val s = linkStatus) {
+                HachidoriStatus.Off -> "not linked"
+                HachidoriStatus.Connecting -> "connecting…"
+                is HachidoriStatus.Linked -> "linked (${s.version}); ${s.known} known, ${s.ignored} ignored" +
+                    if (s.waiting > 0) "; ${s.waiting} waiting to go up" else "; all sent"
+                is HachidoriStatus.Unreachable -> "unreachable (${s.reason}); trying again"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onBackground,
+        )
         for (status in WordStatus.entries) {
             val list = rows.filter { it.status == status }
             Text(

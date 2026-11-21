@@ -2,6 +2,8 @@ package app.genkan.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.genkan.words.HachidoriConfig
+import app.genkan.words.HachidoriLink
 import app.genkan.words.LookupCounts
 import app.genkan.words.WordSettings
 import app.genkan.words.WordStatus
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -21,7 +24,26 @@ class WordsSettingsViewModel @Inject constructor(
     private val words: WordStatuses,
     private val counts: LookupCounts,
     val settings: WordSettings,
+    val hachidori: HachidoriLink,
 ) : ViewModel() {
+
+    private val _link = MutableStateFlow(HachidoriConfig())
+    /** The Hachidori form. */
+    val link: StateFlow<HachidoriConfig> = _link.asStateFlow()
+
+    fun editLink(change: (HachidoriConfig) -> HachidoriConfig) {
+        _link.value = change(_link.value)
+    }
+
+    /** Saves the address and links (or unlinks, when it's switched off). */
+    fun saveLink(enabled: Boolean) {
+        val config = _link.value.copy(enabled = enabled)
+        _link.value = config
+        viewModelScope.launch {
+            hachidori.save(config)
+            _message.value = if (enabled) "Linking to Hachidori at ${config.url ?: "(no address)"}…" else "Hachidori unlinked"
+        }
+    }
 
     val rows: StateFlow<List<WordStatusEntity>> = words.rows.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -38,6 +60,7 @@ class WordsSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { _counted.value = counts.size() }
+        viewModelScope.launch { _link.value = hachidori.config.first() }
     }
 
     fun editPaste(text: String) {

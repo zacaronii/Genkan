@@ -4,6 +4,7 @@ import android.app.Application
 import app.genkan.download.DownloadQueue
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
+import app.genkan.words.HachidoriLink
 import app.genkan.words.WordMarks
 import app.genkan.stats.ReadingLogPusher
 import app.genkan.saves.SaveSync
@@ -36,6 +37,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var builtInText: Lazy<BuiltInText>
     @Inject lateinit var downloadQueue: Lazy<DownloadQueue>
     @Inject lateinit var wordMarks: Lazy<WordMarks>
+    @Inject lateinit var hachidori: Lazy<HachidoriLink>
 
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +55,8 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         builtInText.get().start()
         // Which words Anki has, for the backlog's marks; asked again after each card reaches Anki.
         wordMarks.get().start(ankiMiner.get().deliveries)
+        // Hand marks and lookup counts shared with a Hachidori host, when one is set.
+        hachidori.get().start()
         downloadQueue.get().resume()
     }
 

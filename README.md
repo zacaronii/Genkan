@@ -47,6 +47,13 @@ a Yomitan dictionary popup. See
   headword for its kanji-dictionary entry. To try it without a
   game: `python3 tools/hookbridge/test/fake_host.py` on a computer and
   `adb reverse tcp:6677 tcp:6677`.
+- **Word marks and Hachidori:** as in [Hachidori](https://github.com/bee-san/hachidori), the popup's
+  *✓ Known* and *⊘ Ignore* mark a word by its headword, and the first result shows how often it was
+  looked up. Backlog words are underlined by their Anki state: solid when not in Anki, dashed while
+  being learned, none once mature (interval 21 days or more) or marked; from the mining deck and
+  any decks chosen in *Anki* settings. Under *Words* in settings, a Hachidori host's relay
+  (`ws://host:8771/link`, the Hachidori Relay add-on) shares the marks and counts both ways; what's
+  made offline waits on the device. Lookups and cards stay on the device.
 - **OCR:** for games without a texthooker, *OCR* on the reader's bar reads the top screen
   (Android asks once per session to allow screen capture). *Area* sets the part of the
   screen to read for each game, drawn over a picture of the top screen; by default it's the

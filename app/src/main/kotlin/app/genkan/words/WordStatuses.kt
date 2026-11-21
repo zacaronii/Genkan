@@ -91,6 +91,10 @@ class WordStatuses @Inject constructor(private val dao: WordStatusDao) {
     /** Whether marks go to a Hachidori host (they wait in [pendingHost] until it has them). */
     @Volatile var linked: Boolean = false
 
+    private val _changed = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** A mark changed here: something may be waiting for the host. */
+    val changed: kotlinx.coroutines.flow.SharedFlow<Unit> = _changed
+
     fun status(headword: String): WordStatus? = marks.value[key(headword)]
 
     /** Marks [headword] with [status], or clears its mark (null). */
@@ -99,6 +103,7 @@ class WordStatuses @Inject constructor(private val dao: WordStatusDao) {
         if (word.isEmpty()) return
         val now = System.currentTimeMillis()
         if (status == null && !linked) dao.delete(word) else dao.upsert(listOf(WordStatusEntity(word, status, now, linked)))
+        _changed.tryEmit(Unit)
     }
 
     /** [headword]'s mark toggled to [status]: the same status again clears it, as in Hachidori's popup. */
@@ -113,6 +118,7 @@ class WordStatuses @Inject constructor(private val dao: WordStatusDao) {
         val now = System.currentTimeMillis()
         val fresh = words.map(::key).filter { it.isNotEmpty() }.distinct().filter { status(it) != WordStatus.KNOWN }
         dao.upsert(fresh.map { WordStatusEntity(it, WordStatus.KNOWN, now, linked) })
+        _changed.tryEmit(Unit)
         return fresh.size
     }
 
