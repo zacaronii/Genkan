@@ -20,6 +20,7 @@
                 <action android:name="app.genkan.debug.FORGET_GAME" />
                 <action android:name="app.genkan.debug.SAVE_SYNC" />
                 <action android:name="app.genkan.debug.SHIZUKU_PROBE" />
+                <action android:name="app.genkan.debug.LINE" />
             </intent-filter>
         </receiver>
         <!-- Debug builds only: a stand-in game screen for OCR tests. -->

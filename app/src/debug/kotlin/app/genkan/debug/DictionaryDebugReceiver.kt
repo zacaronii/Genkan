@@ -27,6 +27,8 @@ import app.genkan.stats.ReadingLogConfig
 import app.genkan.stats.ReadingLogSettings
 import app.genkan.privileged.Privileged
 import app.genkan.reader.NowPlaying
+import app.genkan.reader.HookMessage
+import app.genkan.reader.ReaderSession
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,8 @@ import javax.inject.Inject
  * (writes, lists and deletes a probe file in DuckStation's memory card folder through Shizuku)
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (looks for on-screen text in the running 3DS game's memory, through Azahar's RPC)
+ *   adb shell am broadcast -a app.genkan.debug.LINE -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
+ *     puts a line in the reader's backlog, as a texthooker would.
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (hands the line to the 3DS text source as if OCR had read it: it locks on and follows it)
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_POINTERS -n app.genkan/.debug.DictionaryDebugReceiver --es from 089ddc90 --es to 089e0000
@@ -97,6 +101,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var playerSettings: PlayerSettings
     @Inject lateinit var audio: GameAudioRecorder
     @Inject lateinit var readingLog: ReadingLogSettings
+    @Inject lateinit var readerSession: ReaderSession
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -163,6 +168,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         }
                     }
                     "app.genkan.debug.AZAHAR_OFFER" -> azahar.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.LINE" -> readerSession.submit(HookMessage(intent.getStringExtra("text").orEmpty()))
                     "app.genkan.debug.AUDIO_CLIP" -> {
                         val now = System.currentTimeMillis()
                         audio.clip(now - intent.getLongExtra("ms", 3000), now)

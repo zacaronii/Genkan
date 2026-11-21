@@ -20,6 +20,8 @@ const SMALL_KANA_SET = new Set('ぁぃぅぇぉゃゅょゎァィゥェォャュ
 let lastTerms = null;
 let lastStyles = null;
 let lastStates = null;
+let lastMarks = [];
+let lastCount = null;
 
 const STATE_LABELS = { NEW: '＋ Anki', QUEUED: 'Queued', MINED: 'In Anki' };
 
@@ -413,13 +415,32 @@ function mineButton(index, state) {
     return button;
 }
 
-function renderTerm(hit, index, state) {
+/** Hachidori's two hand marks: known, and ignored. Pressing a lit one clears it. */
+function markButtons(index, mark) {
+    const box = el('span', { className: 'marks' });
+    for (const [status, label] of [['KNOWN', '✓ Known'], ['IGNORED', '⊘ Ignore']]) {
+        const button = el('span', { className: 'mark' + (mark === status ? ' active' : ''), textContent: label });
+        button.dataset.index = index;
+        button.dataset.status = status;
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            window.GenkanPopup?.setMark(index, status);
+        });
+        box.appendChild(button);
+    }
+    return box;
+}
+
+function renderTerm(hit, index, state, mark, count) {
     const entry = el('div', { className: 'entry' });
     const top = el('div', { className: 'entry-top' });
     const headword = el('div', { className: 'headword', lang: 'ja' });
     buildFurigana(headword, hit.expression, hit.reading);
     top.appendChild(headword);
-    top.appendChild(mineButton(index, state));
+    const actions = el('div', { className: 'entry-actions' });
+    actions.appendChild(markButtons(index, mark));
+    actions.appendChild(mineButton(index, state));
+    top.appendChild(actions);
     entry.appendChild(top);
 
     const tags = el('div', { className: 'tags' });
@@ -429,6 +450,10 @@ function renderTerm(hit, index, state) {
     for (const freq of hit.frequencies || []) {
         const values = (freq.values || []).map(v => v.display || String(v.value));
         if (values.length) tags.appendChild(tag(values.join(', '), '', freq.dictionary));
+    }
+    // Hachidori's count chip: on the first result only, after its frequencies.
+    if (index === 0 && count) {
+        tags.appendChild(tag(`Looked up ${count} time${count === 1 ? '' : 's'}`, 'lookup-count'));
     }
     if (tags.childNodes.length) entry.appendChild(tags);
 
@@ -480,17 +505,19 @@ function setStyles(styles) {
         (styles || []).map(s => constructDictCss(s.css, s.dictionary)).join('\n');
 }
 
-window.genkanShow = function (hits, styles, states) {
+window.genkanShow = function (hits, styles, states, marks, count) {
     setStyles(styles);
     lastTerms = hits;
     lastStyles = styles;
     lastStates = states || [];
+    lastMarks = marks || [];
+    lastCount = count || null;
     const root = document.getElementById('entries');
     root.replaceChildren();
     if (!hits || !hits.length) {
         root.appendChild(el('div', { className: 'empty', textContent: 'Nothing found.' }));
     } else {
-        hits.forEach((hit, i) => root.appendChild(renderTerm(hit, i, lastStates[i])));
+        hits.forEach((hit, i) => root.appendChild(renderTerm(hit, i, lastStates[i], lastMarks[i], lastCount)));
     }
     window.scrollTo(0, 0);
 };
@@ -500,7 +527,7 @@ window.genkanShowKanji = function (character, entries) {
     root.replaceChildren();
     if (lastTerms) {
         const back = el('span', { className: 'back', textContent: '← Back' });
-        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles, lastStates));
+        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles, lastStates, lastMarks, lastCount));
         root.appendChild(back);
     }
     const entry = el('div', { className: 'entry kanji-entry' });
@@ -524,6 +551,14 @@ window.genkanShowKanji = function (character, entries) {
     }
     root.appendChild(entry);
     window.scrollTo(0, 0);
+};
+
+/** Updates the known and ignore buttons without re-rendering. */
+window.genkanSetMarks = function (marks) {
+    lastMarks = marks || [];
+    document.querySelectorAll('.mark').forEach(button => {
+        button.classList.toggle('active', lastMarks[Number(button.dataset.index)] === button.dataset.status);
+    });
 };
 
 /** Updates the Anki buttons without re-rendering (and losing the scroll position). */

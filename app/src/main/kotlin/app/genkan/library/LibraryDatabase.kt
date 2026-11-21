@@ -1,6 +1,10 @@
 package app.genkan.library
 
 import androidx.room.AutoMigration
+import app.genkan.words.LookupCountDao
+import app.genkan.words.LookupCountEntity
+import app.genkan.words.WordStatusDao
+import app.genkan.words.WordStatusEntity
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import app.genkan.anki.AnkiDao
@@ -109,14 +113,15 @@ interface LibraryDao {
     entities = [PlatformEntity::class, GameEntity::class, DownloadEntity::class, PlaySessionEntity::class, DictionaryEntity::class,
         ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class,
         OutboxCard::class, MinedWord::class,
-        ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class, SaveFileEntity::class],
-    version = 12,
+        ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class, SaveFileEntity::class,
+        WordStatusEntity::class, LookupCountEntity::class],
+    version = 13,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11),
-        AutoMigration(from = 11, to = 12)],
+        AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
@@ -128,4 +133,6 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun anki(): AnkiDao
     abstract fun reading(): ReadingDao
     abstract fun saveFiles(): SaveFileDao
+    abstract fun wordStatuses(): WordStatusDao
+    abstract fun lookupCounts(): LookupCountDao
 }

@@ -11,6 +11,8 @@ import app.genkan.saves.SaveFileDao
 import app.genkan.download.DownloadDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
+import app.genkan.words.LookupCountDao
+import app.genkan.words.WordStatusDao
 import app.genkan.play.PlaySessionDao
 import dagger.Module
 import dagger.Provides
@@ -60,4 +62,10 @@ object AppModule {
 
     @Provides
     fun saveFileDao(db: LibraryDatabase): SaveFileDao = db.saveFiles()
+
+    @Provides
+    fun wordStatusDao(db: LibraryDatabase): WordStatusDao = db.wordStatuses()
+
+    @Provides
+    fun lookupCountDao(db: LibraryDatabase): LookupCountDao = db.lookupCounts()
 }

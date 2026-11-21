@@ -20,13 +20,22 @@ import java.io.ByteArrayInputStream
 
 /** What the popup page shows: a word's entries, or one kanji's. */
 sealed interface PopupContent {
-    /** [statesJson]: each hit's Anki badge (NEW, QUEUED, MINED), in order. */
-    data class Terms(val hitsJson: String, val stylesJson: String, val statesJson: String = "[]") : PopupContent
+    /**
+     * [statesJson]: each hit's Anki badge (NEW, QUEUED, MINED), in order; [marksJson] each hit's
+     * hand mark (KNOWN, IGNORED or null); [count] how often the first hit was looked up (0: no chip).
+     */
+    data class Terms(
+        val hitsJson: String,
+        val stylesJson: String,
+        val statesJson: String = "[]",
+        val marksJson: String = "[]",
+        val count: Int = 0,
+    ) : PopupContent
     data class Kanji(val character: String, val entriesJson: String) : PopupContent
 
     /** The page call that shows it; the JSON is a valid JavaScript literal as it is. */
     fun script(): String = when (this) {
-        is Terms -> "genkanShow($hitsJson, $stylesJson, $statesJson)"
+        is Terms -> "genkanShow($hitsJson, $stylesJson, $statesJson, $marksJson, $count)"
         is Kanji -> "genkanShowKanji(${quote(character)}, $entriesJson)"
     }
 
@@ -42,6 +51,9 @@ interface PopupActions {
 
     /** Make a card of hit [index]; the page rendered its glossary and furigana. */
     fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String)
+
+    /** Hit [index]'s known or ignore button ([status]: KNOWN or IGNORED) was pressed. */
+    fun setMark(index: Int, status: String)
 }
 
 /**
@@ -88,7 +100,7 @@ fun DictionaryPopup(content: PopupContent?, dictionaries: Dictionaries, actions:
             val shown = state.shown
             // Only the badges changed: update them in place, keeping the scroll position.
             val script = if (content is PopupContent.Terms && shown is PopupContent.Terms && shown.hitsJson == content.hitsJson) {
-                "genkanSetStates(${content.statesJson})"
+                "genkanSetStates(${content.statesJson}); genkanSetMarks(${content.marksJson})"
             } else {
                 content.script()
             }
@@ -120,6 +132,11 @@ private class Bridge(private val actions: PopupActions, private val view: WebVie
     @JavascriptInterface
     fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
         view.post { actions.mine(index, glossaryHtml, firstGlossaryHtml, furiganaPlain) }
+    }
+
+    @JavascriptInterface
+    fun setMark(index: Int, status: String) {
+        view.post { actions.setMark(index, status) }
     }
 }
 

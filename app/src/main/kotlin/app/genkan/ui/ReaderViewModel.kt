@@ -23,6 +23,10 @@ import app.genkan.dictionary.LookupResult
 import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ReaderSession
 import app.genkan.reader.ThreadSample
+import app.genkan.words.LookupCounts
+import app.genkan.words.WordSettings
+import app.genkan.words.WordStatus
+import app.genkan.words.WordStatuses
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +55,9 @@ class ReaderViewModel @Inject constructor(
     val hookFinder: HookFinder,
     val azahar: AzaharText,
     val builtIn: BuiltInText,
+    private val words: WordStatuses,
+    private val counts: LookupCounts,
+    private val wordSettings: WordSettings,
 ) : ViewModel(), PopupActions {
 
     /** The entries the popup shows now (a link can replace the tapped word's). */
@@ -59,6 +66,7 @@ class ReaderViewModel @Inject constructor(
     init {
         // A card queued offline reaching Anki later turns its badge to "In Anki".
         viewModelScope.launch { miner.deliveries.collect { refreshStates() } }
+        viewModelScope.launch { words.marks.collect { refreshMarks() } }
     }
 
     private val _editingArea = MutableStateFlow<Bitmap?>(null)
@@ -133,11 +141,32 @@ class ReaderViewModel @Inject constructor(
         shownResult = result
         val styles = dictionaries.stylesJson()
         val expressions = result.hits.map { it.expression }
-        _popup.value = PopupContent.Terms(result.json, styles, statesJson(expressions))
+        // A popup visit counts once, for the first result's headword, as Hachidori counts it.
+        val first = result.hits.firstOrNull()
+        val count = if (first != null && wordSettings.countsOn()) counts.record(first.expression, first.reading) else 0
+        _popup.value = PopupContent.Terms(result.json, styles, statesJson(expressions), marksJson(result), count)
         viewModelScope.launch {
             miner.refreshFromAnki(expressions)
             refreshStates()
         }
+    }
+
+    /** Each hit's hand mark, as the page wants it. */
+    private fun marksJson(result: LookupResult): String =
+        result.hits.joinToString(",", "[", "]") { hit -> words.status(hit.expression)?.let { "\"$it\"" } ?: "null" }
+
+    override fun setMark(index: Int, status: String) {
+        val result = shownResult ?: return
+        val hit = result.hits.getOrNull(index) ?: return
+        val mark = runCatching { WordStatus.valueOf(status) }.getOrNull() ?: return
+        viewModelScope.launch { words.toggle(hit.expression, mark) }
+    }
+
+    /** The shown entries' marks, again: a mark changed (here, or in settings). */
+    private fun refreshMarks() {
+        val result = shownResult ?: return
+        val current = _popup.value as? PopupContent.Terms ?: return
+        if (current.hitsJson == result.json) _popup.value = current.copy(marksJson = marksJson(result))
     }
 
     private suspend fun statesJson(expressions: List<String>): String {
