@@ -25,4 +25,11 @@ interface ICoreSession {
 
     /** The next frame at the core's own size (a PS1's 320x240), as frame() gives it, or null. */
     Bundle nativeFrame() = 8;
+
+    /**
+     * Reads a Yomikata layout (its JSON) after every frame, or at its poll rate, and tells the
+     * host each time what it reads changes; the entry's table text and unit for table text.
+     * An empty layout stops it.
+     */
+    void watchLayout(String layoutJson, String tableText, int unit) = 9;
 }

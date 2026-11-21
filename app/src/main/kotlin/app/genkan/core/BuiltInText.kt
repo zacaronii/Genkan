@@ -21,6 +21,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import app.genkan.yomikata.LayoutRead
+import app.genkan.yomikata.Layouts
+import app.genkan.reader.HookMessage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -56,12 +65,120 @@ class BuiltInText @Inject constructor(
                 if (game != null) {
                     // A game with its own codes: OCR's lines are put right from memory with its table.
                     ocr.corrector = ::tableLine
+                    launch { watchLayout() }
                     text.follow(player::memory)
                 } else {
+                    _layoutActive.value = false
                     text.off()
                 }
             }
         }
+        scope.launch { player.layoutReads.collect(::onLayoutRead) }
+    }
+
+    /** A game is in the built-in player. */
+    val playing: StateFlow<Boolean> = player.game.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Yomikata samples and snapshots are on. */
+    val sampling: kotlinx.coroutines.flow.Flow<Boolean> get() = samples.enabledFlow
+
+    private val _layoutActive = MutableStateFlow(false)
+    /** The game's lines come from its Yomikata layout: no OCR needed. */
+    val layoutActive: StateFlow<Boolean> = _layoutActive.asStateFlow()
+
+    /**
+     * Once the game's id can be read from its RAM, its catalog entry's layout (if it has one) is
+     * read by the player between frames. Tries for a while: a game sets its memory up as it boots.
+     */
+    private suspend fun watchLayout() {
+        val game = session.game.value
+        repeat(LAYOUT_TRIES) {
+            val id = withContext(Dispatchers.IO) {
+                ids[game.key] ?: player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } }
+            }
+            if (id != null) {
+                ids[game.key] = id
+                val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
+                // The executable's hash isn't known here: the layout naming no version.
+                val layout = Layouts.pick(entry.layouts, null) ?: return
+                val watching = player.watchLayout(layout, catalog.tableText(entry).orEmpty(), entry.unit)
+                _layoutActive.value = watching
+                if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
+                return
+            }
+            delay(LAYOUT_RETRY_MS)
+        }
+    }
+
+    /** Debug builds: watch [layoutJson] as if the game's entry had it (its table, if any, still applies). */
+    suspend fun debugWatch(layoutJson: String) {
+        val game = session.game.value
+        val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
+        _layoutActive.value = player.watchLayout(org.json.JSONObject(layoutJson), entry?.let(catalog::tableText).orEmpty(), entry?.unit ?: 2)
+    }
+
+    private var lastRead: LayoutRead? = null
+
+    /**
+     * A snapshot now, at whatever moment the game is in (a line typing out, waiting for a
+     * press), for Yomikata's server to pin a layout's fields down; what happened, for the bar.
+     */
+    suspend fun snapshotNow(): String = withContext(Dispatchers.IO) {
+        val game = session.game.value
+        val memory = player.memory() ?: return@withContext "No game in the built-in player"
+        memory.use { m ->
+            val id = ids[game.key] ?: RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) }
+                ?: return@withContext "This game's id isn't in its memory yet"
+            ids[game.key] = id
+            // The line as far as anything has read it: the layout's, else OCR's last.
+            val read = lastRead
+            val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
+                ?: ocr.latest.value?.takeIf { it.isNotBlank() }
+                ?: return@withContext "Nothing read yet: turn OCR on, or wait for a line"
+            val moment = when {
+                read?.waiting == true -> "waiting for a press"
+                read?.shown != null && read.onScreen != read.message?.replace("\n", "") -> "typing out"
+                else -> "line on screen"
+            }
+            val core = player.game.value?.core?.displayName ?: "built-in player"
+            if (snapshots.takeNow(m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment")) {
+                "Snapshot taken ($moment); it goes to Yomikata with the next sync"
+            } else {
+                "Couldn't take a snapshot of this system's memory"
+            }
+        }
+    }
+
+    private var layoutLine: String? = null
+    private var pendingLine: kotlinx.coroutines.Job? = null
+
+    /**
+     * A layout read: its message goes to the backlog once the line is complete: when the game
+     * waits for a press, or (without that flag) once it has typed out in full, or stops changing.
+     */
+    private fun onLayoutRead(read: LayoutRead) {
+        lastRead = read
+        val message = read.message?.replace("\n", "")?.takeIf { it.isNotBlank() } ?: return
+        pendingLine?.cancel()
+        val complete = when {
+            read.waiting != null -> read.waiting
+            read.shown != null -> read.onScreen == message
+            else -> null
+        }
+        when (complete) {
+            true -> submitLayoutLine(message)
+            false -> Unit
+            null -> pendingLine = scope.launch {
+                delay(LAYOUT_SETTLE_MS)
+                submitLayoutLine(message)
+            }
+        }
+    }
+
+    private fun submitLayoutLine(message: String) {
+        if (message == layoutLine) return
+        layoutLine = message
+        session.submit(HookMessage(message))
     }
 
     /** Everything the built-in player can add to a snapshot. */
@@ -138,6 +255,10 @@ class BuiltInText @Inject constructor(
     private companion object {
         const val TAG = "BuiltInText"
         val STANDARD = setOf("shift_jis", "utf16le", "utf8")
+        const val LAYOUT_TRIES = 20
+        const val LAYOUT_RETRY_MS = 3_000L
+        /** A message without a typed-out count or a waiting flag counts as done this long after it stops changing. */
+        const val LAYOUT_SETTLE_MS = 400L
         /** Codes either side of a found run that can still be its line. */
         const val MARGIN = 8
         /** A run found in more places than this says nothing about where the line is. */

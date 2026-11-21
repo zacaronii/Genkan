@@ -98,6 +98,32 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         // A misread is a false constraint on the table: only a line OCR has read the same way
         // twice, or a long one (a story told line by line is read once each), where one is a small part.
         if (seen.add(key) && key.count { isJapanese(it) } < LONG_LINE) return false
+        if (!write(memory, game, ram, id, line, emulator, extras, note = null)) return false
+        taken.put(id, lines.put(key))
+        ledger.writeText(taken.toString())
+        return true
+    }
+
+    /**
+     * A snapshot taken when asked (a line still typing out, or waiting for a press), with none
+     * of [take]'s rules and not counted against them; [note] says what moment it caught.
+     */
+    @Synchronized
+    fun takeNow(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String, extras: Extras?, note: String): Boolean {
+        val ram = MainRam.of(game.platform) ?: return false
+        return write(memory, game, ram, id, line, emulator, extras, note)
+    }
+
+    private fun write(
+        memory: MemorySource,
+        game: NowPlaying.Game,
+        ram: MainRam,
+        id: String,
+        line: String,
+        emulator: String,
+        extras: Extras?,
+        note: String?,
+    ): Boolean {
         // What can't be read stays zeros: the dump keeps its addresses.
         val bytes = readRam(memory, ram) ?: return false
         dir.mkdirs()
@@ -112,6 +138,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("app", "Genkan ${BuildConfig.VERSION_NAME}")
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
+        note?.let { meta.put("note", it) }
         extras?.vram()?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
@@ -122,9 +149,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             meta.put("screen", JSONObject().put("width", frame.width).put("height", frame.height))
         }
         File(dir, "$name.meta.json").writeText(meta.toString())
-        taken.put(id, lines.put(key))
-        ledger.writeText(taken.toString())
-        Log.i(TAG, "Snapshot ${lines.length()} of ${cap(id)} (${meta.optJSONObject("state")?.optLong("bytes")?.let { "state $it bytes" } ?: "no state"}) for ${game.title} ($id): ${bytes.size / 1024} KB at \"${line.take(12)}\"")
+        Log.i(TAG, "Snapshot${note?.let { " ($it)" }.orEmpty()} (${meta.optJSONObject("state")?.optLong("bytes")?.let { "state $it bytes" } ?: "no state"}) for ${game.title} ($id): ${bytes.size / 1024} KB at \"${line.take(12)}\"")
         return true
     }
 

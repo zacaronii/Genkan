@@ -211,6 +211,19 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    private val _notice = MutableStateFlow<String?>(null)
+    /** A passing message for the bar (what a snapshot did). */
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    /** A snapshot of the built-in player's game now, for Yomikata. */
+    fun snapshotNow() {
+        viewModelScope.launch {
+            _notice.value = builtIn.snapshotNow()
+            kotlinx.coroutines.delay(NOTICE_MS)
+            _notice.value = null
+        }
+    }
+
     /** The shown entries' marks, again: a mark changed (here, or in settings). */
     private fun refreshMarks() {
         val result = shownResult ?: return
@@ -315,6 +328,7 @@ class ReaderViewModel @Inject constructor(
     private companion object {
         /** Lines scanned between showing their marks, on a full backlog. */
         const val PUBLISH_EVERY = 10
+        const val NOTICE_MS = 5_000L
         const val LEAD_MS = 2_500L
         const val MAX_CLIP_MS = 20_000L
     }

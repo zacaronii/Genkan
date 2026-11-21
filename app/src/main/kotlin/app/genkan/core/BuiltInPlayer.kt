@@ -5,6 +5,8 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
+import app.genkan.yomikata.LayoutRead
+import app.genkan.yomikata.Layouts
 import androidx.core.graphics.createBitmap
 import app.genkan.memory.MemorySource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,25 @@ class BuiltInPlayer @Inject constructor() {
         }
         Log.i(TAG, "Playing rom $romId in ${core.displayName}")
         _game.value = game
+    }
+
+    private val _layoutReads = kotlinx.coroutines.flow.MutableSharedFlow<LayoutRead>(extraBufferCapacity = 16)
+    /** What the watched layout reads, each time it changes (see [watchLayout]). */
+    val layoutReads: kotlinx.coroutines.flow.SharedFlow<LayoutRead> = _layoutReads
+
+    /** The player read the watched layout: something changed. */
+    fun layoutRead(json: String) {
+        runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
+    }
+
+    /**
+     * Asks the player to read [layout] between frames (null: stop), with the entry's table for
+     * table text; returns whether it could.
+     */
+    fun watchLayout(layout: org.json.JSONObject?, tableText: String = "", unit: Int = 2): Boolean = try {
+        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, unit) != null
+    } catch (e: RemoteException) {
+        false
     }
 
     /** Asks the player to save and close its game. */

@@ -23,6 +23,10 @@ class CoreHostService : Service() {
         override fun audio(pcm: ByteArray, sampleRate: Int, endMs: Long) {
             audio.feed(pcm, sampleRate, endMs)
         }
+
+        override fun layout(readJson: String) {
+            player.layoutRead(readJson)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder = binder

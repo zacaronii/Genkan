@@ -120,6 +120,40 @@ object Layouts {
         return LayoutRead(message, speakerName, speakerNumber, shown, waiting, choosing, choices, choiceCount, choiceCursor, onScreen, errors)
     }
 
+    /** [read] as JSON, the reference's keys (a speaker number under `speaker` too). */
+    fun toJson(read: LayoutRead): JSONObject = JSONObject().apply {
+        read.message?.let { put("message", it) }
+        read.speakerName?.let { put("speaker", it) }
+        read.speakerNumber?.let { put("speaker", it) }
+        read.shown?.let { put("shown", it) }
+        read.choiceCount?.let { put("choice_count", it) }
+        read.choiceCursor?.let { put("choice_cursor", it) }
+        read.waiting?.let { put("waiting", it) }
+        read.choosing?.let { put("choosing", it) }
+        read.choices?.let { put("choices", JSONArray(it)) }
+        read.onScreen?.let { put("on_screen", it) }
+        if (read.errors.isNotEmpty()) put("errors", JSONObject(read.errors as Map<*, *>))
+    }
+
+    /** What [toJson] wrote, read back. */
+    fun fromJson(json: JSONObject): LayoutRead {
+        val speaker = json.opt("speaker")
+        val errors = json.optJSONObject("errors")
+        return LayoutRead(
+            message = json.optString("message").takeIf { json.has("message") },
+            speakerName = speaker as? String,
+            speakerNumber = (speaker as? Number)?.toLong(),
+            shown = json.optLong("shown").takeIf { json.has("shown") },
+            waiting = json.optBoolean("waiting").takeIf { json.has("waiting") },
+            choosing = json.optBoolean("choosing").takeIf { json.has("choosing") },
+            choices = json.optJSONArray("choices")?.strings(),
+            choiceCount = json.optLong("choice_count").takeIf { json.has("choice_count") },
+            choiceCursor = json.optLong("choice_cursor").takeIf { json.has("choice_cursor") },
+            onScreen = json.optString("on_screen").takeIf { json.has("on_screen") },
+            errors = errors?.let { e -> e.keys().asSequence().associateWith { e.optString(it) } }.orEmpty(),
+        )
+    }
+
     private class Reader(
         val memory: LayoutMemory,
         val order: ByteOrder,
