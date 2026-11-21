@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.dictionary.DictionaryEntity
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
 import app.genkan.romm.RomMState
@@ -33,12 +35,71 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val builtInPlayer by viewModel.playerSettings.enabled.collectAsStateWithLifecycle(false)
     val textSamples by viewModel.playerSettings.samples.collectAsStateWithLifecycle(false)
     val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
+    SetupContent(
+        state = SetupState(
+            status = status,
+            romm = romm,
+            sync = sync,
+            usageAccess = usageAccess,
+            shizuku = shizuku,
+            pspDebugger = pspDebugger,
+            azaharRpc = azaharRpc,
+            builtInPlayer = builtInPlayer,
+            textSamples = textSamples,
+            dictionaries = dictionaries,
+        ),
+        actions = viewModel.actions,
+        focusIndex = focusIndex,
+        onAction = { action ->
+            viewModel.focus(action)
+            onAction(action)
+        },
+    )
+}
+
+/** Everything the settings page reports, gathered from the ViewModel's sources. */
+data class SetupState(
+    val status: DualScreenStatus,
+    val romm: RomMState,
+    val sync: SyncStatus,
+    val usageAccess: Boolean,
+    val shizuku: Privileged.State,
+    val pspDebugger: Boolean,
+    val azaharRpc: Boolean,
+    val builtInPlayer: Boolean,
+    val textSamples: Boolean,
+    val dictionaries: List<DictionaryEntity>,
+)
+
+/**
+ * The settings page drawn from plain state, so it can be shown without a ViewModel. [onAction]
+ * runs when a row is touched; [focusIndex] is the row the gamepad is on. [scrollState] is the
+ * page's scroll position, passed in only to show the page scrolled (the screenshot tests do).
+ */
+@Composable
+fun SetupContent(
+    state: SetupState,
+    actions: List<SetupAction>,
+    focusIndex: Int,
+    onAction: (SetupAction) -> Unit,
+    scrollState: ScrollState = rememberScrollState(),
+) {
+    val status = state.status
+    val romm = state.romm
+    val sync = state.sync
+    val usageAccess = state.usageAccess
+    val shizuku = state.shizuku
+    val pspDebugger = state.pspDebugger
+    val azaharRpc = state.azaharRpc
+    val builtInPlayer = state.builtInPlayer
+    val textSamples = state.textSamples
+    val dictionaries = state.dictionaries
 
     Column(
         Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -116,11 +177,8 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
         )
         Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("B: back", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            viewModel.actions.forEachIndexed { index, action ->
-                ActionRow(action.label, focused = index == focusIndex, onClick = {
-                    viewModel.focus(action)
-                    onAction(action)
-                })
+            actions.forEachIndexed { index, action ->
+                ActionRow(action.label, focused = index == focusIndex, onClick = { onAction(action) })
             }
         }
     }

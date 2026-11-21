@@ -46,7 +46,9 @@ import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import app.genkan.library.GameEntity
+import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryPane
+import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import coil3.compose.AsyncImage
 
@@ -61,6 +63,39 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    LibraryContent(
+        platforms = platforms,
+        games = games,
+        focus = focus,
+        sync = sync,
+        downloads = downloads,
+        notice = notice,
+        coverModel = viewModel::coverModel,
+        emulatorFor = viewModel::emulatorFor,
+        onSelectPlatform = viewModel::selectPlatform,
+        onColumns = { viewModel.columns = it },
+        onSelectGame = viewModel::selectGame,
+    )
+}
+
+/**
+ * The library drawn from plain state, so it can be shown without a ViewModel (the screenshot
+ * tests do). [onColumns] reports how many covers fit in a grid row, for gamepad navigation.
+ */
+@Composable
+fun LibraryContent(
+    platforms: List<PlatformEntity>,
+    games: List<GameEntity>,
+    focus: LibraryFocus,
+    sync: SyncStatus,
+    downloads: Map<Long, DownloadEntity>,
+    notice: String?,
+    coverModel: (GameEntity) -> Any?,
+    emulatorFor: (String) -> String?,
+    onSelectPlatform: (Int) -> Unit,
+    onColumns: (Int) -> Unit,
+    onSelectGame: (Int) -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
 
     Row(
@@ -74,14 +109,14 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
             names = platforms.map { if (it.id < 0) it.name else "${it.name}  ${it.romCount}" },
             selected = focus.platformIndex,
             railFocused = focus.pane == LibraryPane.PLATFORMS,
-            onSelect = viewModel::selectPlatform,
+            onSelect = onSelectPlatform,
         )
         Column(Modifier.fillMaxSize()) {
             val focusedGame = games.getOrNull(focus.gameIndex)?.takeIf { focus.pane == LibraryPane.GAMES }
             Header(
                 title = platforms.getOrNull(focus.platformIndex)?.name ?: "Library",
                 sync = sync,
-                subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], viewModel::emulatorFor) },
+                subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
             )
             if (platforms.isEmpty()) {
                 EmptyLibrary(sync)
@@ -90,9 +125,9 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
                     games = games,
                     downloads = downloads,
                     focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
-                    coverModel = viewModel::coverModel,
-                    onColumns = { viewModel.columns = it },
-                    onSelect = viewModel::selectGame,
+                    coverModel = coverModel,
+                    onColumns = onColumns,
+                    onSelect = onSelectGame,
                 )
             }
         }

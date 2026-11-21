@@ -27,6 +27,8 @@ webkit = "1.14.0"
 mlkitJapanese = "16.0.1"
 onnxruntime = "1.31.1"
 shizuku = "13.1.5"
+roborazzi = "1.79.0"
+robolectric = "4.18.1"
 
 [libraries]
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
@@ -70,6 +72,11 @@ mlkit-text-japanese = { module = "com.google.mlkit:text-recognition-japanese", v
 shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
 shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+# JVM screenshot tests: Roborazzi captures Compose rendered by Robolectric's native graphics.
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 
 [plugins]
@@ -78,3 +85,4 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
