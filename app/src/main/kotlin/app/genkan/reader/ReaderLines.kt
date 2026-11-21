@@ -20,6 +20,8 @@ data class ReaderLineEntity(
     val text: String,
     val at: Long,
     val thread: String? = null,
+    /** Who says it, when the source knew (shown above the line). */
+    val speaker: String? = null,
 )
 
 /** The hook thread chosen as a game's dialogue. */

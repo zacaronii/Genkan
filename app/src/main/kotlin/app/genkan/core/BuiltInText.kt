@@ -193,7 +193,7 @@ class BuiltInText @Inject constructor(
 
     /** A whole line, as the game holds it: the backlog's carry rules for pieces don't apply. */
     private fun submitLayoutLine(line: LayoutLines.Line) {
-        session.submit(HookMessage(line.text, whole = true, takesBack = line.takesBack))
+        session.submit(HookMessage(line.text, whole = true, takesBack = line.takesBack, speaker = line.speaker))
     }
 
     /** Everything the built-in player can add to a snapshot. */

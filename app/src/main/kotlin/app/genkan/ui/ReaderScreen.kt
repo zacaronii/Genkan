@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -235,9 +236,16 @@ private fun Backlog(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + if (lookupLine != null) panelHeight else 0.dp),
     ) {
-        items(lines, key = { it.id }) { line ->
+        itemsIndexed(lines, key = { _, line -> line.id }) { i, line ->
             val highlight = lookup?.takeIf { it.lineId == line.id }
-            TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty()) { onTap(line, it) }
+            Column {
+                // The speaker above their line, once for lines said in a row (a transcript's way).
+                val speaker = line.speaker
+                if (speaker != null && lines.getOrNull(i - 1)?.speaker != speaker) {
+                    Text(speaker, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty()) { onTap(line, it) }
+            }
         }
     }
 }
