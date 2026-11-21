@@ -50,33 +50,46 @@ class ArtworkWarmer @Inject constructor(
         if (games !== lastGames) direction = 0
         lastGames = games
         lastIndex = index
+        // Signed out: nothing is remembered as wanted, so the same focus warms once the sign-in
+        // is back instead of matching lastPaths and returning early.
+        val base = baseUrl()
+        if (base == null) {
+            inFlight.values.forEach { if (!it.isDisposed) it.dispose() }
+            inFlight = emptyMap()
+            lastPaths = emptyList()
+            return
+        }
         val paths = warmPaths(games, index, if (moving) direction else 0).filterNot { it in warmed }
         if (paths == lastPaths) return
         lastPaths = paths
         val wanted = paths.toSet()
         inFlight.filterKeys { it !in wanted }.values.forEach { if (!it.isDisposed) it.dispose() }
-        val baseUrl = session.currentAccount()?.baseUrl
-        if (baseUrl == null) {
-            inFlight = emptyMap()
-            return
-        }
-        val loader = SingletonImageLoader.get(context)
-        inFlight = paths.associateWith { path ->
-            inFlight[path]?.takeUnless { it.isDisposed } ?: run {
-                val url = RomMApiFactory.assetUrl(baseUrl, path) ?: return@associateWith null
-                // Disk only, decoded at a token size: the screen decodes at its own size later, so
-                // a full-size bitmap now would cost CPU while the shelf animates, and push images
-                // that are on screen out of the memory cache.
-                loader.enqueue(
-                    ImageRequest.Builder(context)
-                        .data(url)
-                        .size(WARM_DECODE_PX)
-                        .memoryCachePolicy(CachePolicy.DISABLED)
-                        .listener(onSuccess = { _, _ -> warmed[path] = Unit })
-                        .build()
-                )
+        val kept = inFlight
+        inFlight = buildMap {
+            for (path in paths) {
+                val running = kept[path]?.takeUnless { it.isDisposed }
+                val request = running ?: RomMApiFactory.assetUrl(base, path)?.let { url -> fetch(url) { warmed[path] = Unit } }
+                if (request != null) put(path, request)
             }
-        }.filterValues { it != null }.mapValues { it.value!! }
+        }
+    }
+
+    /** The signed-in server's address, or null when signed out; replaceable in tests. */
+    internal var baseUrl: () -> String? = { session.currentAccount()?.baseUrl }
+
+    /** Starts fetching [url] into the disk cache, calling [onDone] when it is there; replaceable in tests. */
+    internal var fetch: (url: String, onDone: () -> Unit) -> Disposable = { url, onDone ->
+        // Disk only, decoded at a token size: the screen decodes at its own size later, so a
+        // full-size bitmap now would cost CPU while the shelf animates, and push images that are
+        // on screen out of the memory cache.
+        SingletonImageLoader.get(context).enqueue(
+            ImageRequest.Builder(context)
+                .data(url)
+                .size(WARM_DECODE_PX)
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .listener(onSuccess = { _, _ -> onDone() })
+                .build()
+        )
     }
 
     companion object {

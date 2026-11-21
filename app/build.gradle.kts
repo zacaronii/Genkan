@@ -26,6 +26,9 @@ android {
         versionName = "0.0.1"
         // Instrumented tests: what must hold on the device's own libraries (its charset decoders).
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The shelf's per-step trace (ui/ShelfTrace.kt): build with -Pgenkan.shelfTrace=true.
+        val shelfTrace = providers.gradleProperty("genkan.shelfTrace").orNull == "true"
+        buildConfigField("boolean", "SHELF_TRACE", shelfTrace.toString())
         ndk {
             // The Thor and the arm64 test emulator.
             abiFilters += "arm64-v8a"

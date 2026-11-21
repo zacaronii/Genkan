@@ -36,11 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -242,6 +244,9 @@ internal fun GameShelf(
                             rotationY = ShelfGeometry.rotationY(d)
                             translationY = ShelfGeometry.forward(d) * stepPx
                             alpha = ShelfGeometry.alpha(d)
+                            // Fade by scaling each draw's alpha instead of compositing the case in an
+                            // offscreen buffer first, which the default does for any alpha below 1.
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             cameraDistance = 14f * density.density
                         }
@@ -271,6 +276,7 @@ internal fun GameShelf(
                                 onCoverAspect = onCoverAspect,
                                 showMedia = index == focused && active,
                                 badgeOnLeft = index < focused,
+                                raised = index == focused,
                                 mediaOut = mediaNow,
                                 shade = { ShelfGeometry.shade(index - positionNow()) },
                                 modifier = transform.then(select),
@@ -373,6 +379,7 @@ private fun ShelfCase(
     onCoverAspect: (Long, Float) -> Unit,
     showMedia: Boolean,
     badgeOnLeft: Boolean,
+    raised: Boolean,
     mediaOut: () -> Float,
     shade: () -> Float,
     modifier: Modifier,
@@ -400,7 +407,9 @@ private fun ShelfCase(
                 .fillMaxSize()
                 .graphicsLayer {
                     this.shape = shape
-                    shadowElevation = 6.dp.toPx()
+                    // A real shadow only under the focused case: one per rotated layer cost the GPU
+                    // on every frame of a move. The others stand on their drawn floor shadow.
+                    shadowElevation = if (raised) 6.dp.toPx() else 0f
                     clip = true
                 }
                 .background(caseColor),
@@ -417,7 +426,9 @@ private fun ShelfCase(
                             top = if (spec.style == CaseStyle.CARD_CASE) height * 0.06f else width * parts.frame,
                             bottom = width * parts.frame,
                         )
-                        .clip(RoundedCornerShape(width * parts.corner * 0.5f))
+                        // A plain rectangle clip: a rounded one is a path clip, redone for every
+                        // turned case on every frame, for corners a few pixels across.
+                        .clipToBounds()
                         .background(caseColor),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -449,7 +460,16 @@ private fun ShelfCase(
             else CardboardEdge()
             DownloadMark(game, download, badgeOnLeft)
             // Depth: the further from the focus, the darker. Its own layer, so only its alpha changes per frame.
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = shade() }.background(Color.Black))
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = shade()
+                        // One flat rectangle: nothing overlaps, so no offscreen buffer is needed.
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    }
+                    .background(Color.Black),
+            )
         }
     }
 }
@@ -591,7 +611,7 @@ private fun DownloadMark(game: GameEntity, download: DownloadEntity?, onLeft: Bo
 private fun Badge(background: Color, onLeft: Boolean, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = if (onLeft) Alignment.BottomStart else Alignment.BottomEnd) {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(background).border(1.dp, Color(0x40FFFFFF), CircleShape),
+            Modifier.size(28.dp).background(background, CircleShape).border(1.dp, Color(0x40FFFFFF), CircleShape),
             contentAlignment = Alignment.Center,
         ) { content() }
     }
