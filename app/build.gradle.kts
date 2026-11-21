@@ -12,8 +12,6 @@ plugins {
 android {
     // The layout conformance vectors run on the device too, from the instrumented test's assets.
     sourceSets.getByName("androidTest").assets.srcDir("src/test/resources")
-    // Room's exported schemas, for the instrumented migration test.
-    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     namespace = "app.genkan"
     compileSdk = 37
     ndkVersion = "29.0.14206865"
@@ -109,12 +107,12 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
-    androidTestImplementation(libs.androidx.room.testing)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.org.json)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.junit)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(platform(libs.androidx.compose.bom))

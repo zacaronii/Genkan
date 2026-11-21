@@ -28,6 +28,28 @@ class SettingsGroupsTest {
         assertEquals(SetupAction.DISABLE_HOME, home.action(on = true))
     }
 
+    @Test
+    fun `a press runs what the switch shows, by pad or by touch`() {
+        fun state(home: Boolean, player: Boolean) = SetupState(
+            status = app.genkan.home.DualScreenStatus(isDefaultHome = home),
+            romm = app.genkan.romm.RomMState.SignedOut,
+            sync = app.genkan.library.SyncStatus.Idle,
+            usageAccess = true,
+            shizuku = app.genkan.privileged.Privileged.State.READY,
+            pspDebugger = false,
+            azaharRpc = false,
+            builtInPlayer = player,
+            textSamples = false,
+            dictionaries = emptyList(),
+        )
+        val switches = groups.flatMap { it.rows }.filterIsInstance<SettingsRow.Switch>()
+        val home = switches.single { it.key == SwitchKey.HOME }
+        val player = switches.single { it.key == SwitchKey.BUILT_IN_PLAYER }
+        assertEquals(SetupAction.DISABLE_HOME, state(home = true, player = false).actionFor(home))
+        assertEquals(SetupAction.ENABLE_HOME, state(home = false, player = false).actionFor(home))
+        assertEquals(SetupAction.BUILT_IN_PLAYER, state(home = false, player = true).actionFor(player))
+    }
+
     private fun move(focus: SettingsFocus, key: PadKey) = SettingsNavigator.onKey(focus, key, groups)
 
     @Test

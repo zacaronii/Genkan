@@ -124,6 +124,9 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         extras: Extras?,
         note: String?,
     ): Boolean {
+        // The picture first, then the memory at once, so both are of the same moment: the
+        // state and the gzipping after take seconds, while a line types out.
+        val frame = extras?.screen()
         // What can't be read stays zeros: the dump keeps its addresses.
         val bytes = readRam(memory, ram) ?: return false
         dir.mkdirs()
@@ -144,7 +147,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
         }
         extras?.state(File(dir, "$name.state.gz"))?.let { size -> meta.put("state", JSONObject().put("bytes", size)) }
-        extras?.screen()?.let { frame ->
+        frame?.let { frame ->
             File(dir, "$name.screen.png").outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, 100, it) }
             meta.put("screen", JSONObject().put("width", frame.width).put("height", frame.height))
         }

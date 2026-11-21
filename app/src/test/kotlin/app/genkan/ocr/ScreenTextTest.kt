@@ -36,9 +36,26 @@ class ScreenTextTest {
 
     @Test
     fun `vertical text is measured top to bottom`() {
-        val tall = ScreenText.of(listOf(OcrLine("縦書きの行", top = 0, left = 0, height = 500, width = 50)), 0, 0, 100, 500)
+        val tall = ScreenText.of(listOf(OcrLine("縦書きの行", top = 0, left = 0, height = 500, width = 50, vertical = true)), 0, 0, 100, 500)
         assertTrue(tall.lines.single().vertical)
         assertEquals(2, tall.hit(0.2f, 0.5f)?.offset)
+    }
+
+    @Test
+    fun `a one-character vertical line keeps its axis`() {
+        // The engine boxed it as vertical and measured its end along y: the tap is measured the same way.
+        val one = ScreenText.of(
+            listOf(OcrLine("縦", top = 0, left = 0, height = 120, width = 40, ends = listOf(CharEnd(0, 120)), vertical = true)),
+            0, 0, 100, 200,
+        )
+        assertTrue(one.lines.single().vertical)
+        assertEquals(0.6f, one.lines.single().ends.single().second, 1e-6f)
+        assertEquals(0, one.hit(0.2f, 0.5f)?.offset)
+    }
+
+    @Test
+    fun `a read with no lines empties the screen`() {
+        assertEquals(ScreenText.EMPTY, ScreenText.of(emptyList(), 0, 0, 1920, 1080))
     }
 
     @Test

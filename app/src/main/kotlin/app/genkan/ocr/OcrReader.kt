@@ -85,6 +85,11 @@ class OcrReader @Inject constructor(
     /** Where OCR's last read lines sit on the top screen, for the overlay over the game. */
     val screen: StateFlow<ScreenText> = _screen.asStateFlow()
 
+    init {
+        // Another game's boxes mean nothing over this one.
+        scope.launch { nowPlaying.game.collect { _screen.value = ScreenText.EMPTY } }
+    }
+
     private val _lastReadMs = MutableStateFlow<Long?>(null)
     /** How long the last OCR took, for the status line. */
     val lastReadMs: StateFlow<Long?> = _lastReadMs.asStateFlow()
@@ -121,8 +126,12 @@ class OcrReader @Inject constructor(
         job = scope.launch {
             while (isActive) {
                 delay(INTERVAL_MS)
-                // Nothing to read while Genkan's own launcher is on the top screen.
-                if (!capture.running.value || launcher.inFront.value) continue
+                // Nothing to read while Genkan's own launcher is on the top screen; nor any boxes
+                // to draw for a game that isn't in view.
+                if (!capture.running.value || launcher.inFront.value) {
+                    _screen.value = ScreenText.EMPTY
+                    continue
+                }
                 val frame = capture.frame() ?: continue
                 val area = area(frame, region.value) ?: continue
                 val box = Bitmap.createBitmap(frame, area.left, area.top, area.width(), area.height())
@@ -142,6 +151,8 @@ class OcrReader @Inject constructor(
             engine.read(box)
         } catch (e: Exception) {
             Log.w(TAG, "OCR failed: $e")
+            // What the boxes showed may be gone: none, rather than stale ones.
+            _screen.value = ScreenText.EMPTY
             return
         }
         _screen.value = ScreenText.of(lines, area.left, area.top, frameWidth, frameHeight)
