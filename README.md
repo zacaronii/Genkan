@@ -71,12 +71,12 @@ a Yomitan dictionary popup. See
   and archives it in RomM; a delete on the server never removes a save from the device.
   Dolphin (GameCube, Wii) keeps its saves in its own `Android/data`,
   which other apps can't read, so those go through [Shizuku](https://github.com/RikkaApps/Shizuku):
-  install and start it (it stops at every reboot), then *Allow Genkan in Shizuku* in settings.
+  install and start it (it stops at every reboot), then *Emulator saves through Shizuku* under *Playing* in settings.
   Its save folders are shared by every game, so Genkan learns which files are a game's from
   what changed there while it ran. DuckStation's memory cards can't be synced: it writes them
   readable by itself only, which even Shizuku can't get past. For synced PS1 saves, use the
   built-in player.
-- **PSP text from PPSSPP (opt-in):** *PSP text from PPSSPP's debugger* in settings turns on
+- **PSP text from PPSSPP (opt-in):** *PSP text from PPSSPP* (settings, *Reading text*) turns on
   PPSSPP's remote debugger (a fixed port in its `ppsspp.ini`; switching off restores PPSSPP's own
   values). For games with a hook profile, Genkan sets non-pausing log breakpoints at the game's
   text routine and reads each line from memory, with OCR off. PPSSPP 1.20 opens that debugger to
@@ -87,7 +87,7 @@ a Yomitan dictionary popup. See
   that reads the next one, keeps the function handed each new line in a register for three lines
   running, and checks it against OCR for eight more. Advance a line each time the bar asks. A
   hook that matches is used from then on and sent to the Yomikata inbox, if one is set.
-- **3DS text from Azahar (opt-in):** *3DS text from Azahar's RPC server* in settings turns on
+- **3DS text from Azahar (opt-in):** *3DS text from Azahar* (settings, *Reading text*) turns on
   Azahar's scripting RPC (`enable_rpc_server` in its `config.ini`; switching off restores Azahar's
   own value). The RPC only reads memory, so no profile is needed but OCR starts it off: the
   first line OCR reads is looked up in the game's memory (UTF-16, UTF-8 or Shift-JIS), then
@@ -175,8 +175,8 @@ dictionary engine in `third_party/hoshidicts`.
 The library, the settings page and the bottom screen's game details are drawn on the JVM
 from made-up data (Roborazzi on Robolectric, `app/src/test/kotlin/app/genkan/ui/ScreenshotTest.kt`),
 at the Thor's sizes and density: 1920x1080 for the top screen and 1080x1240 for the bottom
-one, both at 369 dpi. The settings page is shot twice, at the top and scrolled to its
-action rows. Record them after a UI change and commit the PNGs with it:
+one, both at 369 dpi. The settings page is shot once per group (`settings_<group>.png`).
+Record them after a UI change and commit the PNGs with it:
 
 ```sh
 ./gradlew :app:recordRoborazziDebug     # writes app/src/test/screenshots/*.png
@@ -195,8 +195,8 @@ scripts/emulator-secondary-display.sh      # adds a 1080x1240 second display
 ./gradlew installDebug
 ```
 
-Open Genkan from the app drawer, choose **Enable Genkan as Home**, accept the prompt,
-and press Home. The companion should appear on the second display.
+Open Genkan from the app drawer, switch on **Genkan as Home** under *Device setup* in
+settings, accept the prompt, and press Home. The companion should appear on the second display.
 
 ## Getting the stock launcher back
 
@@ -208,7 +208,7 @@ scripts/recover-home.sh [serial]                       # disables Genkan's home 
 scripts/recover-home.sh [serial] <stock/.Component>    # also sets the stock launcher as home
 ```
 
-Inside the app, **Disable Genkan as Home** does the same and opens the system's
+Inside the app, switching **Genkan as Home** off does the same and opens the system's
 default-home settings.
 
 ## License
