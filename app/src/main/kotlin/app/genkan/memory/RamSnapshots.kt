@@ -47,18 +47,24 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
 
     fun ramOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".ram.gz")
 
+    /** The video RAM taken with a snapshot, when there is one. */
+    fun vramOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".vram.gz")
+
     /** Sent or refused for good: gone from the device. */
     fun remove(meta: File) {
         ramOf(meta).delete()
+        vramOf(meta).delete()
         meta.delete()
     }
 
     /**
      * Takes a snapshot of [memory]'s main RAM for [line] when it's clean and new for the game and
-     * the game has fewer than [PER_GAME]; returns whether it did.
+     * the game has fewer than [PER_GAME]; returns whether it did. [vram], when the core gives
+     * it, goes along: on a PS1 it holds the scene's font and the text box as drawn, which can
+     * map kanji codes when the script isn't in RAM as codes (Persona 2).
      */
     @Synchronized
-    fun take(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String): Boolean {
+    fun take(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String, vram: (() -> ByteArray?)? = null): Boolean {
         val ram = MainRam.of(game.platform) ?: return false
         if (!isClean(line)) return false
         val taken = runCatching { JSONObject(ledger.readText()) }.getOrNull() ?: JSONObject()
@@ -84,6 +90,10 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("app", "Genkan ${BuildConfig.VERSION_NAME}")
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
+        vram?.invoke()?.let { video ->
+            GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
+            meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
+        }
         File(dir, "$name.meta.json").writeText(meta.toString())
         taken.put(id, lines.put(key))
         ledger.writeText(taken.toString())
@@ -94,6 +104,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     companion object {
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
+        /** A PS1's video RAM is 1024 16-bit pixels wide (15-bit colour, bit 15 the mask bit). */
+        private const val VRAM_WIDTH = 1024
         private const val SAME_LINE = 0.8
         private const val LONG_LINE = 15
 

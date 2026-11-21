@@ -51,6 +51,9 @@ public:
     void clear();
     std::vector<Region> regions();
     bool read(uint64_t address, uint8_t *out, size_t size);
+    /** The core's video RAM (a PS1's 1 MB frame buffer and texture pages), 0 when it gives none. */
+    size_t videoRamSize();
+    bool readVideoRam(uint64_t offset, uint8_t *out, size_t size);
 
     void setSampleRate(int32_t rate);
     int32_t getSampleRate();

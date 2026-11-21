@@ -42,6 +42,20 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_GenkanTap_readMemory
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_videoRamSize(JNIEnv *, jclass) {
+    return static_cast<jlong>(GenkanTap::getInstance().videoRamSize());
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_GenkanTap_readVideoRam(
+    JNIEnv *env, jclass, jlong offset, jbyteArray out, jint size
+) {
+    if (size <= 0 || size > env->GetArrayLength(out)) return JNI_FALSE;
+    auto *bytes = env->GetByteArrayElements(out, nullptr);
+    bool ok = GenkanTap::getInstance().readVideoRam(static_cast<uint64_t>(offset), reinterpret_cast<uint8_t *>(bytes), size);
+    env->ReleaseByteArrayElements(out, bytes, ok ? 0 : JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_GenkanTap_audioSampleRate(JNIEnv *, jclass) {
     return GenkanTap::getInstance().getSampleRate();
 }

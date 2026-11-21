@@ -52,9 +52,12 @@ class TableText(private val table: CharTable, private val unit: Int = 2) {
         while (i + unit <= until) {
             val code = buildString { for (k in 0 until unit) append("%02X".format(bytes[i + k].toInt() and 0xFF)) }
             val text = table.char(code)
+            // The code's value, for telling controls apart: Human's are 0x8000 up (0xFFF9, 0x8100).
+            val value = (if (table.littleEndian) code.chunked(2).reversed().joinToString("") else code).toLong(16)
+            val high = 1L shl (unit * 8 - 1)
             out += when {
                 text != null -> Token.Known(text)
-                table.isBreak(code) || code.startsWith("FF") || code.all { it == '0' } -> Token.Control(code)
+                table.isBreak(code) || value >= high || value == 0L -> Token.Control(code)
                 else -> Token.Unknown(code)
             }
             i += unit

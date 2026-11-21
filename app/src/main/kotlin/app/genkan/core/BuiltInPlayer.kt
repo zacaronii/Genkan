@@ -86,7 +86,30 @@ class BuiltInPlayer @Inject constructor() {
         return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base)
     }
 
+    /**
+     * The running game's video RAM (a PS1's 1024×512 16-bit frame buffer and texture pages,
+     * where its font and the drawn text box are), or null when the core gives none.
+     */
+    fun videoRam(): ByteArray? {
+        val session = _game.value?.session ?: return null
+        return try {
+            val size = session.videoSize().toInt()
+            if (size <= 0) return null
+            val out = ByteArray(size)
+            var at = 0
+            while (at < size) {
+                val n = minOf(VIDEO_CHUNK, size - at)
+                (session.readVideo(at.toLong(), n) ?: return null).copyInto(out, at)
+                at += n
+            }
+            out
+        } catch (e: RemoteException) {
+            null
+        }
+    }
+
     companion object {
+        private const val VIDEO_CHUNK = 64 * 1024
         private const val TAG = "BuiltInPlayer"
         const val FRAME_WIDTH = "width"
         const val FRAME_HEIGHT = "height"

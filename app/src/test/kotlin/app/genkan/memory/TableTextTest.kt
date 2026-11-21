@@ -52,6 +52,17 @@ class TableTextTest {
     }
 
     @Test
+    fun `a little-endian table's controls end its lines`() {
+        // Twilight Syndrome's codes (Yomikata tables/ps1/SLPS-00102.tbl): あ = 01 00, controls 0x8xxx.
+        val kana = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+        val twilight = CharTable.parse(listOf(kana.mapIndexed { i, c -> "%02X00=%c".format(1 + i, c) }.joinToString("\n")))
+        fun le(text: String) = text.flatMap { c -> listOf((kana.indexOf(c) + 1).toByte(), 0) }.toByteArray()
+        val ram = le("ほかのせりふ") + byteArrayOf(0x00, 0x81.toByte()) + le("うしろから") + byteArrayOf(0x22, 0x01) + le("こえてくる") + byteArrayOf(0x08, 0x84.toByte()) + le("つぎのせりふ")
+        val reader = TableText(twilight)
+        assertEquals("うしろから聞こえてくる", reader.correct(reader.tokens(ram, 0, ram.size), "うしろから聞こえてくる"))
+    }
+
+    @Test
     fun `other text isn't forced onto the codes`() {
         val reader = TableText(table)
         assertNull(reader.correct(reader.tokens(line, 0, line.size), "まったくちがうせりふをいう"))

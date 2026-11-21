@@ -77,6 +77,27 @@ bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
     return false;
 }
 
+size_t GenkanTap::videoRamSize() {
+    std::lock_guard<std::mutex> lock(memoryLock);
+    if (systemRamData == nullptr || systemRamData(RETRO_MEMORY_VIDEO_RAM) == nullptr) return 0;
+    return systemRamSize(RETRO_MEMORY_VIDEO_RAM);
+}
+
+bool GenkanTap::readVideoRam(uint64_t offset, uint8_t *out, size_t size) {
+    uint8_t *data;
+    size_t total;
+    {
+        std::lock_guard<std::mutex> lock(memoryLock);
+        if (systemRamData == nullptr) return false;
+        data = static_cast<uint8_t *>(systemRamData(RETRO_MEMORY_VIDEO_RAM));
+        total = systemRamSize(RETRO_MEMORY_VIDEO_RAM);
+    }
+    if (data == nullptr || offset + size > total) return false;
+    struct iovec local { out, size };
+    struct iovec remote { data + offset, size };
+    return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
+}
+
 void GenkanTap::setSampleRate(int32_t rate) {
     std::lock_guard<std::mutex> lock(audioLock);
     sampleRate = rate;

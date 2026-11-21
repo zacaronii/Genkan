@@ -117,7 +117,7 @@ class BuiltInText @Inject constructor(
             samples.sample(memory, game, line)
         } else if (id != null) {
             val core = player.game.value?.core?.displayName ?: "built-in player"
-            snapshots.take(memory, game, id, line, "Genkan built-in player ($core)")
+            snapshots.take(memory, game, id, line, "Genkan built-in player ($core)", player::videoRam)
         } else {
             Log.i(TAG, "No release id in ${game.title}'s RAM: no snapshot")
         }

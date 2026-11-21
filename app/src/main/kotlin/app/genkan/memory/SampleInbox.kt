@@ -165,10 +165,12 @@ class SampleInbox @Inject constructor(
                 snapshots.remove(meta)
                 continue
             }
-            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            val parts = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("meta", null, meta.readBytes().toRequestBody(JSON))
                 .addFormDataPart("ram", ram.name, ram.asRequestBody(GZIP))
-                .build()
+            // Video RAM, when it was taken: an inbox that doesn't keep it yet ignores the part.
+            snapshots.vramOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("vram", it.name, it.asRequestBody(GZIP)) }
+            val body = parts.build()
             val request = Request.Builder()
                 .url(config.snapshotsEndpoint)
                 .header("Authorization", "Bearer ${config.token.trim()}")

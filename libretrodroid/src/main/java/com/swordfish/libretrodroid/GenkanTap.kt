@@ -31,6 +31,12 @@ object GenkanTap {
     /** [size] bytes at [address] into [out]; false when no region holds all of them. */
     @JvmStatic external fun readMemory(address: Long, out: ByteArray, size: Int): Boolean
 
+    /** The size of the core's video RAM, 0 when it gives none. */
+    @JvmStatic external fun videoRamSize(): Long
+
+    /** [size] bytes of video RAM from [offset] into [out]; false past its end. */
+    @JvmStatic external fun readVideoRam(offset: Long, out: ByteArray, size: Int): Boolean
+
     /** The core's sample rate, 0 before a game is loaded. */
     @JvmStatic external fun audioSampleRate(): Int
 

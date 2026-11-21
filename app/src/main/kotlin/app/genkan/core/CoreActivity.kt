@@ -189,6 +189,14 @@ class CoreActivity : ComponentActivity() {
         override fun quit() {
             runOnUiThread { quit() }
         }
+
+        override fun videoSize(): Long = GenkanTap.videoRamSize()
+
+        override fun readVideo(offset: Long, size: Int): ByteArray? {
+            if (size !in 1..MAX_READ) return null
+            val out = ByteArray(size)
+            return out.takeIf { GenkanTap.readVideoRam(offset, it, size) }
+        }
     }
 
     /** GL's rows come bottom first: they go into shared memory top first, as a Bitmap wants them. */

@@ -140,6 +140,15 @@ class CharTable private constructor(
     /** What [code] (hex, memory byte order) stands for, or null when the table lacks it. */
     fun char(code: String): String? = chars[code.uppercase()]
 
+    /**
+     * Whether the table's codes look little-endian in memory: most of a 2-byte table's keys
+     * then end in 00 (あ = 01 00), where a big-endian one's begin with it (00 50).
+     */
+    val littleEndian: Boolean by lazy {
+        val two = chars.keys.filter { it.length == 4 }
+        two.count { it.endsWith("00") } > two.count { it.startsWith("00") }
+    }
+
     /** Whether [code] ends a string or a line. */
     fun isBreak(code: String): Boolean = code.uppercase().let { it in ends || it in newlines }
 

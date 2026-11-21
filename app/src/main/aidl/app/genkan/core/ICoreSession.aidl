@@ -13,4 +13,10 @@ interface ICoreSession {
 
     /** Saves and closes the game; the process ends after. */
     oneway void quit() = 4;
+
+    /** The size of the core's video RAM, 0 when it gives none. */
+    long videoSize() = 5;
+
+    /** size bytes of video RAM from offset, or null. */
+    byte[] readVideo(long offset, int size) = 6;
 }
