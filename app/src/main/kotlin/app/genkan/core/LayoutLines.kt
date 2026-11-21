@@ -9,7 +9,9 @@ import app.genkan.yomikata.LayoutRead
  * goes when it's replaced by one that doesn't continue it, or the message clears: a game that
  * advances by itself, or a line skipped before it finished typing. Each line goes once, so the
  * same sentence twice in a row is two lines; a line that grows after it went (a box that adds a
- * sentence and waits again) goes again, taking back what went before.
+ * sentence and waits again) goes again, taking back what went before. A game that waits for a
+ * press partway through typing a message (`waiting` with `shown` short of the end) has shown only
+ * that much: that much goes, and the rest follows as the line grows.
  */
 class LayoutLines {
     /** [takesBack]: the text of this line that went before, which this one replaces. */
@@ -29,6 +31,15 @@ class LayoutLines {
         val gone = sentText
         if (gone == line.text) return null
         return line.copy(takesBack = gone)
+    }
+
+    /** The game waits with [shown] of the current line on screen: that much goes, once. */
+    private fun sendPart(shown: String, out: MutableList<Line>) {
+        val line = current ?: return
+        val gone = sentText
+        if (shown.isBlank() || shown == gone || (gone != null && gone.startsWith(shown))) return
+        out += line.copy(text = shown, takesBack = gone)
+        sentText = shown
     }
 
     private fun send(out: MutableList<Line>) {
@@ -66,7 +77,8 @@ class LayoutLines {
             read.shown != null -> read.onScreen == text
             else -> null
         }
-        if (complete == true) send(out)
+        val partway = read.waiting == true && read.shown != null && read.onScreen != null && read.onScreen != text
+        if (partway) sendPart(read.onScreen!!, out) else if (complete == true) send(out)
         return Step(out, settle = complete == null && unsent() != null)
     }
 

@@ -91,6 +91,9 @@ class ReaderSession @Inject constructor(
         }
         val now = System.currentTimeMillis()
         if (message.whole) {
+            // A piece still settling came first: it goes first.
+            settleJobs.remove(message.thread)?.cancel()
+            feeds[message.thread]?.settle(now)?.let { handOver(it, message.thread) }
             // Known to be whole: kept as it is, even a repeat of the line before.
             val text = Lines.normalise(message.text)
             // Its speaker goes with it: only whole lines know theirs.

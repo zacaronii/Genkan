@@ -77,6 +77,20 @@ class LayoutLinesTest {
     }
 
     @Test
+    fun `a wait partway through a message sends what's shown, then the rest as the line grows`() {
+        read("前半。後半。", waiting = false, shown = 1)
+        val first = read("前半。後半。", waiting = true, shown = 3)
+        assertEquals(listOf("前半。"), texts(first))
+        assertNull(first.lines.single().takesBack)
+        // Still waiting there: nothing again.
+        assertEquals(emptyList<String>(), texts(read("前半。後半。", waiting = true, shown = 3)))
+        read("前半。後半。", waiting = false, shown = 5)
+        val whole = read("前半。後半。", waiting = true, shown = 6)
+        assertEquals("前半。後半。", whole.lines.single().text)
+        assertEquals("前半。", whole.lines.single().takesBack)
+    }
+
+    @Test
     fun `a line with neither flag nor count settles`() {
         val step = read("静かな行")
         assertTrue(step.settle)
