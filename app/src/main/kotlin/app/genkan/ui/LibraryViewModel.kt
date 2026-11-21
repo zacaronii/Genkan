@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import app.genkan.library.ArtworkWarmer
 import app.genkan.library.FocusedGame
 import app.genkan.saves.SaveSync
 import app.genkan.azahar.AzaharText
@@ -76,6 +77,7 @@ class LibraryViewModel @Inject constructor(
     private val saveSync: SaveSync,
     private val ppssppText: PpssppText,
     private val azaharText: AzaharText,
+    private val artworkWarmer: ArtworkWarmer,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -125,6 +127,11 @@ class LibraryViewModel @Inject constructor(
                 val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
                 game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
             }.distinctUntilChanged().collect(focusedGame::set)
+        }
+        // The artwork of the games around the focused one, so the next few are already here.
+        viewModelScope.launch {
+            combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }
+                .collect { (list, index) -> artworkWarmer.warmAround(list, index.coerceIn(0, (list.size - 1).coerceAtLeast(0))) }
         }
     }
 

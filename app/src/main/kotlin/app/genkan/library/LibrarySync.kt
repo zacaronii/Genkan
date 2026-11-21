@@ -13,8 +13,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import app.genkan.romm.RomMApiFactory
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -124,6 +128,74 @@ class LibrarySync @Inject constructor(
             genres = rom.genres?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
             releaseYear = rom.firstReleaseDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).year },
             developer = rom.developerName,
+            coverLargePath = rom.coverLarge,
+            physicalPath = RomMApiFactory.resourcePath(rom.ssMetadata?.physicalPath),
+            logoPath = RomMApiFactory.resourcePath(rom.ssMetadata?.logoPath),
+            box2dPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dPath),
+            box2dSidePath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dSidePath),
+            box2dBackPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dBackPath),
+            box3dPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box3dPath),
+            titleScreenPath = RomMApiFactory.resourcePath(rom.ssMetadata?.titleScreenPath),
+            marqueePath = RomMApiFactory.resourcePath(rom.ssMetadata?.marqueePath),
+            fanartPath = RomMApiFactory.resourcePath(rom.ssMetadata?.fanartPath),
+            screenshotPaths = GameEntity.joinList(rom.screenshotPaths?.mapNotNull(RomMApiFactory::resourcePath)),
+            manualPath = rom.manualPath.takeIf { rom.hasManual }?.let(RomMApiFactory::resourcePath),
+            regions = GameEntity.joinList(rom.regions),
+            franchises = GameEntity.joinList(rom.metadatum?.franchises),
+            publishers = GameEntity.joinList(rom.metadatum?.publishers),
+            gameModes = GameEntity.joinList(rom.metadatum?.gameModes),
+            playerCount = rom.metadatum?.playerCount?.trim()?.takeIf { it.isNotEmpty() },
+            averageRating = rom.metadatum?.averageRating?.takeIf { it > 0f },
+            releaseDateMillis = rom.firstReleaseDateMillis,
+            youtubeVideoId = rom.youtubeVideoId?.trim()?.takeIf { it.isNotEmpty() },
+            discCount = discCount(rom),
+            hltbId = rom.hltbId,
+            // HowLongToBeat reports 0 for what it doesn't know.
+            hltbMainStorySec = rom.hltbMetadata?.mainStorySec?.takeIf { it > 0 },
+            hltbMainPlusExtraSec = rom.hltbMetadata?.mainPlusExtraSec?.takeIf { it > 0 },
+            hltbCompletionistSec = rom.hltbMetadata?.completionistSec?.takeIf { it > 0 },
+            hltbAllStylesSec = rom.hltbMetadata?.allStylesSec?.takeIf { it > 0 },
+            hltbReviewScore = rom.hltbMetadata?.reviewScore?.takeIf { it > 0 },
+            lastPlayedMillis = parseTimestamp(rom.romUser?.lastPlayed),
+            backlogged = rom.romUser?.backlogged ?: false,
+            nowPlaying = rom.romUser?.nowPlaying ?: false,
+            userRating = rom.romUser?.rating ?: 0,
+            userDifficulty = rom.romUser?.difficulty ?: 0,
+            userCompletion = rom.romUser?.completion ?: 0,
+            userStatus = rom.romUser?.status?.takeIf { it.isNotBlank() },
+            userHidden = rom.romUser?.hidden ?: false,
         )
+
+        /**
+         * The number of discs, from ScreenScraper's disc cut-outs or from a folder game's disc
+         * files, whichever says more. Null when neither names a disc, which a single-disc or
+         * cartridge game never does.
+         */
+        fun discCount(rom: RomMRom): Int? {
+            val ss = rom.ssMetadata
+            val extraDiscs = ss?.physicalExtraDiscs.orEmpty()
+            val fromSs = if (ss?.physicalDisc == null && extraDiscs.isEmpty()) {
+                0
+            } else {
+                val numbers = listOfNotNull(ss?.physicalDisc) + extraDiscs.map { it.disc }
+                maxOf(numbers.maxOrNull() ?: 0, extraDiscs.size + 1)
+            }
+            val fromFiles = rom.files.orEmpty().filter { it.isGameContent }.mapNotNull { it.discNumber }.distinct().size
+            return maxOf(fromSs, fromFiles).takeIf { it > 0 }
+        }
+
+        /** RomM's ISO-8601 timestamps, with or without an offset (none means UTC). */
+        fun parseTimestamp(value: String?): Long? {
+            if (value.isNullOrBlank()) return null
+            return try {
+                OffsetDateTime.parse(value).toInstant().toEpochMilli()
+            } catch (e: DateTimeParseException) {
+                try {
+                    LocalDateTime.parse(value).toInstant(ZoneOffset.UTC).toEpochMilli()
+                } catch (e: DateTimeParseException) {
+                    null
+                }
+            }
+        }
     }
 }
