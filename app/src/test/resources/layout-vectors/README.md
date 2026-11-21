@@ -1,4 +1,4 @@
-Copied unmodified from Yomikata, commit fe40b67,
+Copied unmodified from Yomikata, commit e14b877,
 tools/tests/layout-vectors/. Its README follows.
 
 # Layout conformance vectors
