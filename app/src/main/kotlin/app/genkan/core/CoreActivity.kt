@@ -213,9 +213,8 @@ class CoreActivity : ComponentActivity() {
             return null
         }
 
-        override fun watchLayout(layoutJson: String, tableText: String, unit: Int, controlsJson: String) {
-            layoutWatch.set(layoutJson, tableText, unit, controlsJson)
-        }
+        override fun watchLayout(layoutJson: String, tableText: String, entryJson: String): Boolean =
+            layoutWatch.set(layoutJson, tableText, entryJson)
 
         override fun videoSize(): Long = GenkanTap.videoRamSize()
 

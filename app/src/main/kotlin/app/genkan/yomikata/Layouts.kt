@@ -213,7 +213,7 @@ object Layouts {
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
             // The text's own cleanup, then the entry's, as for a hook.
-            for (step in CleanupStep.parse(spec.optJSONArray("cleanup")) + entryCleanup) text = step.apply(text)
+            for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
             return text
         }
 
@@ -296,6 +296,14 @@ object Layouts {
     }
 
     private const val REPLACEMENT = '\uFFFD'
+
+    /** A text's cleanup, compiled once: a layout is read every frame. */
+    private val cleanups = java.util.concurrent.ConcurrentHashMap<String, List<CleanupStep>>()
+
+    private fun cleanupOf(spec: JSONObject): List<CleanupStep> {
+        val steps = spec.optJSONArray("cleanup") ?: return emptyList()
+        return cleanups.getOrPut(steps.toString()) { CleanupStep.parse(steps) }
+    }
 
     /**
      * EUC-JP codes whose character differs between decoders (Android's follows Microsoft's

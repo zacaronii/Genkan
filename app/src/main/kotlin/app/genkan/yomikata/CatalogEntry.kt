@@ -23,6 +23,8 @@ data class CatalogEntry(
     val hooks: List<Hook> = emptyList(),
     /** Where the game keeps what it shows, per version (docs/format.md, Layouts; read by [Layouts]). */
     val layouts: List<JSONObject> = emptyList(),
+    /** [cleanup] as the entry writes it, for passing on (a layout read in the player's process). */
+    val cleanupJson: JSONArray = JSONArray(),
 ) {
     /** A printing the entry is known to fit: a boot executable's hash (discs) or a header CRC (cartridges). */
     data class Version(val id: String?, val exeSha1: String?, val headerCrc32: String?)
@@ -57,6 +59,7 @@ data class CatalogEntry(
                 cleanup = CleanupStep.parse(o.optJSONArray("cleanup")),
                 hooks = o.optJSONArray("hooks").objects().map(::parseHook),
                 layouts = o.optJSONArray("layouts").objects(),
+                cleanupJson = o.optJSONArray("cleanup") ?: JSONArray(),
             )
         }
 

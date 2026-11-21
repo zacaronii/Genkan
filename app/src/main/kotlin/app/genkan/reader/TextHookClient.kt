@@ -28,7 +28,13 @@ import javax.inject.Singleton
  * or a plain-text frame (Textractor's WebSocket plugin, LunaTranslator). [thread] is empty when
  * the source doesn't say; such lines skip the thread picker.
  */
-data class HookMessage(val text: String, val thread: String = "", val hookCode: String = "") {
+data class HookMessage(
+    val text: String,
+    val thread: String = "",
+    val hookCode: String = "",
+    /** A complete line, as the game holds it (a Yomikata layout's): not a piece to carry on. */
+    val whole: Boolean = false,
+) {
     companion object {
         fun parse(frame: String): HookMessage? {
             val fields = if (frame.trim().startsWith('{')) Lines.jsonStringFields(frame.trim()) else null

@@ -65,10 +65,11 @@ class BuiltInText @Inject constructor(
                 if (game != null) {
                     // A game with its own codes: OCR's lines are put right from memory with its table.
                     ocr.corrector = ::tableLine
+                    stopLayout()
                     launch { watchLayout() }
                     text.follow(player::memory)
                 } else {
-                    _layoutActive.value = false
+                    stopLayout()
                     text.off()
                 }
             }
@@ -101,8 +102,8 @@ class BuiltInText @Inject constructor(
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
                 // The executable's hash isn't known here: the layout naming no version.
                 val layout = Layouts.pick(entry.layouts, null) ?: return
-                val watching = player.watchLayout(layout, catalog.tableText(entry).orEmpty(), entry.unit, entry.controls)
-                _layoutActive.value = watching
+                val watching = player.watchLayout(layout, entry, catalog.tableText(entry).orEmpty())
+                setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
                 return
             }
@@ -114,7 +115,25 @@ class BuiltInText @Inject constructor(
     suspend fun debugWatch(layoutJson: String) {
         val game = session.game.value
         val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
-        _layoutActive.value = player.watchLayout(org.json.JSONObject(layoutJson), entry?.let(catalog::tableText).orEmpty(), entry?.unit ?: 2, entry?.controls.orEmpty())
+        setLayoutActive(player.watchLayout(org.json.JSONObject(layoutJson), entry, entry?.let(catalog::tableText).orEmpty()))
+    }
+
+    /**
+     * While a layout gives the game's lines, OCR and the memory search keep reading (a snapshot
+     * and the table reader use them) but put nothing in the backlog: two copies of each line,
+     * one perhaps misread, would only crowd it.
+     */
+    private fun setLayoutActive(on: Boolean) {
+        _layoutActive.value = on
+        ocr.quiet = on
+    }
+
+    /** A new game, or none: nothing of the last one's layout carries over. */
+    private fun stopLayout() {
+        setLayoutActive(false)
+        lastRead = null
+        settleJob?.cancel()
+        layoutLines.reset()
     }
 
     private var lastRead: LayoutRead? = null
@@ -149,36 +168,26 @@ class BuiltInText @Inject constructor(
         }
     }
 
-    private var layoutLine: String? = null
-    private var pendingLine: kotlinx.coroutines.Job? = null
+    private val layoutLines = LayoutLines()
+    private var settleJob: kotlinx.coroutines.Job? = null
 
-    /**
-     * A layout read: its message goes to the backlog once the line is complete: when the game
-     * waits for a press, or (without that flag) once it has typed out in full, or stops changing.
-     */
+    /** A layout read: the lines [LayoutLines] says are complete go to the backlog. */
     private fun onLayoutRead(read: LayoutRead) {
         lastRead = read
-        val message = read.message?.replace("\n", "")?.takeIf { it.isNotBlank() } ?: return
-        pendingLine?.cancel()
-        val complete = when {
-            read.waiting != null -> read.waiting
-            read.shown != null -> read.onScreen == message
-            else -> null
-        }
-        when (complete) {
-            true -> submitLayoutLine(message)
-            false -> Unit
-            null -> pendingLine = scope.launch {
+        settleJob?.cancel()
+        val step = layoutLines.read(read)
+        step.lines.forEach(::submitLayoutLine)
+        if (step.settle) {
+            settleJob = scope.launch {
                 delay(LAYOUT_SETTLE_MS)
-                submitLayoutLine(message)
+                layoutLines.settled()?.let(::submitLayoutLine)
             }
         }
     }
 
-    private fun submitLayoutLine(message: String) {
-        if (message == layoutLine) return
-        layoutLine = message
-        session.submit(HookMessage(message))
+    /** A whole line, as the game holds it: the backlog's carry rules for pieces don't apply. */
+    private fun submitLayoutLine(line: LayoutLines.Line) {
+        session.submit(HookMessage(line.text, whole = true))
     }
 
     /** Everything the built-in player can add to a snapshot. */

@@ -99,6 +99,9 @@ class OcrReader @Inject constructor(
         latch.reset()
     }
 
+    /** Lines are read but not put in the backlog (another source gives them). */
+    @Volatile var quiet: Boolean = false
+
     /** Turns a line OCR read into the game's exact text, or null to keep OCR's. */
     @Volatile var corrector: (suspend (String) -> String?)? = null
 
@@ -136,7 +139,7 @@ class OcrReader @Inject constructor(
         lastText = text
         // A memory source that has the game's script gives the line in the game's own words.
         val exact = corrector?.let { fix -> runCatching { fix(text) }.onFailure { Log.w(TAG, "Correction failed: $it") }.getOrNull() }
-        session.submit(HookMessage(exact ?: text))
+        if (!quiet) session.submit(HookMessage(exact ?: text))
         _latest.value = text
         _lines.tryEmit(text)
     }

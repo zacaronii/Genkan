@@ -5,6 +5,7 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
+import app.genkan.yomikata.CatalogEntry
 import app.genkan.yomikata.LayoutRead
 import app.genkan.yomikata.Layouts
 import androidx.core.graphics.createBitmap
@@ -55,11 +56,15 @@ class BuiltInPlayer @Inject constructor() {
     }
 
     /**
-     * Asks the player to read [layout] between frames (null: stop), with the entry's table for
-     * table text; returns whether it could.
+     * Asks the player to read [layout] between frames (null: stop), with [entry]'s table, unit,
+     * controls and cleanup; whether the player took it.
      */
-    fun watchLayout(layout: org.json.JSONObject?, tableText: String = "", unit: Int = 2, controls: Map<String, String> = emptyMap()): Boolean = try {
-        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, unit, org.json.JSONObject(controls as Map<*, *>).toString()) != null
+    fun watchLayout(layout: org.json.JSONObject?, entry: CatalogEntry?, tableText: String = ""): Boolean = try {
+        val entryJson = org.json.JSONObject()
+            .put("unit", entry?.unit ?: 2)
+            .put("controls", org.json.JSONObject((entry?.controls ?: emptyMap()) as Map<*, *>))
+            .put("cleanup", entry?.cleanupJson ?: org.json.JSONArray())
+        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, entryJson.toString()) == true
     } catch (e: RemoteException) {
         false
     }
