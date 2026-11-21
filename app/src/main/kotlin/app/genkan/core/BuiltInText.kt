@@ -4,7 +4,10 @@ import app.genkan.memory.FoundText
 import app.genkan.memory.MemoryText
 import app.genkan.memory.MemoryTextStatus
 import app.genkan.memory.MemorySource
+import app.genkan.memory.MainRam
+import app.genkan.memory.MemoryScan
 import app.genkan.memory.RamSnapshots
+import app.genkan.memory.TableText
 import app.genkan.memory.TextSamples
 import app.genkan.yomikata.YomikataCatalog
 import android.util.Log
@@ -28,7 +31,7 @@ import javax.inject.Singleton
 @Singleton
 class BuiltInText @Inject constructor(
     private val session: ReaderSession,
-    ocr: OcrReader,
+    private val ocr: OcrReader,
     private val player: BuiltInPlayer,
     private val samples: TextSamples,
     private val snapshots: RamSnapshots,
@@ -50,8 +53,52 @@ class BuiltInText @Inject constructor(
         started = true
         scope.launch {
             player.game.collectLatest { game ->
-                if (game != null) text.follow(player::memory) else text.off()
+                if (game != null) {
+                    // A game with its own codes: OCR's lines are put right from memory with its table.
+                    ocr.corrector = ::tableLine
+                    text.follow(player::memory)
+                } else {
+                    text.off()
+                }
             }
+        }
+    }
+
+    /** The table reader for each game key that has one. */
+    private val tables = HashMap<String, TableText>()
+
+    /**
+     * [line] as a game with a Yomikata table wrote it (see [TableText]), or null to keep OCR's:
+     * its kana runs are looked for in main RAM as the table's codes, and the codes around the
+     * first place found lined up with OCR's line.
+     */
+    private suspend fun tableLine(line: String): String? = withContext(Dispatchers.IO) {
+        val game = session.game.value
+        val ramAt = MainRam.of(game.platform) ?: return@withContext null
+        player.memory()?.use { memory ->
+            val ram = RamSnapshots.mainRamOf(memory, game.platform) ?: return@use null
+            // Only a table found is kept: the catalog may gain one while the game runs.
+            val reader = tables[game.key] ?: run {
+                val id = ids.getOrPut(game.key) { RamSnapshots.gameId(game.platform, ram) } ?: return@use null
+                val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return@use null
+                val table = catalog.table(entry) ?: return@use null
+                Log.i(TAG, "${game.title} ($id): reading with its Yomikata table")
+                TableText(table, entry.unit).also { tables[game.key] = it }
+            }
+            val reach = (line.length + MARGIN) * 2
+            for (probe in reader.probes(line)) {
+                val hits = MemoryScan.find(ram, probe)
+                if (hits.isEmpty() || hits.size > MAX_PLACES) continue
+                val hit = hits.first()
+                // As far back as the line could start, keeping the codes' alignment.
+                val from = hit - minOf(hit / 2, reach) * 2
+                val tokens = reader.tokens(ram, maxOf(0, from), minOf(ram.size, hit + reach * 2))
+                reader.correct(tokens, line)?.let { exact ->
+                    Log.i(TAG, "Table line at 0x%08x: %s".format(ramAt.baseAddress + hit, exact))
+                    return@use exact
+                }
+            }
+            null
         }
     }
 
@@ -84,5 +131,9 @@ class BuiltInText @Inject constructor(
     private companion object {
         const val TAG = "BuiltInText"
         val STANDARD = setOf("shift_jis", "utf16le", "utf8")
+        /** Codes either side of a found run that can still be its line. */
+        const val MARGIN = 8
+        /** A run found in more places than this says nothing about where the line is. */
+        const val MAX_PLACES = 3
     }
 }

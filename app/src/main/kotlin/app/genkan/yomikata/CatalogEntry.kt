@@ -137,6 +137,19 @@ class CharTable private constructor(
 ) {
     val size: Int get() = chars.size
 
+    /** What [code] (hex, memory byte order) stands for, or null when the table lacks it. */
+    fun char(code: String): String? = chars[code.uppercase()]
+
+    /** Whether [code] ends a string or a line. */
+    fun isBreak(code: String): Boolean = code.uppercase().let { it in ends || it in newlines }
+
+    private val reverse: Map<Char, String> by lazy {
+        buildMap { chars.entries.sortedBy { it.key }.forEach { (code, text) -> if (text.length == 1) putIfAbsent(text[0], code) } }
+    }
+
+    /** The code for [c] (the lowest, when several stand for it), or null. */
+    fun code(c: Char): String? = reverse[c]
+
     /**
      * [bytes] as text, [unit] bytes per code: ends and page breaks become blank lines, newlines
      * line breaks, other [controls] nothing, and codes the table lacks U+FFFD.
