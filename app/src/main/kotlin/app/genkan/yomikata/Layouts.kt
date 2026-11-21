@@ -59,7 +59,7 @@ object Layouts {
     /**
      * Everything [layout] names, read from [memory]. A field that can't be read is left out and
      * its reason kept in [LayoutRead.errors]. [unit], [table] and [controls] are the entry's,
-     * for `table` text.
+     * for `table` text; [cleanup] is the entry's, applied to every text after the text's own.
      */
     fun read(
         layout: JSONObject,
@@ -67,9 +67,10 @@ object Layouts {
         unit: Int = 2,
         table: CharTable? = null,
         controls: Map<String, String> = emptyMap(),
+        cleanup: List<CleanupStep> = emptyList(),
     ): LayoutRead {
         val order = if (layout.optString("endian", "little") == "big") ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
-        val reader = Reader(memory, order, unit, table, controls)
+        val reader = Reader(memory, order, unit, table, controls, cleanup)
         val errors = LinkedHashMap<String, String>()
         fun <T> attempt(name: String, read: () -> T): T? = try {
             read()
@@ -103,7 +104,8 @@ object Layouts {
         val choosing = flag("choosing")
         val choices = layout.optJSONObject("choices")?.let { spec ->
             attempt("choices") {
-                val rows = reader.text(spec).split("\n")
+                // An empty text is no answers.
+                val rows = reader.text(spec).takeIf { it.isNotEmpty() }?.split("\n").orEmpty()
                 if (choiceCount != null) rows.take(choiceCount.coerceAtLeast(0).toInt()) else rows
             }
         }
@@ -124,6 +126,7 @@ object Layouts {
         val unit: Int,
         val table: CharTable?,
         val controls: Map<String, String>,
+        val entryCleanup: List<CleanupStep>,
     ) {
 
         /** The address [spec] names: fixed, or `base` then, for each offset, the pointer there plus it. */
@@ -175,7 +178,8 @@ object Layouts {
             }
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
-            for (step in CleanupStep.parse(spec.optJSONArray("cleanup"))) text = step.apply(text)
+            // The text's own cleanup, then the entry's, as for a hook.
+            for (step in CleanupStep.parse(spec.optJSONArray("cleanup")) + entryCleanup) text = step.apply(text)
             return text
         }
 
@@ -225,8 +229,8 @@ object Layouts {
 
         /**
          * [data] as text, one character at a time (the format's rule, so every decoder agrees):
-         * a character that doesn't decode is one U+FFFD, and Shift-JIS's single bytes 0x80,
-         * 0xA0 and 0xFD-0xFF are U+FFFD without asking the decoder.
+         * a character that doesn't decode is one U+FFFD, and so is any single byte from 0x80 up
+         * but Shift-JIS's half-width kana, without asking the decoder.
          */
         private fun decode(data: ByteArray, charset: String, width: Int, decoder: java.nio.charset.CharsetDecoder?): String {
             if (charset == "table") {
@@ -238,7 +242,8 @@ object Layouts {
             while (i < data.size) {
                 val n = minOf(charLength(data, i, charset, width), data.size - i)
                 val b = data[i].toInt() and 0xFF
-                if (charset == "shift_jis" && n == 1 && (b == 0x80 || b == 0xA0 || b >= 0xFD)) {
+                // A single byte from 0x80 up is U+FFFD, except Shift-JIS's half-width kana (A1-DF).
+                if (n == 1 && b >= 0x80 && !(charset == "shift_jis" && b in 0xA1..0xDF)) {
                     out.append(REPLACEMENT)
                 } else {
                     try {

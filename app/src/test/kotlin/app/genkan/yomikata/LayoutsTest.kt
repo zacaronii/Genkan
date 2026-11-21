@@ -56,7 +56,8 @@ class LayoutsTest {
             val paths = entry.optJSONArray("tables")
             val table = paths?.let { p -> CharTable.parse(List(p.length()) { tables!!.getString(p.getString(it)) }) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
-            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls)
+            val cleanup = CleanupStep.parse(entry.optJSONArray("cleanup"))
+            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls, cleanup)
             val expected = vector.getJSONObject("expected")
             val actual = asReference(read)
             val name = vector.getString("name")
