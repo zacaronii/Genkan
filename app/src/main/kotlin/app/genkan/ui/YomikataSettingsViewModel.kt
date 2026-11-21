@@ -71,7 +71,7 @@ class YomikataSettingsViewModel @Inject constructor(
             _check.value = "Checking ${config.endpoint}…"
             _check.value = try {
                 val games = inbox.check(config)
-                inbox.send()
+                inbox.send(retryHeld = true)
                 "Connected. The inbox holds samples for $games game${if (games == 1) "" else "s"}."
             } catch (e: Exception) {
                 "Couldn't reach the inbox at ${config.endpoint}: ${e.message ?: e.javaClass.simpleName}. " +
@@ -106,7 +106,7 @@ class YomikataSettingsViewModel @Inject constructor(
 
     fun sendAll() {
         viewModelScope.launch {
-            inbox.send(all = true)
+            inbox.send(all = true, retryHeld = true)
             countLocal()
         }
     }
