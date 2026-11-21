@@ -31,7 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +50,7 @@ import app.genkan.launch.LocalShelves
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryPane
+import app.genkan.library.LibraryView
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import coil3.compose.AsyncImage
@@ -63,7 +66,9 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val view by viewModel.view.collectAsStateWithLifecycle()
     LibraryContent(
+        view = view,
         platforms = platforms,
         games = games,
         focus = focus,
@@ -71,19 +76,24 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
         downloads = downloads,
         notice = notice,
         coverModel = viewModel::coverModel,
+        artModel = viewModel::artModel,
         emulatorFor = viewModel::emulatorFor,
         onSelectPlatform = viewModel::selectPlatform,
         onColumns = { viewModel.columns = it },
         onSelectGame = viewModel::selectGame,
+        onToggleView = viewModel::toggleView,
     )
 }
 
 /**
  * The library drawn from plain state, so it can be shown without a ViewModel (the screenshot
- * tests do). [onColumns] reports how many covers fit in a grid row, for gamepad navigation.
+ * tests do), as the shelf or the grid by [view]. [onColumns] reports how many covers fit in a
+ * grid row, for gamepad navigation. [artModel] turns a game's other artwork (large cover, spine,
+ * logo, disc) into something Coil loads. [staticMedia] is for screenshots; see [GameShelf].
  */
 @Composable
 fun LibraryContent(
+    view: LibraryView,
     platforms: List<PlatformEntity>,
     games: List<GameEntity>,
     focus: LibraryFocus,
@@ -91,11 +101,18 @@ fun LibraryContent(
     downloads: Map<Long, DownloadEntity>,
     notice: String?,
     coverModel: (GameEntity) -> Any?,
+    artModel: (String?) -> Any?,
     emulatorFor: (String) -> String?,
     onSelectPlatform: (Int) -> Unit,
     onColumns: (Int) -> Unit,
     onSelectGame: (Int) -> Unit,
+    onToggleView: () -> Unit,
+    staticMedia: Boolean? = null,
 ) {
+    if (view == LibraryView.SHELF) {
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia)
+        return
+    }
     val colors = MaterialTheme.colorScheme
 
     Row(
@@ -117,6 +134,7 @@ fun LibraryContent(
                 title = platforms.getOrNull(focus.platformIndex)?.name ?: "Library",
                 sync = sync,
                 subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
+                onToggleView = onToggleView,
             )
             if (platforms.isEmpty()) {
                 EmptyLibrary(sync)
@@ -161,8 +179,256 @@ private fun PlatformRail(names: List<String>, selected: Int, railFocused: Boolea
     }
 }
 
+/**
+ * The shelf view: the consoles along the top, one console's cases in the middle, and the focused
+ * game's title, console and buttons underneath.
+ */
 @Composable
-private fun Header(title: String, sync: SyncStatus, subtitle: String?) {
+private fun ShelfLibrary(
+    platforms: List<PlatformEntity>,
+    games: List<GameEntity>,
+    focus: LibraryFocus,
+    sync: SyncStatus,
+    downloads: Map<Long, DownloadEntity>,
+    notice: String?,
+    coverModel: (GameEntity) -> Any?,
+    artModel: (String?) -> Any?,
+    emulatorFor: (String) -> String?,
+    onSelectPlatform: (Int) -> Unit,
+    onSelectGame: (Int) -> Unit,
+    onToggleView: () -> Unit,
+    staticMedia: Boolean?,
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF1A1A20), colors.background)))
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+    ) {
+        ConsoleStrip(
+            platforms = platforms,
+            selected = focus.platformIndex,
+            stripFocused = focus.pane == LibraryPane.PLATFORMS,
+            sync = sync,
+            onSelect = onSelectPlatform,
+            onToggleView = onToggleView,
+        )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                platforms.isEmpty() -> EmptyLibrary(sync)
+                games.isEmpty() -> Unit
+                else -> GameShelf(
+                    games = games,
+                    focusedIndex = focus.gameIndex,
+                    active = focus.pane == LibraryPane.GAMES,
+                    downloads = downloads,
+                    coverModel = coverModel,
+                    artModel = artModel,
+                    onSelect = onSelectGame,
+                    staticMedia = staticMedia,
+                )
+            }
+        }
+        val game = games.getOrNull(focus.gameIndex)
+        HintBar(
+            game = game,
+            console = platforms.getOrNull(focus.platformIndex)?.name.orEmpty(),
+            download = game?.let { downloads[it.id] },
+            notice = notice,
+            onShelf = focus.pane == LibraryPane.GAMES,
+            emulatorFor = emulatorFor,
+        )
+    }
+}
+
+/**
+ * The consoles: the selected one between its neighbours' names, with L1 and R1 either side, and
+ * the sync state and the grid button on the right.
+ */
+@Composable
+private fun ConsoleStrip(
+    platforms: List<PlatformEntity>,
+    selected: Int,
+    stripFocused: Boolean,
+    sync: SyncStatus,
+    onSelect: (Int) -> Unit,
+    onToggleView: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+        ButtonGlyph("L1")
+        Row(
+            Modifier.weight(1f).padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            platforms.getOrNull(selected - 1)?.let { prev ->
+                NeighbourConsole(prev.name, Modifier.weight(1f, fill = false)) { onSelect(selected - 1) }
+            }
+            platforms.getOrNull(selected)?.let { current ->
+                val shape = RoundedCornerShape(8.dp)
+                Text(
+                    if (current.id < 0) current.name else "${current.name}  ${current.romCount}",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colors.primary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .background(if (stripFocused) colors.primary.copy(alpha = 0.18f) else Color.Transparent, shape)
+                        .border(2.dp, if (stripFocused) colors.primary else Color.Transparent, shape)
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                )
+            }
+            platforms.getOrNull(selected + 1)?.let { next ->
+                NeighbourConsole(next.name, Modifier.weight(1f, fill = false)) { onSelect(selected + 1) }
+            }
+        }
+        ButtonGlyph("R1")
+        Text(
+            // Y's hint is under the shelf; up here only what the sync is doing, and Start.
+            when (sync) {
+                SyncStatus.Idle -> ""
+                is SyncStatus.Running -> "Syncing ${sync.platform}…"
+                is SyncStatus.Done -> "Start: settings"
+                is SyncStatus.Failed -> "Sync failed"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp),
+        )
+        ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
+    }
+}
+
+@Composable
+private fun NeighbourConsole(name: String, modifier: Modifier, onClick: () -> Unit) {
+    Text(
+        name,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+    )
+}
+
+/** The button that switches to [target]; Select does the same from the pad. */
+@Composable
+private fun ViewToggle(target: LibraryView, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.surface)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ButtonGlyph("Select")
+        Text(if (target == LibraryView.GRID) "Grid" else "Shelf", style = MaterialTheme.typography.labelMedium, color = colors.onSurface)
+    }
+}
+
+/** A controller button's name in a small pill, as the hints show them. */
+@Composable
+private fun ButtonGlyph(label: String) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .height(20.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.onSurface.copy(alpha = 0.14f))
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.onSurface)
+    }
+}
+
+/** Under the shelf: the focused game's title and console, and what A, X and Y do. */
+@Composable
+private fun HintBar(
+    game: GameEntity?,
+    console: String,
+    download: DownloadEntity?,
+    notice: String?,
+    onShelf: Boolean,
+    emulatorFor: (String) -> String?,
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                game?.name ?: " ",
+                style = MaterialTheme.typography.titleLarge,
+                color = colors.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                notice ?: game?.let { shelfStatus(it, console, download) } ?: console,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (notice != null) colors.primary else colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            Modifier.padding(start = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (game != null) {
+                // On the console strip, A goes down to the cases; on a case it acts on the game.
+                Hint("A", if (onShelf) primaryHint(game, download, emulatorFor) else "Choose")
+                if (onShelf && download?.state == DownloadState.INSTALLED) Hint("X", "Delete")
+            }
+            Hint("Y", "Sync")
+        }
+    }
+}
+
+@Composable
+private fun Hint(button: String, action: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ButtonGlyph(button)
+        Text(action, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/** The line under the title: the console, the year, the size and whether the game is here. */
+private fun shelfStatus(game: GameEntity, console: String, download: DownloadEntity?): String {
+    if (LocalShelves.isLocal(game)) return console
+    val state = when (download?.state) {
+        null -> "not downloaded"
+        DownloadState.QUEUED -> "queued"
+        DownloadState.RUNNING -> {
+            val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
+            "downloading $percent%"
+        }
+        DownloadState.INSTALLED -> "on this device"
+        DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
+    }
+    return listOfNotNull(console, game.releaseYear?.toString(), formatSize(game.fsSizeBytes), state).joinToString("  ·  ")
+}
+
+/** What A does for [game], the same choice gameLine spells out in the grid. */
+private fun primaryHint(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
+    when (game.platformSlug) {
+        LocalShelves.PC_SLUG -> return "Play in GameNative"
+        LocalShelves.APPS_SLUG -> return "Open"
+    }
+    return when (download?.state) {
+        null -> "Download"
+        DownloadState.QUEUED, DownloadState.RUNNING -> "Cancel"
+        DownloadState.INSTALLED -> emulatorFor(game.platformSlug)?.let { "Play in $it" } ?: "No emulator"
+        DownloadState.FAILED -> "Retry"
+    }
+}
+
+@Composable
+private fun Header(title: String, sync: SyncStatus, subtitle: String?, onToggleView: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -175,7 +441,10 @@ private fun Header(title: String, sync: SyncStatus, subtitle: String?) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(syncLabel(sync), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(syncLabel(sync), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            ViewToggle(LibraryView.SHELF, onToggleView)
+        }
     }
 }
 

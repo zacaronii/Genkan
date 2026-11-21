@@ -34,6 +34,8 @@ import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryNavigator
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibrarySync
+import app.genkan.library.LibraryView
+import app.genkan.library.LibraryViewSettings
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import app.genkan.romm.RomMSession
@@ -78,6 +80,7 @@ class LibraryViewModel @Inject constructor(
     private val ppssppText: PpssppText,
     private val azaharText: AzaharText,
     private val artworkWarmer: ArtworkWarmer,
+    private val viewSettings: LibraryViewSettings,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -98,6 +101,15 @@ class LibraryViewModel @Inject constructor(
 
     private val _focus = MutableStateFlow(LibraryFocus())
     val focus: StateFlow<LibraryFocus> = _focus.asStateFlow()
+
+    /** The shelf or the grid, as last left; the shelf until the stored choice has been read. */
+    val view: StateFlow<LibraryView> = viewSettings.view.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryView.DEFAULT)
+
+    /** Switches between the shelf and the grid, and remembers the choice. */
+    fun toggleView() {
+        val next = view.value.toggled()
+        viewModelScope.launch { viewSettings.setView(next) }
+    }
 
     /** PC games first (the visual novels live there), then RomM's platforms, then apps. */
     val platforms: StateFlow<List<PlatformEntity>> =
@@ -152,12 +164,22 @@ class LibraryViewModel @Inject constructor(
         else -> session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, game.coverPath) }
     }
 
-    fun onKey(key: PadKey): Boolean {
+    /** A RomM asset path (a large cover, spine, logo or disc cut-out) as a URL, or null without one. */
+    fun artModel(path: String?): Any? =
+        path?.let { p -> session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, p) } }
+
+    /**
+     * Handles a gamepad key; [repeatCount] is the key event's, so a held D-pad can speed up along
+     * the shelf. Returns false for keys the library doesn't use.
+     */
+    fun onKey(key: PadKey, repeatCount: Int = 0): Boolean {
         if (key == PadKey.Y) {
             sync(); return true
         }
-        if (key == PadKey.SELECT && lingering != null) {
-            closeLingering(); return true
+        if (key == PadKey.SELECT) {
+            // Select closes a lingering emulator when one is offered; otherwise it switches view.
+            if (lingering != null) closeLingering() else if (repeatCount == 0) toggleView()
+            return true
         }
         val focusedGame = games.value.getOrNull(_focus.value.gameIndex).takeIf { _focus.value.pane == LibraryPane.GAMES }
         if (focusedGame != null && key == PadKey.A) {
@@ -166,7 +188,7 @@ class LibraryViewModel @Inject constructor(
         if (focusedGame != null && key == PadKey.X) {
             deleteAction(focusedGame); return true
         }
-        val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns)
+        val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
             ?: return false
         _focus.value = next
         return true

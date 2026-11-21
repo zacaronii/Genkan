@@ -17,7 +17,10 @@ a Yomitan dictionary popup. See
 - **Sign in:** enter your RomM server's address, then scan the QR code (or open the link)
   and approve the code in RomM's web UI. A pairing code from RomM's *Client API tokens*
   page works too.
-- **Library:** D-pad moves, L1/R1 switch platform, Y re-syncs, Start opens settings.
+- **Library:** each platform's games stand on a shelf as their cases; left and right flip
+  through them (holding speeds up), and the focused game's disc or cartridge slides out when
+  it rests. Up goes to the platforms, L1/R1 switch platform from anywhere, Y re-syncs, Start
+  opens settings. Select switches to the cover grid and back, and the choice is remembered.
 - **Downloads:** A downloads the focused game (A again cancels), X twice deletes it. Games
   go to `ROMs/<platform>/` on internal storage, so the first download asks for
   *All files access*. Downloads resume after a crash or a dropped connection.
@@ -176,7 +179,10 @@ The library, the settings page and the bottom screen's game details are drawn on
 from made-up data (Roborazzi on Robolectric, `app/src/test/kotlin/app/genkan/ui/ScreenshotTest.kt`),
 at the Thor's sizes and density: 1920x1080 for the top screen and 1080x1240 for the bottom
 one, both at 369 dpi. The settings page is shot once per group (`settings_<group>.png`).
-Record them after a UI change and commit the PNGs with it:
+The library is shot as the grid and as the shelf: a PlayStation shelf of jewel cases, a DS
+shelf, each with the focused game's disc or card slid out, and a game without a cover. No
+real art is used: the tests draw stand-in covers, spines, logos and discs. Record them after
+a UI change and commit the PNGs with it:
 
 ```sh
 ./gradlew :app:recordRoborazziDebug     # writes app/src/test/screenshots/*.png

@@ -18,6 +18,7 @@ import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryPane
+import app.genkan.library.LibraryView
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import app.genkan.play.PlayTotals
@@ -63,21 +64,67 @@ class ScreenshotTest {
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     }
 
+    /** The cover grid, the second view. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun library() = shoot("library", TOP_PIXELS) {
+    fun libraryGrid() = shoot("library_grid", TOP_PIXELS) {
+        library(LibraryView.GRID, platformIndex = 2, FakeData.games, gameIndex = 2)
+    }
+
+    /** PlayStation jewel cases, with real spines on most and the download states on the neighbours. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfPlayStation() = shoot("shelf_ps1", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = false)
+    }
+
+    /** DS cases, narrower and rounder. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfDs() = shoot("shelf_ds", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 3, FakeData.dsGames, gameIndex = 4, staticMedia = false)
+    }
+
+    /** The focused PlayStation game at rest, its disc (the server's cut-out) slid out of the case. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfDiscOut() = shoot("shelf_media_disc", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = true)
+    }
+
+    /** A DS game with no cut-out on the server: a drawn card with the logo as its label. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfCardOut() = shoot("shelf_media_card", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 3, FakeData.dsGames, gameIndex = 2, staticMedia = true)
+    }
+
+    /** A game without a cover: a blank case in the console's colour with the title logo. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfNoCover() = shoot("shelf_no_cover", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 5, staticMedia = true)
+    }
+
+    /** The library on [platforms][FakeData.platforms] index [platformIndex], showing [games]. */
+    @Composable
+    private fun library(view: LibraryView, platformIndex: Int, games: List<GameEntity>, gameIndex: Int, staticMedia: Boolean? = null) {
         LibraryContent(
+            view = view,
             platforms = FakeData.platforms,
-            games = FakeData.games,
-            focus = LibraryFocus(pane = LibraryPane.GAMES, platformIndex = 2, gameIndex = 2),
+            games = games,
+            focus = LibraryFocus(pane = LibraryPane.GAMES, platformIndex = platformIndex, gameIndex = gameIndex),
             sync = SyncStatus.Done(games = 64),
             downloads = FakeData.downloads,
             notice = null,
-            coverModel = { game -> if (game.coverPath != null) "fake-cover:${game.id}" else null },
-            emulatorFor = { "PPSSPP" },
+            coverModel = { game -> game.coverPath?.let { "fake:$it" } },
+            artModel = { path -> path?.let { "fake:$it" } },
+            emulatorFor = { slug -> mapOf("psx" to "DuckStation", "nds" to "melonDS", "psp" to "PPSSPP")[slug] },
             onSelectPlatform = {},
             onColumns = {},
             onSelectGame = {},
+            onToggleView = {},
+            staticMedia = staticMedia,
         )
     }
 
@@ -171,7 +218,7 @@ private object FakeData {
         PlatformEntity(1, "gba", "gba", "Game Boy Advance", 12, null),
         PlatformEntity(2, "psx", "psx", "PlayStation", 8, null),
         PlatformEntity(3, "psp", "psp", "PlayStation Portable", 14, null),
-        PlatformEntity(4, "n3ds", "3ds", "Nintendo 3DS", 16, null),
+        PlatformEntity(4, "nds", "nds", "Nintendo DS", 9, null),
         PlatformEntity(-1, "genkan-pc", null, "PC (GameNative)", 3, null),
         PlatformEntity(-2, "genkan-apps", null, "Apps", 5, null),
     )
@@ -207,17 +254,73 @@ private object FakeData {
         )
     }
 
+    private val psxTitles = listOf(
+        "Midnight Ferry", "Crystal Garden Tale", "Lantern Road", "Echoes of Kyoto", "Iron Orchard",
+        "Snowbound Signal", "Velvet Comet", "Tidewater Saga", "Paper Moon Racing", "Old Capital Ghosts",
+    )
+
+    /**
+     * PlayStation games with spines, logos and disc cut-outs, all fake paths [FakeCovers] draws.
+     * Game 5 has no cover (its logo stands in) and game 6 has neither cover nor logo; games 1 and 7
+     * have no spine image, so theirs is drawn.
+     */
+    val psxGames = psxTitles.mapIndexed { index, title ->
+        art(200L + index, 2, "psx", title, index).copy(
+            coverPath = if (index == 5 || index == 6) null else "/covers/psx/$index.png",
+            box2dSidePath = if (index == 1 || index == 7) null else "/spines/psx/$index.png",
+            logoPath = if (index == 6) null else "/logos/$title",
+            physicalPath = "/physical/disc/$index.png",
+        )
+    }
+
+    private val dsTitles = listOf(
+        "Pocket Atelier", "Sky Whale Courier", "Mystery of Room 7", "Picross Shrine", "Little Fox Bakery",
+        "Starlit Kana Drill", "Ghost Train Notes", "Island Radio", "Dragon Homework",
+    )
+
+    /** DS games: no disc or card cut-outs (so a card is drawn), and no spine images. */
+    val dsGames = dsTitles.mapIndexed { index, title ->
+        art(300L + index, 4, "nds", title, index).copy(
+            coverPath = "/covers/nds/$index.png",
+            logoPath = "/logos/$title",
+        )
+    }
+
+    private fun art(id: Long, platformId: Long, slug: String, title: String, index: Int) = GameEntity(
+        id = id,
+        platformId = platformId,
+        platformSlug = slug,
+        name = title,
+        sortTitle = title.lowercase(),
+        fsName = "$title.chd",
+        fsSizeBytes = (90L + index * 61L) shl 20,
+        coverPath = null,
+        hasMultipleFiles = false,
+        releaseYear = 1996 + index % 5,
+    )
+
     val downloads = mapOf(
         102L to download(102, DownloadState.INSTALLED, done = 374L shl 20, total = 374L shl 20),
         104L to download(104, DownloadState.RUNNING, done = 220L shl 20, total = 568L shl 20),
         107L to download(107, DownloadState.FAILED, error = "server closed the connection"),
         109L to download(109, DownloadState.INSTALLED, done = 1, total = 1),
+        // The PlayStation shelf: games 2 to 5 are here, 1 is downloading and 6 failed.
+        201L to download(201, DownloadState.RUNNING, done = 140L shl 20, total = 151L shl 20),
+        202L to download(202, DownloadState.INSTALLED, done = 1, total = 1),
+        203L to download(203, DownloadState.INSTALLED, done = 1, total = 1),
+        204L to download(204, DownloadState.INSTALLED, done = 1, total = 1),
+        205L to download(205, DownloadState.INSTALLED, done = 1, total = 1),
+        206L to download(206, DownloadState.FAILED, error = "server closed the connection"),
+        // The DS shelf: games 2 to 4 are here.
+        302L to download(302, DownloadState.INSTALLED, done = 1, total = 1),
+        303L to download(303, DownloadState.INSTALLED, done = 1, total = 1),
+        304L to download(304, DownloadState.INSTALLED, done = 1, total = 1),
     )
 
     private fun download(id: Long, state: DownloadState, done: Long = 0, total: Long = 0, error: String? = null) =
         DownloadEntity(
             romId = id,
-            name = games.first { it.id == id }.name,
+            name = (games + psxGames + dsGames).first { it.id == id }.name,
             platformSlug = "psp",
             state = state,
             bytesDone = done,
@@ -276,7 +379,13 @@ private object FakeData {
     }
 }
 
-/** Placeholder cover art drawn on the spot: a two-tone gradient with a pale band, per model. */
+/**
+ * Placeholder art drawn on the spot, so no game art is ever committed. A model is "fake:" and an
+ * asset path from [FakeData]: covers are two-tone gradients with a pale band (square for the
+ * PlayStation, a little taller than wide for the DS), spines a dark strip with a title bar,
+ * logos the title in outlined letters on a transparent ground, and physical cut-outs a plain
+ * disc. Anything else (the details screen's "fake-cover:") gets a portrait cover.
+ */
 private object FakeCovers {
     private val palette = listOf(
         0xFF3B5BA5 to 0xFF1B2A4E, 0xFFB5523B to 0xFF4E1F15, 0xFF3F8F6B to 0xFF173A2B,
@@ -284,9 +393,19 @@ private object FakeCovers {
     )
 
     fun forModel(model: String): Bitmap {
+        val path = model.removePrefix("fake:")
+        return when {
+            path.startsWith("/spines/") -> spine(model)
+            path.startsWith("/logos/") -> logo(path.removePrefix("/logos/"))
+            path.startsWith("/physical/") -> disc(model)
+            path.startsWith("/covers/psx/") -> cover(model, 400, 400)
+            path.startsWith("/covers/nds/") -> cover(model, 360, 400)
+            else -> cover(model, 300, 400)
+        }
+    }
+
+    private fun cover(model: String, width: Int, height: Int): Bitmap {
         val (top, bottom) = palette[(model.hashCode() and 0x7fffffff) % palette.size]
-        val width = 300
-        val height = 400
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -299,4 +418,66 @@ private object FakeCovers {
         canvas.drawCircle(width * 0.7f, height * 0.3f, width * 0.16f, paint)
         return bitmap
     }
+}
+
+/** A spine: the cover's darker colour, a light title bar and a console band at the top. */
+private fun FakeCovers.spine(model: String): Bitmap {
+    val bitmap = Bitmap.createBitmap(40, 400, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    canvas.drawColor(0xFF22262E.toInt())
+    paint.color = 0xFFB8BEC9.toInt()
+    canvas.drawRect(0f, 0f, 40f, 46f, paint)
+    paint.color = 0xCCFFFFFF.toInt()
+    canvas.drawRect(12f, 70f, 28f, 300f, paint)
+    paint.color = (model.hashCode() or 0xFF000000.toInt())
+    canvas.drawRect(0f, 340f, 40f, 400f, paint)
+    return bitmap
+}
+
+/** A title logo: the title in bold white letters with a dark outline, on transparency. */
+private fun FakeCovers.logo(title: String): Bitmap {
+    val bitmap = Bitmap.createBitmap(480, 200, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val words = title.split(" ")
+    val lines = if (words.size > 2) listOf(words.take(words.size / 2).joinToString(" "), words.drop(words.size / 2).joinToString(" ")) else listOf(title)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        textSize = 64f
+    }
+    // Shrink long titles to fit the logo's width, as a real wordmark would be drawn.
+    val widest = lines.maxOf { paint.measureText(it) }
+    if (widest > 440f) paint.textSize = 64f * 440f / widest
+    lines.forEachIndexed { i, line ->
+        val y = 200f / 2 + (i - (lines.size - 1) / 2f) * 72f + 22f
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 10f
+        paint.color = 0xFF2A1B10.toInt()
+        canvas.drawText(line, 240f, y, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFFFFE9A8.toInt()
+        canvas.drawText(line, 240f, y, paint)
+    }
+    return bitmap
+}
+
+/** A disc cut-out: a silver disc with a printed label and the hole, on transparency. */
+private fun FakeCovers.disc(model: String): Bitmap {
+    val size = 400
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val c = size / 2f
+    paint.color = 0xFFD5D8DE.toInt()
+    canvas.drawCircle(c, c, c, paint)
+    paint.color = (model.hashCode() or 0xFF000000.toInt())
+    canvas.drawCircle(c, c, c * 0.92f, paint)
+    paint.color = 0x55FFFFFF
+    canvas.drawRect(0f, c * 0.55f, size.toFloat(), c * 0.85f, paint)
+    paint.color = 0xFFD5D8DE.toInt()
+    canvas.drawCircle(c, c, c * 0.24f, paint)
+    paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+    canvas.drawCircle(c, c, c * 0.1f, paint)
+    return bitmap
 }

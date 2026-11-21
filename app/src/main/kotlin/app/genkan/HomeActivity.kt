@@ -223,7 +223,7 @@ class HomeActivity : ComponentActivity() {
         when (screen) {
             Screen.LIBRARY -> {
                 if (pad == PadKey.START) appViewModel.openSettings()
-                else if (pad == null || !libraryViewModel.onKey(pad)) return super.dispatchKeyEvent(event)
+                else if (pad == null || !libraryViewModel.onKey(pad, event.repeatCount)) return super.dispatchKeyEvent(event)
             }
             // B steps from a group's rows back to the group list, and only then out of settings.
             Screen.SETTINGS -> {
