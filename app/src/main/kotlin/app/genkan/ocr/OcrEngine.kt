@@ -13,8 +13,18 @@ import kotlin.coroutines.resumeWithException
 /**
  * One line OCR found, with where it sits so lines can be put in reading order (and drawn over the
  * game). [ends]: where each character the engine boxed ends, along the line, when it gives them.
+ * [vertical]: the line runs top to bottom, as the engine read it; decided once, there, so its
+ * [ends] and a tap on it are measured along the same axis.
  */
-data class OcrLine(val text: String, val top: Int, val left: Int, val height: Int, val width: Int = 0, val ends: List<CharEnd> = emptyList())
+data class OcrLine(
+    val text: String,
+    val top: Int,
+    val left: Int,
+    val height: Int,
+    val width: Int = 0,
+    val ends: List<CharEnd> = emptyList(),
+    val vertical: Boolean = false,
+)
 
 /** The character at [offset] in its line ends at [end] (pixels: x across a line, y down a vertical one). */
 data class CharEnd(val offset: Int, val end: Int)
@@ -63,7 +73,7 @@ class MlKitJapaneseOcr @Inject constructor() : OcrEngine {
                                 at = offset + symbol.text.length
                                 CharEnd(offset, if (vertical) edge.bottom else edge.right)
                             }
-                            OcrLine(line.text, box?.top ?: 0, box?.left ?: 0, height, width, ends)
+                            OcrLine(line.text, box?.top ?: 0, box?.left ?: 0, height, width, ends, vertical)
                         }
                     },
                 )

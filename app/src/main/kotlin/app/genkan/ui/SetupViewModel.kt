@@ -12,9 +12,17 @@ import app.genkan.core.PlayerSettings
 import app.genkan.ppsspp.PpssppText
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.lifecycle.viewModelScope
+import app.genkan.dictionary.DictionaryEntity
+import app.genkan.home.DualScreenStatus
+import app.genkan.library.SyncStatus
+import app.genkan.romm.RomMState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /** Everything the settings page can do. Each one has exactly one row in [SettingsGroups.DEFAULT]. */
@@ -63,6 +71,41 @@ class SetupViewModel @Inject constructor(
     /** Whether DuckStation's and Dolphin's saves (in their own Android/data) can be synced. */
     val shizuku: StateFlow<Privileged.State> = _shizuku.asStateFlow()
 
+    /** Everything the page shows; a press by pad or by touch reads the switches from here alike. */
+    @Suppress("UNCHECKED_CAST")
+    val state: StateFlow<SetupState> = combine(
+        dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
+        ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
+    ) { v ->
+        SetupState(
+            status = v[0] as DualScreenStatus,
+            romm = v[1] as RomMState,
+            sync = v[2] as SyncStatus,
+            usageAccess = v[3] as Boolean,
+            shizuku = v[4] as Privileged.State,
+            pspDebugger = v[5] as Boolean,
+            azaharRpc = v[6] as Boolean,
+            builtInPlayer = v[7] as Boolean,
+            textSamples = v[8] as Boolean,
+            dictionaries = v[9] as List<DictionaryEntity>,
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SetupState(
+            status = dualScreen.status.value,
+            romm = romm.state.value,
+            sync = librarySync.status.value,
+            usageAccess = usageAccess.value,
+            shizuku = shizuku.value,
+            pspDebugger = false,
+            azaharRpc = false,
+            builtInPlayer = false,
+            textSamples = false,
+            dictionaries = emptyList(),
+        ),
+    )
+
     val groups: List<SettingsGroup> = SettingsGroups.DEFAULT
 
     private val _focus = MutableStateFlow(SettingsFocus())
@@ -91,14 +134,8 @@ class SetupViewModel @Inject constructor(
         _focus.value = SettingsFocus(pane = SettingsPane.ROWS, group = group, row = row)
     }
 
-    /**
-     * The action a press on [row] runs now. Only Home's switch runs different actions for on and
-     * off; the others flip with one action, so only Home's state is read here.
-     */
-    private fun actionFor(row: SettingsRow): SetupAction = when (row) {
-        is SettingsRow.Button -> row.action
-        is SettingsRow.Switch -> row.action(on = row.key == SwitchKey.HOME && SetupState.homeOn(dualScreen.status.value))
-    }
+    /** The action a press on [row] runs now: the same answer a tap gets (see [SetupState.actionFor]). */
+    private fun actionFor(row: SettingsRow): SetupAction = state.value.actionFor(row)
 
     data class KeyResult(val consumed: Boolean, val action: SetupAction? = null)
 }

@@ -41,30 +41,10 @@ import app.genkan.romm.RomMState
 
 @Composable
 fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
-    val status by viewModel.dualScreen.status.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
-    val romm by viewModel.romm.state.collectAsStateWithLifecycle()
-    val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
-    val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
-    val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
-    val pspDebugger by viewModel.ppssppText.enabled.collectAsStateWithLifecycle(false)
-    val azaharRpc by viewModel.azaharText.enabled.collectAsStateWithLifecycle(false)
-    val builtInPlayer by viewModel.playerSettings.enabled.collectAsStateWithLifecycle(false)
-    val textSamples by viewModel.playerSettings.samples.collectAsStateWithLifecycle(false)
-    val dictionaries by viewModel.dictionaries.all.collectAsStateWithLifecycle(emptyList())
     SetupContent(
-        state = SetupState(
-            status = status,
-            romm = romm,
-            sync = sync,
-            usageAccess = usageAccess,
-            shizuku = shizuku,
-            pspDebugger = pspDebugger,
-            azaharRpc = azaharRpc,
-            builtInPlayer = builtInPlayer,
-            textSamples = textSamples,
-            dictionaries = dictionaries,
-        ),
+        state = state,
         groups = viewModel.groups,
         focus = focus,
         onSelectGroup = viewModel::selectGroup,
@@ -94,6 +74,15 @@ data class SetupState(
         SwitchKey.BUILT_IN_PLAYER -> builtInPlayer
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
+    }
+
+    /**
+     * What pressing [row] runs now: a switch runs its off action while it shows on. The pad (in
+     * SetupViewModel) and a tap both ask here, so a switch with two actions can't differ by input.
+     */
+    fun actionFor(row: SettingsRow): SetupAction = when (row) {
+        is SettingsRow.Button -> row.action
+        is SettingsRow.Switch -> row.action(isOn(row.key))
     }
 
     companion object {
@@ -163,13 +152,7 @@ fun SetupContent(
                         status = status(row, state),
                         on = on,
                         focused = focus.pane == SettingsPane.ROWS && index == focus.row,
-                        onClick = {
-                            val action = when (row) {
-                                is SettingsRow.Button -> row.action
-                                is SettingsRow.Switch -> row.action(on == true)
-                            }
-                            onRow(focus.group, index, action)
-                        },
+                        onClick = { onRow(focus.group, index, state.actionFor(row)) },
                     )
                 }
             }

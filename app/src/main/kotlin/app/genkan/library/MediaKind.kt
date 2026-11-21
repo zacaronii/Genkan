@@ -25,16 +25,18 @@ enum class MediaKind {
                 "virtualboy", "pokemon-mini", "genesis", "megadrive", "md", "sms", "gamegear", "gg",
                 "sega32", "neo-geo-pocket", "neo-geo-pocket-color", "ngp", "ngpc",
                 "wonderswan", "wonderswan-color", "ws", "wsc", "atari2600", "atari5200", "atari7800",
-                "lynx", "jaguar",
+                "lynx", "jaguar", "sg1000", "msx", "msx2", "satellaview",
             )
             put(
                 DISC,
                 "psx", "ps1", "ps2", "ps3", "ngc", "gc", "wii", "wiiu", "saturn", "dc", "dreamcast",
                 "segacd", "3do", "turbografx-cd", "pc-fx", "neo-geo-cd", "xbox", "xbox360", "philips-cd-i",
+                "ps4", "ps5",
             )
             put(UMD, "psp")
-            put(DISK_CARD, "fds")
-            put(CARD, "nds", "3ds", "n3ds", "new-nintendo-3ds", "psvita", "switch")
+            put(DISK_CARD, "fds", "64dd")
+            // PC Engine HuCards are cards too: credit-card sized, in CD-style cases.
+            put(CARD, "nds", "nintendo-dsi", "3ds", "n3ds", "new-nintendo-3ds", "psvita", "switch", "tg16", "pce", "supergrafx")
         }
 
         /** The media for a RomM platform slug, case-insensitively. */

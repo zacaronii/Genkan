@@ -28,6 +28,14 @@ class MediaKindTest {
     }
 
     @Test
+    fun `the rest of RomM's slugs`() {
+        for (slug in listOf("tg16", "pce", "supergrafx", "nintendo-dsi")) assertEquals(slug, MediaKind.CARD, MediaKind.forSlug(slug))
+        for (slug in listOf("sg1000", "msx", "msx2", "satellaview")) assertEquals(slug, MediaKind.CARTRIDGE, MediaKind.forSlug(slug))
+        for (slug in listOf("ps4", "ps5")) assertEquals(slug, MediaKind.DISC, MediaKind.forSlug(slug))
+        assertEquals(MediaKind.DISK_CARD, MediaKind.forSlug("64dd"))
+    }
+
+    @Test
     fun `unknown slugs and local shelves are unknown`() {
         assertEquals(MediaKind.UNKNOWN, MediaKind.forSlug("not-a-platform"))
         assertEquals(MediaKind.UNKNOWN, MediaKind.forSlug("pc"))

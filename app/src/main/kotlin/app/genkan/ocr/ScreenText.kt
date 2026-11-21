@@ -61,7 +61,7 @@ data class ScreenText(val lines: List<Line>) {
             val h = frameHeight.toFloat()
             return ScreenText(
                 lines.filter { it.text.isNotBlank() && it.width > 0 && it.height > 0 }.map {
-                    val vertical = it.text.trim().length > 1 && it.height > it.width * VERTICAL_ASPECT
+                    val vertical = it.vertical
                     // Offsets in the trimmed text, ends in the frame.
                     val lead = it.text.length - it.text.trimStart().length
                     val text = it.text.trim()

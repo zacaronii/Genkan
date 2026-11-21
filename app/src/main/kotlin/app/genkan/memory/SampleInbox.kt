@@ -149,7 +149,7 @@ class SampleInbox @Inject constructor(
             _status.value = InboxStatus.Unreachable(e.message ?: e.javaClass.simpleName)
             return@withLock
         } ?: return@withLock
-        if (!refused) _status.value = if (files > 0 || sentSnapshots > 0) InboxStatus.Sent(files, added, sentSnapshots) else InboxStatus.Idle
+        if (!refused && !snapshotHeld) _status.value = if (files > 0 || sentSnapshots > 0) InboxStatus.Sent(files, added, sentSnapshots) else InboxStatus.Idle
         if (files > 0) Log.i(TAG, "Sent $files sample files to the inbox, $added new samples")
     }
 
@@ -157,7 +157,11 @@ class SampleInbox @Inject constructor(
      * Sends the RAM snapshots waiting on the device, each removed once the inbox has it (or
      * refuses it for good); null when the inbox refused the token.
      */
+    /** A snapshot waits on the device for an inbox limit (see [isSizeLimit]); its reason is the status. */
+    private var snapshotHeld = false
+
     private suspend fun sendSnapshots(config: InboxConfig): Int? = withContext(Dispatchers.IO) {
+        snapshotHeld = false
         var sent = 0
         val pending = snapshots.pending()
         // An inbox that stores only RAM would take a snapshot and drop its state and screen, and
@@ -195,8 +199,14 @@ class SampleInbox @Inject constructor(
                         _status.value = InboxStatus.Refused("the inbox didn't accept the token")
                         return@withContext null
                     }
-                    // Not something a retry fixes (outside main RAM, too large): dropped.
-                    400, 413 -> {
+                    400, 413 -> if (isSizeLimit(response.code, text)) {
+                        // Too large for the inbox as it is: kept, since a limit can be raised and
+                        // a capture can't be taken again; the reason shows until it goes.
+                        Log.w(TAG, "Inbox can't take snapshot ${meta.name} yet: ${response.code} $text")
+                        _status.value = InboxStatus.Refused("${meta.name} kept on this device: ${detailOf(text)}")
+                        snapshotHeld = true
+                    } else {
+                        // Not something a retry fixes (outside main RAM, a meta it can't read): dropped.
                         Log.w(TAG, "Inbox refused snapshot ${meta.name}: ${response.code} $text")
                         snapshots.remove(meta)
                     }
@@ -280,12 +290,25 @@ class SampleInbox @Inject constructor(
 
     private fun sentKey(file: File) = intPreferencesKey("sent:${file.name}")
 
-    private companion object {
-        const val TAG = "SampleInbox"
-        val ADDRESS = stringPreferencesKey("inbox_address")
-        val TOKEN = stringPreferencesKey("inbox_token")
-        val JSON = "application/json".toMediaType()
-        val GZIP = "application/gzip".toMediaType()
-        val PNG = "image/png".toMediaType()
+    companion object {
+        /**
+         * Whether the inbox refused a snapshot for its size (a 413, or a 400 saying a part is too
+         * large), which a raised limit fixes, rather than for what it is.
+         */
+        fun isSizeLimit(code: Int, body: String): Boolean =
+            code == 413 || (code == 400 && SIZE_WORDS.any { body.contains(it, ignoreCase = true) })
+
+        /** The inbox's reason (its JSON "detail"), else the body as it came. */
+        fun detailOf(body: String): String =
+            runCatching { JSONObject(body).optString("detail") }.getOrNull()?.takeIf { it.isNotBlank() } ?: body.take(200)
+
+        private val SIZE_WORDS = listOf("larger than", "too large", "exceeds")
+
+        private const val TAG = "SampleInbox"
+        private val ADDRESS = stringPreferencesKey("inbox_address")
+        private val TOKEN = stringPreferencesKey("inbox_token")
+        private val JSON = "application/json".toMediaType()
+        private val GZIP = "application/gzip".toMediaType()
+        private val PNG = "image/png".toMediaType()
     }
 }
