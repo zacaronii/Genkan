@@ -145,6 +145,8 @@ class GameDetailsFormatTest {
         assertText("Not downloaded  ·  374 MB", GameDetailsFormat.downloadLine(sized, null))
         assertNull(GameDetailsFormat.downloadLine(game(platformId = -1, slug = LocalShelves.PC_SLUG), null))
         assertText("Downloaded  ·  374 MB", GameDetailsFormat.downloadLine(sized, download(DownloadState.INSTALLED)))
+        // Under a megabyte, in kilobytes (a 58 KB Famicom disk is not "0 MB").
+        assertText("Not downloaded  ·  58 KB", GameDetailsFormat.downloadLine(sized.copy(fsSizeBytes = 58L * 1024), null))
         assertText("Downloading… 25%", GameDetailsFormat.downloadLine(sized, download(DownloadState.RUNNING, done = 25, total = 100)))
         assertText("Download failed: timed out", GameDetailsFormat.downloadLine(sized, download(DownloadState.FAILED, error = "timed out")))
     }

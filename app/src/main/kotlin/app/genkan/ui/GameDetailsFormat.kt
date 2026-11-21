@@ -160,6 +160,8 @@ object GameDetailsFormat {
     private fun sizeSuffix(bytes: Long): String = when {
         bytes <= 0 -> ""
         bytes >= 1L shl 30 -> "$SEPARATOR%.1f GB".format(bytes / (1L shl 30).toDouble())
-        else -> "$SEPARATOR${bytes / (1L shl 20)} MB"
+        // A Famicom disk or a Game Boy cartridge is kilobytes: "0 MB" would say it's empty.
+        bytes >= 1L shl 20 -> "$SEPARATOR${bytes / (1L shl 20)} MB"
+        else -> "$SEPARATOR${(bytes + 1023) / 1024} KB"
     }
 }
