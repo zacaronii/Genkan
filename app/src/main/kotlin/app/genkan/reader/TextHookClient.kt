@@ -36,6 +36,8 @@ data class HookMessage(
     val whole: Boolean = false,
     /** For a whole line: the line it grew from, already in the backlog, which it replaces. */
     val takesBack: String? = null,
+    /** Who says the line, when the source knows (a Yomikata layout's speaker). */
+    val speaker: String? = null,
 ) {
     companion object {
         fun parse(frame: String): HookMessage? {

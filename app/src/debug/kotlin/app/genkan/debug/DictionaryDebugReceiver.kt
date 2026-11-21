@@ -59,7 +59,7 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.LAYOUT -n app.genkan/.debug.DictionaryDebugReceiver --es json '{...}'
  *     has the built-in player watch a layout given here (with the catalog entry's table), as if the entry had it.
  *   adb shell am broadcast -a app.genkan.debug.LINE -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
- *     puts a line in the reader's backlog, as a texthooker would.
+ *     puts a line in the reader's backlog, as a texthooker would ([--es speaker 名前] says who).
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (hands the line to the 3DS text source as if OCR had read it: it locks on and follows it)
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_POINTERS -n app.genkan/.debug.DictionaryDebugReceiver --es from 089ddc90 --es to 089e0000
@@ -179,7 +179,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Scan in ${(System.nanoTime() - started) / 1_000_000} ms: " + words.joinToString(" ") { "${text.substring(it.start, it.end)}→${it.expression}【${it.reading}】" })
                     }
                     "app.genkan.debug.LAYOUT" -> builtInText.debugWatch(intent.getStringExtra("json").orEmpty())
-                    "app.genkan.debug.LINE" -> readerSession.submit(HookMessage(intent.getStringExtra("text").orEmpty()))
+                    "app.genkan.debug.LINE" -> readerSession.submit(
+                        // With a speaker it's a whole line, as a layout's: only those carry one.
+                        HookMessage(intent.getStringExtra("text").orEmpty(), whole = intent.hasExtra("speaker"), speaker = intent.getStringExtra("speaker")),
+                    )
                     "app.genkan.debug.AUDIO_CLIP" -> {
                         val now = System.currentTimeMillis()
                         audio.clip(now - intent.getLongExtra("ms", 3000), now)

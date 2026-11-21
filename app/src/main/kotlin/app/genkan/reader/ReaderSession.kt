@@ -93,7 +93,8 @@ class ReaderSession @Inject constructor(
         if (message.whole) {
             // Known to be whole: kept as it is, even a repeat of the line before.
             val text = Lines.normalise(message.text)
-            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread)
+            // Its speaker goes with it: only whole lines know theirs.
+            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread, message.speaker)
             return
         }
         val feed = feeds.getOrPut(message.thread) { LineFeed() }
@@ -107,14 +108,14 @@ class ReaderSession @Inject constructor(
         }
     }
 
-    private suspend fun handOver(out: LineFeed.Out, thread: String) {
+    private suspend fun handOver(out: LineFeed.Out, thread: String, speaker: String? = null) {
         val key = nowPlaying.game.value.key
         val now = System.currentTimeMillis()
         val last = out.takesBack?.let { dao.last(key) }
         if (last != null && last.text == out.takesBack) {
             dao.replace(last.id, out.text, now)
         } else {
-            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now, thread = thread.ifEmpty { null }))
+            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now, thread = thread.ifEmpty { null }, speaker = speaker))
         }
         // A line that carries on one already counted adds only its new part to the stats.
         val takenBack = out.takesBack
