@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -128,20 +129,45 @@ class ScreenshotTest {
         )
     }
 
+    /** A game with everything: artwork, RomM's details, your play, reading and save. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetails() = shoot("game_details", BOTTOM_PIXELS) {
-        val game = FakeData.games[2]
+        GameDetailsContent(details = FakeData.fullDetails, onShowReader = {})
+    }
+
+    /** The same game scrolled to the end of its details, where the screenshot strip is. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsScrolled() = shoot("game_details_scrolled", BOTTOM_PIXELS) {
+        // The scroll position is clamped to the column's height once it is laid out.
+        GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, factsScroll = rememberScrollState(Int.MAX_VALUE))
+    }
+
+    /**
+     * A game RomM knows little about, never downloaded or played: most lines are left out, and
+     * with no cut-out or fan art the cover stands in, blurred behind as well.
+     */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsSparse() = shoot("game_details_sparse", BOTTOM_PIXELS) {
+        val game = FakeData.games[6]
         GameDetailsContent(
             details = GameDetails(
                 focus = FocusedGame.Focus(game, "PlayStation Portable", "fake-cover:${game.id}"),
-                play = PlayTotals(plays = 7, totalMs = 5 * 3_600_000L + 42 * 60_000L, lastPlayed = FakeData.NOW - 86_400_000L),
-                reading = ReadingGameTotals(activeMs = 3 * 3_600_000L + 10 * 60_000L, characters = 48_213),
-                download = FakeData.downloads[game.id],
-                save = SaveStatus.Synced(at = FakeData.NOW - 3_600_000L, what = "uploaded"),
+                play = null,
+                reading = ReadingGameTotals(activeMs = 0, characters = 0),
+                download = null,
             ),
             onShowReader = {},
         )
+    }
+
+    /** The full game's second screenshot opened over the whole screen. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsScreenshot() = shoot("game_details_screenshot", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, initialScreenshot = 1)
     }
 
     /** The first group with the group list focused; the others with the pad on their rows. */
@@ -299,6 +325,46 @@ private object FakeData {
         releaseYear = 1996 + index % 5,
     )
 
+    /** The focused game with every artwork and detail column filled. */
+    private val fullGame by lazy {
+        games[2].copy(
+            physicalPath = "/physical/102.png",
+            logoPath = "/logo/102.png",
+            fanartPath = "/fanart/102.jpg",
+            screenshotPaths = "/shots/102-1.png\n/shots/102-2.png\n/shots/102-3.png",
+            manualPath = "/manuals/102.pdf",
+            publishers = "Example Soft\nSample Publishing",
+            regions = "Japan",
+            playerCount = "1",
+            // 2009-07-13.
+            releaseDateMillis = 1_247_443_200_000L,
+            hltbMainStorySec = 32 * 3600 + 10 * 60,
+            lastPlayedMillis = NOW - 86_400_000L,
+            userStatus = "incomplete",
+            userCompletion = 40,
+            userRating = 8,
+            backlogged = true,
+        )
+    }
+
+    /** What the bottom screen shows for [fullGame]; [FakeCovers] draws its artwork. */
+    val fullDetails by lazy {
+        GameDetails(
+            focus = FocusedGame.Focus(fullGame, "PlayStation Portable", "fake-cover:${fullGame.id}"),
+            play = PlayTotals(plays = 7, totalMs = 5 * 3_600_000L + 42 * 60_000L, lastPlayed = NOW - 86_400_000L),
+            reading = ReadingGameTotals(activeMs = 3 * 3_600_000L + 10 * 60_000L, characters = 48_213, lines = 1_204),
+            download = downloads[fullGame.id],
+            save = SaveStatus.Synced(at = NOW - 3_600_000L, what = "uploaded"),
+            art = GameArt(
+                physical = "fake-physical:${fullGame.id}",
+                logo = "fake-logo:${fullGame.name}",
+                fanart = "fake-fanart:${fullGame.id}",
+                screenshots = (1..3).map { "fake-screenshot:$it" },
+                hasManual = true,
+            ),
+        )
+    }
+
     val downloads = mapOf(
         102L to download(102, DownloadState.INSTALLED, done = 374L shl 20, total = 374L shl 20),
         104L to download(104, DownloadState.RUNNING, done = 220L shl 20, total = 568L shl 20),
@@ -380,11 +446,13 @@ private object FakeData {
 }
 
 /**
- * Placeholder art drawn on the spot, so no game art is ever committed. A model is "fake:" and an
- * asset path from [FakeData]: covers are two-tone gradients with a pale band (square for the
- * PlayStation, a little taller than wide for the DS), spines a dark strip with a title bar,
- * logos the title in outlined letters on a transparent ground, and physical cut-outs a plain
- * disc. Anything else (the details screen's "fake-cover:") gets a portrait cover.
+ * Placeholder art drawn on the spot, so no game art is ever committed. The shelf's models are
+ * "fake:" and an asset path from [FakeData]: covers are two-tone gradients with a pale band
+ * (square for the PlayStation, a little taller than wide for the DS), spines a dark strip with a
+ * title bar, logos the title in outlined letters on a transparent ground, and physical cut-outs
+ * a plain disc. The details screen's models go by prefix: a labelled disc for "fake-physical:",
+ * the title on a pale plate for "fake-logo:", a wide landscape for "fake-fanart:" and a scene
+ * with a text box for "fake-screenshot:". Anything else (as "fake-cover:") gets a portrait cover.
  */
 private object FakeCovers {
     private val palette = listOf(
@@ -395,6 +463,10 @@ private object FakeCovers {
     fun forModel(model: String): Bitmap {
         val path = model.removePrefix("fake:")
         return when {
+            model.startsWith("fake-physical:") -> labelledDisc(model)
+            model.startsWith("fake-logo:") -> plateLogo(model.substringAfter(':'))
+            model.startsWith("fake-fanart:") -> landscape(model, 640, 360, textBox = false)
+            model.startsWith("fake-screenshot:") -> landscape(model, 480, 272, textBox = true)
             path.startsWith("/spines/") -> spine(model)
             path.startsWith("/logos/") -> logo(path.removePrefix("/logos/"))
             path.startsWith("/physical/") -> disc(model)
@@ -404,8 +476,10 @@ private object FakeCovers {
         }
     }
 
+    private fun colorsFor(model: String) = palette[(model.hashCode() and 0x7fffffff) % palette.size]
+
     private fun cover(model: String, width: Int, height: Int): Bitmap {
-        val (top, bottom) = palette[(model.hashCode() and 0x7fffffff) % palette.size]
+        val (top, bottom) = colorsFor(model)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -416,6 +490,72 @@ private object FakeCovers {
         canvas.drawRect(0f, height * 0.62f, width.toFloat(), height * 0.78f, paint)
         paint.color = 0x55FFFFFF
         canvas.drawCircle(width * 0.7f, height * 0.3f, width * 0.16f, paint)
+        return bitmap
+    }
+
+    /** A disc on a transparent square, with a printed label ring and the centre hole cut out. */
+    private fun labelledDisc(model: String): Bitmap {
+        val (light, dark) = colorsFor(model)
+        val size = 400
+        val c = size / 2f
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.color = 0xFFD8DCE2.toInt()
+        canvas.drawCircle(c, c, c - 4, paint)
+        paint.shader = LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), light.toInt(), dark.toInt(), Shader.TileMode.CLAMP)
+        canvas.drawCircle(c, c, c - 18, paint)
+        paint.shader = null
+        paint.color = 0x55FFFFFF
+        canvas.drawCircle(c, c, c * 0.38f, paint)
+        paint.color = 0xFFD8DCE2.toInt()
+        canvas.drawCircle(c, c, c * 0.24f, paint)
+        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        canvas.drawCircle(c, c, c * 0.1f, paint)
+        return bitmap
+    }
+
+    /** The title in heavy type on a pale rounded plate, on a transparent background. */
+    private fun plateLogo(title: String): Bitmap {
+        val width = 600
+        val height = 200
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.color = 0xE6F4E9D0.toInt()
+        canvas.drawRoundRect(10f, 30f, width - 10f, height - 30f, 40f, 40f, paint)
+        paint.color = 0xFF5A3B12.toInt()
+        paint.textAlign = Paint.Align.CENTER
+        paint.isFakeBoldText = true
+        paint.textSize = 48f
+        val words = title.split(' ')
+        val half = (words.size + 1) / 2
+        canvas.drawText(words.take(half).joinToString(" "), width / 2f, 92f, paint)
+        canvas.drawText(words.drop(half).joinToString(" "), width / 2f, 146f, paint)
+        return bitmap
+    }
+
+    /** Sky, sun and hills; [textBox] adds a visual novel's dialogue box along the bottom. */
+    private fun landscape(model: String, width: Int, height: Int, textBox: Boolean): Bitmap {
+        val (sky, ground) = colorsFor(model)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), sky.toInt(), ground.toInt(), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        paint.shader = null
+        paint.color = 0x66FFF3C4
+        canvas.drawCircle(width * 0.72f, height * 0.3f, height * 0.14f, paint)
+        paint.color = 0x55000000
+        canvas.drawCircle(width * 0.2f, height * 1.25f, height * 0.75f, paint)
+        canvas.drawCircle(width * 0.75f, height * 1.4f, height * 0.8f, paint)
+        if (textBox) {
+            paint.color = 0xCC101018.toInt()
+            canvas.drawRoundRect(width * 0.04f, height * 0.68f, width * 0.96f, height * 0.95f, 12f, 12f, paint)
+            paint.color = 0x99FFFFFF.toInt()
+            canvas.drawRect(width * 0.08f, height * 0.75f, width * 0.8f, height * 0.79f, paint)
+            canvas.drawRect(width * 0.08f, height * 0.84f, width * 0.6f, height * 0.88f, paint)
+        }
         return bitmap
     }
 }

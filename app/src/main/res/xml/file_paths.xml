@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Games live in shared storage (ROMs/); emulators get read grants for the files they boot. -->
+<!-- Games live in shared storage (ROMs/); emulators get read grants for the files they boot.
+     Manuals are fetched into the cache and handed to a PDF viewer the same way. -->
 <paths>
     <external-path name="storage" path="." />
+    <cache-path name="manuals" path="manuals/" />
 </paths>
