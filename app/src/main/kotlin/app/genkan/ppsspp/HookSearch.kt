@@ -24,7 +24,7 @@ object HookSearch {
     private val TAG_NAME = Regex("<([A-Za-z]+)")
 
     /** Text as compared: layout (spaces, line breaks, byte-order marks) left out. */
-    fun normalise(text: String): String = text.filterNot { it.isWhitespace() || it == '﻿' || it == '　' }
+    fun normalise(text: String): String = text.filterNot { it.isWhitespace() || it == '\uFEFF' || it == '\u3000' }
 
     /** How alike two lines are, 0 to 1: one minus their edit distance over the longer's length. */
     fun similarity(a: String, b: String): Double {
@@ -111,7 +111,7 @@ object HookSearch {
             val alternatives = if (names.size == 1) names[0] else names.joinToString("|", "(?:", ")")
             rules.put(JSONObject().put("regex", "<$alternatives[^<>\\n]*>").put("replace", ""))
         }
-        if (raws.any { '﻿' in it }) rules.put(JSONObject().put("regex", "﻿").put("replace", ""))
+        if (raws.any { '\uFEFF' in it }) rules.put(JSONObject().put("regex", "\uFEFF").put("replace", ""))
         if (raws.any { '\n' in it.trim() }) rules.put(JSONObject().put("regex", "\\n").put("replace", ""))
         if (raws.any { it != it.trim() }) rules.put(JSONObject().put("regex", "^\\s+|\\s+$").put("replace", ""))
         return rules
