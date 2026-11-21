@@ -12,16 +12,36 @@ object TextShape {
     data class Hit(val offset: Int, val unit: Int, val bigEndian: Boolean, val length: Int)
 
     /**
-     * The part of [line] to look for: its longest run of kana and kanji, at most [MAX_RUN]
-     * characters, and only when a character repeats in it (an all-different run matches almost
-     * anywhere). Punctuation is left out: OCR misreads it most, and games often code it apart.
+     * The part of [line] to look for: the stretch of kana and kanji, at most [MAX_RUN]
+     * characters, whose characters repeat the most, and only with [MIN_REPEATS] repeats or more:
+     * a shape with fewer matches random bytes all over memory. Punctuation is left out: OCR
+     * misreads it most, and games often code it apart.
      */
-    fun probe(line: String): String? {
-        val run = line.split(Regex("[^\\p{IsHiragana}\\p{IsKatakana}\\p{IsHan}ー々]+")).maxByOrNull { it.length } ?: return null
-        val probe = run.take(MAX_RUN)
-        if (probe.length < MIN_RUN || probe.toSet().size == probe.length) return null
-        return probe
+    fun probe(line: String): String? = probes(line).firstOrNull()
+
+    /**
+     * Stretches to try in turn, the most repetitive first, each starting somewhere else: OCR
+     * joins a text box's rows, and a stretch across a row break isn't in memory as one run
+     * (the game keeps a newline code there).
+     */
+    fun probes(line: String, count: Int = MAX_PROBES): List<String> {
+        val runs = line.split(Regex("[^\\p{IsHiragana}\\p{IsKatakana}\\p{IsHan}ー々]+")).filter { it.length >= MIN_RUN }
+        val windows = runs.flatMapIndexed { r, run ->
+            (0..run.length - MIN_RUN).flatMap { from ->
+                (MIN_RUN..minOf(MAX_RUN, run.length - from)).map { length -> Triple(r, from, run.substring(from, from + length)) }
+            }
+        }.filter { repeats(it.third) >= MIN_REPEATS }
+            .sortedWith(compareByDescending<Triple<Int, Int, String>> { repeats(it.third) }.thenByDescending { it.third.length })
+        val chosen = mutableListOf<Triple<Int, Int, String>>()
+        for (w in windows) {
+            if (chosen.size >= count) break
+            if (chosen.none { it.first == w.first && kotlin.math.abs(it.second - w.second) < MIN_RUN }) chosen += w
+        }
+        return chosen.map { it.third }
     }
+
+    /** How many of [text]'s characters are ones seen before in it. */
+    private fun repeats(text: String): Int = text.length - text.toSet().size
 
     /** Every place in [bytes] whose 1- or 2-byte codes have [probe]'s shape; zeros never match. */
     fun find(bytes: ByteArray, probe: String): List<Hit> {
@@ -72,5 +92,7 @@ object TextShape {
     /** 2-byte codes are searched at even addresses only, as the CPUs these games ran on need. */
     private const val ODD_ALIGNED = false
     private const val MIN_RUN = 5
-    const val MAX_RUN = 12
+    private const val MIN_REPEATS = 2
+    private const val MAX_PROBES = 4
+    const val MAX_RUN = 16
 }

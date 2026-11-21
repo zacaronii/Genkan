@@ -16,15 +16,20 @@ class TextShapeTest {
         }.toByteArray()
     }
 
-    @Test fun probeTakesTheLongestRunWithARepeat() {
-        assertEquals("ここにいるのはわたし", TextShape.probe("「ここにいるのはわたし」"))
-        // No character repeats: it would match almost anywhere.
+    @Test fun probeTakesTheStretchThatRepeatsMost() {
+        assertEquals("ここにいるのはわたしたち", TextShape.probe("「ここにいるのはわたしたち」"))
+        // Moonlight Syndrome: across its row break and within the second row, other tries.
+        val tries = TextShape.probes("o.あんなのだったらもっと早く帰ってくればよかった▼")
+        assertEquals("んなのだったらもっと早く帰ってく", tries[0])
+        assertTrue(tries.any { it in "もっと早く帰ってくればよかった" })
+        // Fewer than two repeats: it would match almost anywhere.
         assertNull(TextShape.probe("あいうえおか"))
+        assertNull(TextShape.probe("ここにいるのはわたし"))
         assertNull(TextShape.probe("「はい」"))
     }
 
     @Test fun findsTheLineInAnUnknownTableEitherByteOrder() {
-        val line = "ここにいるのはわたし"
+        val line = "ここにいるのはわたしたち"
         for (bigEndian in listOf(false, true)) {
             val noise = ByteArray(301) { (it * 37 + 11).toByte() }
             val bytes = noise + byteArrayOf(0) + encode(line, bigEndian) + noise

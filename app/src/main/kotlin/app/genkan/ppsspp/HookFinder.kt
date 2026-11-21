@@ -6,6 +6,7 @@ import android.util.Log
 import app.genkan.BuildConfig
 import app.genkan.memory.SampleInbox
 import app.genkan.ocr.OcrReader
+import app.genkan.reader.NowPlaying
 import app.genkan.yomikata.CatalogEntry
 import app.genkan.yomikata.CleanupStep
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,7 +21,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
@@ -59,9 +63,15 @@ class HookFinder @Inject constructor(
     private val ppsspp: PpssppText,
     private val ocr: OcrReader,
     private val inbox: SampleInbox,
+    nowPlaying: NowPlaying,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+
+    init {
+        // A result is about the game it was found in: another game starting clears it.
+        scope.launch { nowPlaying.game.map { it.key }.distinctUntilChanged().drop(1).collect { stop() } }
+    }
 
     private val _state = MutableStateFlow<HookFinderState>(HookFinderState.Idle)
     val state: StateFlow<HookFinderState> = _state.asStateFlow()

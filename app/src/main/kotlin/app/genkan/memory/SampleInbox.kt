@@ -186,9 +186,16 @@ class SampleInbox @Inject constructor(
         val request = Request.Builder()
             .url(config.endpoint)
             .header("Authorization", "Bearer ${config.token.trim()}")
-            .post(file.readBytes().toRequestBody(JSON))
+            .post(body(file).toRequestBody(JSON))
             .build()
         client.newCall(request).execute().use { Answer(it.code, it.body.string()) }
+    }
+
+    /** A sample file as sent: the platform in Yomikata's names, for files written before Genkan used them. */
+    private fun body(file: File): String {
+        val doc = JSONObject(file.readText())
+        doc.optString("platform").takeIf { it.isNotEmpty() }?.let { doc.put("platform", TextSamples.yomikataPlatform(it)) }
+        return doc.toString()
     }
 
     private fun sentKey(file: File) = intPreferencesKey("sent:${file.name}")
