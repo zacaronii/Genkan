@@ -25,9 +25,9 @@ import app.genkan.reader.ReaderSession
 import app.genkan.reader.ThreadSample
 import app.genkan.dictionary.ScannedWord
 import app.genkan.words.LookupCounts
+import app.genkan.words.PopupPrefsSource
 import app.genkan.words.WordMarkState
 import app.genkan.words.WordMarks
-import app.genkan.words.WordSettings
 import app.genkan.words.WordStatus
 import app.genkan.words.WordStatuses
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,8 +65,8 @@ class ReaderViewModel @Inject constructor(
     val builtIn: BuiltInText,
     private val words: WordStatuses,
     private val counts: LookupCounts,
-    private val wordSettings: WordSettings,
     private val wordMarks: WordMarks,
+    private val popupPrefs: PopupPrefsSource,
 ) : ViewModel(), PopupActions {
 
     /** Each backlog line's words, as scanned for its text (scanning is the slow part, done once). */
@@ -164,7 +164,7 @@ class ReaderViewModel @Inject constructor(
         _popup.value = null
         stats.onInteraction()
         lookupJob = viewModelScope.launch {
-            val result = dictionaries.lookup(line.text.substring(start))
+            val result = dictionaries.lookup(line.text.substring(start), popupPrefs.prefs.value.maxResults)
             _lookup.value = Lookup(line.id, start, result, line.text)
             show(result)
         }
@@ -177,8 +177,14 @@ class ReaderViewModel @Inject constructor(
         val expressions = result.hits.map { it.expression }
         // A popup visit counts once, for the first result's headword, as Hachidori counts it.
         val first = result.hits.firstOrNull()
-        val count = if (first != null && wordSettings.countsOn()) counts.record(first.expression, first.reading) else 0
-        _popup.value = PopupContent.Terms(result.json, styles, statesJson(expressions), marksJson(result), count)
+        val prefs = popupPrefs.prefs.value
+        val count = if (first != null && prefs.counts) counts.record(first.expression, first.reading) else 0
+        val summary = if (prefs.summary) {
+            org.json.JSONObject().put("count", prefs.summaryCount).put("dictionary", prefs.summaryDictionary ?: org.json.JSONObject.NULL).toString()
+        } else {
+            "null"
+        }
+        _popup.value = PopupContent.Terms(result.json, styles, statesJson(expressions), marksJson(result), count, summary)
         viewModelScope.launch {
             miner.refreshFromAnki(expressions)
             refreshStates()
@@ -261,7 +267,7 @@ class ReaderViewModel @Inject constructor(
     override fun lookUp(text: String) {
         if (_lookup.value == null) return
         lookupJob?.cancel()
-        lookupJob = viewModelScope.launch { show(dictionaries.lookup(text)) }
+        lookupJob = viewModelScope.launch { show(dictionaries.lookup(text, popupPrefs.prefs.value.maxResults)) }
     }
 
     /**

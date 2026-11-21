@@ -28,7 +28,21 @@ class WordSettings @Inject constructor(@ApplicationContext private val context: 
         context.wordStore.edit { it[COUNTS] = on }
     }
 
+    /** Hachidori's brief definitions beside each headword, and how many (1 to 6; Hachidori's default: off, 3). */
+    val summary: Flow<Boolean> = context.wordStore.data.map { it[SUMMARY] ?: false }
+    val summaryCount: Flow<Int> = context.wordStore.data.map { it[SUMMARY_COUNT] ?: 3 }
+
+    suspend fun setSummary(on: Boolean) {
+        context.wordStore.edit { it[SUMMARY] = on }
+    }
+
+    suspend fun setSummaryCount(count: Int) {
+        context.wordStore.edit { it[SUMMARY_COUNT] = count.coerceIn(1, 6) }
+    }
+
     private companion object {
         val COUNTS = booleanPreferencesKey("lookup_counts")
+        val SUMMARY = booleanPreferencesKey("summary")
+        val SUMMARY_COUNT = androidx.datastore.preferences.core.intPreferencesKey("summary_count")
     }
 }

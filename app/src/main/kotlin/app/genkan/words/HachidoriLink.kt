@@ -98,6 +98,19 @@ class HachidoriLink @Inject constructor(
 
     val config: Flow<HachidoriConfig> = context.hachidoriStore.data.map { HachidoriConfig(it[ADDRESS].orEmpty(), it[ENABLED] == true) }
 
+    /**
+     * The host's reader options as it last sent them (popup settings), while linked; never its
+     * `anki` section, which carries its AnkiConnect address and key.
+     */
+    val hostOptions: Flow<JSONObject?> = context.hachidoriStore.data.map { prefs ->
+        if (prefs[ENABLED] != true) null else prefs[OPTIONS]?.let { runCatching { JSONObject(it) }.getOrNull() }
+    }
+
+    private suspend fun keepOptions(options: JSONObject) {
+        options.remove("anki")
+        context.hachidoriStore.edit { it[OPTIONS] = options.toString() }
+    }
+
     /** Saves the address and switch; switching on queues every local mark for the host. */
     suspend fun save(config: HachidoriConfig) {
         val was = this.config.first()
@@ -184,13 +197,18 @@ class HachidoriLink @Inject constructor(
                         linked = true
                         hostVersion = frame.optString("version")
                         frame.optJSONObject("snapshot")?.optJSONObject("wordStatusOverrides")?.let { adopt(it) }
+                        frame.optJSONObject("snapshot")?.optJSONObject("options")?.let { keepOptions(it) }
                         Log.i(TAG, "Linked to Hachidori ${frame.optString("version")}")
                         flush(link)
                         launch { merge(words.changed, counts.changed).collect { flush(link) } }
                     }
-                    "storage" -> frame.optJSONObject("changes")?.optJSONObject("wordStatusOverrides")?.let {
-                        adopt(it)
-                        report(hostVersion)
+                    "storage" -> {
+                        val changes = frame.optJSONObject("changes")
+                        changes?.optJSONObject("options")?.let { keepOptions(it) }
+                        changes?.optJSONObject("wordStatusOverrides")?.let {
+                            adopt(it)
+                            report(hostVersion)
+                        }
                     }
                     "bye" -> socket.close(1000, "bye")
                 }
@@ -268,6 +286,7 @@ class HachidoriLink @Inject constructor(
         const val LINKED_THEN_CLOSED = "the link closed"
         val ADDRESS = stringPreferencesKey("address")
         val ENABLED = booleanPreferencesKey("enabled")
+        val OPTIONS = stringPreferencesKey("options")
 
         fun JSONArray?.strings(): List<String> = this?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty()
         fun JSONObject.optLongOrNull(key: String): Long? = if (has(key) && !isNull(key)) optLong(key) else null

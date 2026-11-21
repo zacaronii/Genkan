@@ -33,6 +33,7 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
     val counted by viewModel.counted.collectAsStateWithLifecycle()
     val link by viewModel.link.collectAsStateWithLifecycle()
     val linkStatus by viewModel.hachidori.status.collectAsStateWithLifecycle()
+    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -54,12 +55,26 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
             color = colors.onSurfaceVariant,
         )
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (prefs.fromHachidori) {
+                Text(
+                    "The popup uses the linked Hachidori's settings: lookup counts " + (if (prefs.counts) "on" else "off") +
+                        ", brief definitions " + (if (prefs.summary) "on (${prefs.summaryCount})" else "off") +
+                        ", up to ${prefs.maxResults} results" + (prefs.frequencyDictionary?.let { ", sorted by $it" } ?: "") +
+                        ". Change them in Hachidori; these below apply when it's unlinked.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
+            }
             ActionRow(
                 "Record and show lookup counts: " + if (counting) "on" else "off",
                 focused = null,
                 onClick = viewModel::toggleCounts,
                 modifier = Modifier.focusRequester(first),
             )
+            val summaryOn by viewModel.settings.summary.collectAsStateWithLifecycle(false)
+            val summaryCount by viewModel.settings.summaryCount.collectAsStateWithLifecycle(3)
+            ActionRow("Brief definitions beside each word (Hachidori's first meanings): " + if (summaryOn) "on" else "off", focused = null, onClick = viewModel::toggleSummary)
+            if (summaryOn) ActionRow("How many brief definitions: $summaryCount", focused = null, onClick = viewModel::nextSummaryCount)
             ActionRow("Reset lookup counts ($counted word${if (counted == 1) "" else "s"})", focused = null, onClick = viewModel::resetCounts)
             GenkanTextField(paste, viewModel::editPaste, "Words to mark known (separated by spaces, commas or lines)", keyboardType = KeyboardType.Text)
             ActionRow("Mark these known", focused = null, onClick = viewModel::addPasted)

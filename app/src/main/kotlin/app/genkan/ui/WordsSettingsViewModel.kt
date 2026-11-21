@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.genkan.words.HachidoriConfig
 import app.genkan.words.HachidoriLink
 import app.genkan.words.LookupCounts
+import app.genkan.words.PopupPrefs
+import app.genkan.words.PopupPrefsSource
 import app.genkan.words.WordSettings
 import app.genkan.words.WordStatus
 import app.genkan.words.WordStatusEntity
@@ -25,7 +27,20 @@ class WordsSettingsViewModel @Inject constructor(
     private val counts: LookupCounts,
     val settings: WordSettings,
     val hachidori: HachidoriLink,
+    popupPrefs: PopupPrefsSource,
 ) : ViewModel() {
+
+    /** What the popup uses now: these settings, or a linked Hachidori's. */
+    val prefs: StateFlow<PopupPrefs> = popupPrefs.prefs
+
+    fun toggleSummary() {
+        viewModelScope.launch { settings.setSummary(!settings.summary.first()) }
+    }
+
+    /** One more brief definition, 1 to 6, then back to 1. */
+    fun nextSummaryCount() {
+        viewModelScope.launch { settings.setSummaryCount(settings.summaryCount.first() % 6 + 1) }
+    }
 
     private val _link = MutableStateFlow(HachidoriConfig())
     /** The Hachidori form. */

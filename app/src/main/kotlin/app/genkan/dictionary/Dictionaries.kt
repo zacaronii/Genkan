@@ -150,6 +150,13 @@ class Dictionaries @Inject constructor(
         }
     }
 
+    /** The frequency dictionary to sort by, by title, when it's installed and on; null: the first one. */
+    @Volatile var preferredFrequency: String? = null
+        set(value) {
+            if (field != value) loaded = false
+            field = value
+        }
+
     /** Looks up the start of [text]: the longest dictionary words it begins with, deinflected. */
     suspend fun lookup(text: String, maxResults: Int = MAX_RESULTS): LookupResult = withContext(native) {
         lock.withLock {
@@ -224,8 +231,10 @@ class Dictionaries @Inject constructor(
                 if (handle == 0L) Log.w(TAG, "A dictionary would not open")
             }
             scanLength = if (handle != 0L) NativeDictionaries.scanLength(handle) else 24
-            // Results are sorted by the first frequency dictionary, the way Yomitan does.
-            frequencyDictionary = enabled.firstOrNull { it.frequencies > 0 }?.title.orEmpty()
+            // Results are sorted by the chosen frequency dictionary when it's here (a linked
+            // Hachidori's), else by the first one, the way Yomitan does.
+            val frequencyTitles = enabled.filter { it.frequencies > 0 }.map { it.title }
+            frequencyDictionary = preferredFrequency?.takeIf { it in frequencyTitles } ?: frequencyTitles.firstOrNull().orEmpty()
             loaded = true
         }
         return handle.takeIf { it != 0L }

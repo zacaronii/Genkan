@@ -30,12 +30,14 @@ sealed interface PopupContent {
         val statesJson: String = "[]",
         val marksJson: String = "[]",
         val count: Int = 0,
+        /** Brief definitions to show ({count, dictionary}), or null. */
+        val summaryJson: String = "null",
     ) : PopupContent
     data class Kanji(val character: String, val entriesJson: String) : PopupContent
 
     /** The page call that shows it; the JSON is a valid JavaScript literal as it is. */
     fun script(): String = when (this) {
-        is Terms -> "genkanShow($hitsJson, $stylesJson, $statesJson, $marksJson, $count)"
+        is Terms -> "genkanShow($hitsJson, $stylesJson, $statesJson, $marksJson, $count, $summaryJson)"
         is Kanji -> "genkanShowKanji(${quote(character)}, $entriesJson)"
     }
 

@@ -60,6 +60,7 @@ html, body {
 .mark.active { color: #1c1c21; background: #7fa58d; }
 .mark.active[data-status="IGNORED"] { background: #939199; }
 .lookup-count { color: var(--accent); }
+.compact-summary { font-size: 17px; color: var(--muted); margin: 2px 0 4px; }
 .mine-queued { background: var(--tag); color: var(--accent); }
 .mine-mined { background: var(--tag); color: #8fd18f; }
 .headword rt { font-size: 15px; color: var(--muted); }

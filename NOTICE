@@ -184,3 +184,8 @@ https://github.com/0xDC00/scripts
   PSP hook addresses and text clean-up from PSP_ULJM06119_Dunamis15.js and
   PSP_NPJH50127_Tokimeki-Memorial-4.js
     -> app/src/main/kotlin/app/genkan/ppsspp/PspHooks.kt
+
+Hachidori (GPL-3.0-or-later)
+https://github.com/bee-san/hachidori, commit 5a5b5e2
+  app/src/main/assets/popup/compact-summary.js: the compact definition summary ("first meanings")
+  from extension/render/popup.js, lines 185-225 and 1701-2159, copied unmodified inside a wrapper.

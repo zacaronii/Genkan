@@ -22,6 +22,7 @@ let lastStyles = null;
 let lastStates = null;
 let lastMarks = [];
 let lastCount = null;
+let lastSummary = null;
 
 const STATE_LABELS = { NEW: '＋ Anki', QUEUED: 'Queued', MINED: 'In Anki' };
 
@@ -431,7 +432,7 @@ function markButtons(index, mark) {
     return box;
 }
 
-function renderTerm(hit, index, state, mark, count) {
+function renderTerm(hit, index, state, mark, count, summary) {
     const entry = el('div', { className: 'entry' });
     const top = el('div', { className: 'entry-top' });
     const headword = el('div', { className: 'headword', lang: 'ja' });
@@ -442,6 +443,14 @@ function renderTerm(hit, index, state, mark, count) {
     actions.appendChild(mineButton(index, state));
     top.appendChild(actions);
     entry.appendChild(top);
+
+    // Hachidori's brief definitions: the first senses of the first dictionary that has some.
+    if (summary && window.genkanCompactSummary) {
+        const brief = window.genkanCompactSummary(hit.glossaries || [], summary.dictionary || null, summary.count);
+        if (brief && brief.items.length) {
+            entry.appendChild(el('div', { className: 'compact-summary', textContent: brief.items.join(' · ') }));
+        }
+    }
 
     const tags = el('div', { className: 'tags' });
     if (hit.trace && hit.trace.length) {
@@ -505,19 +514,20 @@ function setStyles(styles) {
         (styles || []).map(s => constructDictCss(s.css, s.dictionary)).join('\n');
 }
 
-window.genkanShow = function (hits, styles, states, marks, count) {
+window.genkanShow = function (hits, styles, states, marks, count, summary) {
     setStyles(styles);
     lastTerms = hits;
     lastStyles = styles;
     lastStates = states || [];
     lastMarks = marks || [];
     lastCount = count || null;
+    lastSummary = summary || null;
     const root = document.getElementById('entries');
     root.replaceChildren();
     if (!hits || !hits.length) {
         root.appendChild(el('div', { className: 'empty', textContent: 'Nothing found.' }));
     } else {
-        hits.forEach((hit, i) => root.appendChild(renderTerm(hit, i, lastStates[i], lastMarks[i], lastCount)));
+        hits.forEach((hit, i) => root.appendChild(renderTerm(hit, i, lastStates[i], lastMarks[i], lastCount, lastSummary)));
     }
     window.scrollTo(0, 0);
 };
@@ -527,7 +537,7 @@ window.genkanShowKanji = function (character, entries) {
     root.replaceChildren();
     if (lastTerms) {
         const back = el('span', { className: 'back', textContent: '← Back' });
-        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles, lastStates, lastMarks, lastCount));
+        back.addEventListener('click', () => window.genkanShow(lastTerms, lastStyles, lastStates, lastMarks, lastCount, lastSummary));
         root.appendChild(back);
     }
     const entry = el('div', { className: 'entry kanji-entry' });
