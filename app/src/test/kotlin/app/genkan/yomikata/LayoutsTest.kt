@@ -110,6 +110,32 @@ class LayoutsTest {
         assertEquals("�A", message("""{"address": "0x0", "charset": "utf16le", "max_bytes": 4}""", bytesAt(0, 0x3D, 0xD8, 0x41, 0x00)))
     }
 
+    /** Yomikata's tools/tests/test_layout.py, test_pick_without_a_hash_takes_the_only_version_of_the_release. */
+    @Test
+    fun `without a hash, the only version listed for the release id stands in`() {
+        val b = "b".repeat(40)
+        val c = "c".repeat(40)
+        val layouts = """[{"notes": "general"}, {"versions": ["$b"], "notes": "b"}, {"versions": ["$c"], "notes": "c"}]"""
+        fun entry(versions: String, id: String = "SLPS-00001", lays: String = layouts) = CatalogEntry.parse(
+            """{"id": "$id", "platform": "ps1", "title": "t", "encoding": "table", "aliases": ["SLPS-00002"],
+                "versions": $versions, "layouts": $lays}""",
+        )
+        fun notes(e: CatalogEntry, release: String?, hash: String? = null) = Layouts.pick(e, release, hash)?.optString("notes")
+
+        val e = entry("""[{"exe_sha1": "$b"}, {"exe_sha1": "$c", "id": "SLPS-00002"}]""")
+        assertEquals("b", notes(e, "SLPS-00001")) // a version without an id is the entry's own
+        assertEquals("c", notes(e, "SLPS-00002"))
+        assertEquals("c", notes(e, "SLPS-00001", c)) // a hash, when there is one, decides
+        assertEquals("general", notes(e, "SLPS-00003")) // an id with no version listed
+        val two = entry("""[{"exe_sha1": "$b"}, {"exe_sha1": "$c", "id": "SLPS-00002"}, {"exe_sha1": "${"d".repeat(40)}", "note": "rev 1"}]""")
+        assertEquals("general", notes(two, "SLPS-00001")) // two versions of one id: no guessing
+        // Only layouts naming versions, and no single version to name: none.
+        val pinnedOnly = entry("""[{"exe_sha1": "$b"}, {"exe_sha1": "${"d".repeat(40)}"}]""", lays = """[{"versions": ["$b"], "notes": "b"}]""")
+        assertEquals(null, notes(pinnedOnly, "SLPS-00001"))
+        val cart = entry("""[{"header_crc32": "00000000"}]""", id = "AXXJ")
+        assertEquals("general", notes(cart, "AXXJ")) // no executable hash to name
+    }
+
     @Test
     fun `the layout naming a version wins, else the first naming none`() {
         val general = JSONObject("""{"poll": 20}""")

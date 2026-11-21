@@ -100,8 +100,8 @@ class BuiltInText @Inject constructor(
             if (id != null) {
                 ids[game.key] = id
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
-                // The executable's hash isn't known here: the layout naming no version.
-                val layout = Layouts.pick(entry.layouts, null) ?: return
+                // Genkan can't hash the executable: the release id's only listed version stands in.
+                val layout = Layouts.pick(entry, id) ?: return
                 val watching = player.watchLayout(layout, entry, catalog.tableText(entry).orEmpty())
                 setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")

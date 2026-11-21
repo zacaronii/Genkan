@@ -57,6 +57,22 @@ object Layouts {
     }
 
     /**
+     * The layout for a release, for a reader that can't hash its executable (Genkan can't):
+     * the `exe_sha1` of the only version [entry] lists for [releaseId] (a version without an id
+     * is the entry's own) stands in for the hash, and [pick] chooses as usual. With several
+     * versions of that id, or none, only a layout naming no versions. Yomikata's `pick` with a
+     * release id (docs/format.md, "Which layout").
+     */
+    fun pick(entry: CatalogEntry, releaseId: String?, exeSha1: String? = null): JSONObject? =
+        pick(entry.layouts, exeSha1 ?: versionFor(entry, releaseId))
+
+    /** The `exe_sha1` of the only version [entry] lists for [releaseId], or null. */
+    fun versionFor(entry: CatalogEntry, releaseId: String?): String? {
+        val mine = entry.versions.filter { (it.id ?: entry.id) == releaseId }
+        return mine.singleOrNull()?.exeSha1
+    }
+
+    /**
      * Everything [layout] names, read from [memory]. A field that can't be read is left out and
      * its reason kept in [LayoutRead.errors]. [unit], [table] and [controls] are the entry's,
      * for `table` text; [cleanup] is the entry's, applied to every text after the text's own.
