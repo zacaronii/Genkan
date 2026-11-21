@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -98,24 +97,37 @@ class ScreenshotTest {
         )
     }
 
+    /** The first group with the group list focused; the others with the pad on their rows. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settings() = shoot("settings", TOP_PIXELS) {
-        SetupContent(FakeData.settings, SetupAction.entries, focusIndex = 2, onAction = {})
-    }
+    fun settingsLibrary() = shootSettings(0, SettingsFocus(pane = SettingsPane.GROUPS, group = 0))
 
-    /** The same page scrolled to the end, where the action rows are. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsScrolled() = shoot("settings_scrolled", TOP_PIXELS) {
-        // The scroll position is clamped to the page's height once it is laid out.
-        SetupContent(
-            FakeData.settings,
-            SetupAction.entries,
-            focusIndex = SetupAction.BUILT_IN_PLAYER.ordinal,
-            onAction = {},
-            scrollState = rememberScrollState(Int.MAX_VALUE),
-        )
+    fun settingsPlaying() = shootSettings(1, SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 1))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsReading() = shootSettings(2, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 0))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsWords() = shootSettings(3, SettingsFocus(pane = SettingsPane.ROWS, group = 3, row = 0))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsAnki() = shootSettings(4, SettingsFocus(pane = SettingsPane.ROWS, group = 4, row = 1))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsDevice() = shootSettings(5, SettingsFocus(pane = SettingsPane.ROWS, group = 5, row = 0))
+
+    /** Records group [index] of the settings page as settings_<id>.png. */
+    private fun shootSettings(index: Int, focus: SettingsFocus) {
+        val groups = SettingsGroups.DEFAULT
+        shoot("settings_${groups[index].id}", TOP_PIXELS) {
+            SetupContent(FakeData.settings, groups, focus, onSelectGroup = {}, onRow = { _, _, _ -> })
+        }
     }
 
     /**
@@ -235,8 +247,9 @@ private object FakeData {
                 ),
             ),
             sync = SyncStatus.Done(games = 64),
-            usageAccess = true,
-            shizuku = Privileged.State.READY,
+            // Two rows that need attention, to show their status.
+            usageAccess = false,
+            shizuku = Privileged.State.STOPPED,
             pspDebugger = false,
             azaharRpc = false,
             builtInPlayer = true,

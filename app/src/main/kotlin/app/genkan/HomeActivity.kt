@@ -225,13 +225,14 @@ class HomeActivity : ComponentActivity() {
                 if (pad == PadKey.START) appViewModel.openSettings()
                 else if (pad == null || !libraryViewModel.onKey(pad)) return super.dispatchKeyEvent(event)
             }
+            // B steps from a group's rows back to the group list, and only then out of settings.
             Screen.SETTINGS -> {
-                if (pad == PadKey.B || pad == PadKey.START) {
-                    appViewModel.closeSettings()
-                } else {
-                    val result = viewModel.onKey(event.keyCode)
-                    result.action?.let(::run)
-                    if (!result.consumed) return super.dispatchKeyEvent(event)
+                val result = pad?.takeIf { it != PadKey.START }?.let(viewModel::onKey)
+                when {
+                    pad == PadKey.START -> appViewModel.closeSettings()
+                    result?.consumed == true -> result.action?.let(::run)
+                    pad == PadKey.B -> appViewModel.closeSettings()
+                    else -> return super.dispatchKeyEvent(event)
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.

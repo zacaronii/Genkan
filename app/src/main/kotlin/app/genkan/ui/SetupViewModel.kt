@@ -1,9 +1,9 @@
 package app.genkan.ui
 
-import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import app.genkan.dictionary.Dictionaries
 import app.genkan.home.DualScreenState
+import app.genkan.input.PadKey
 import app.genkan.library.LibrarySync
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
@@ -15,24 +15,24 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
-enum class SetupAction(val label: String) {
-    ENABLE_HOME("Enable Genkan as Home"),
-    DISABLE_HOME("Disable Genkan as Home"),
-    SYNC_LIBRARY("Sync library now"),
-    DICTIONARIES("Dictionaries"),
-    ANKI("Anki"),
-    READING_LOG("Reading log"),
-    USAGE_ACCESS("Usage access (exact play time)"),
-    SHIZUKU("Allow Genkan in Shizuku (emulator saves)"),
-    PSP_DEBUGGER("PSP text from PPSSPP's debugger: switch on or off"),
-    AZAHAR_RPC("3DS text from Azahar's RPC server: switch on or off"),
-    BUILT_IN_PLAYER("Built-in player for GB, GBA, DS, PS1 and PSP: switch on or off"),
-    WORDS("Words: known and ignored, lookup counts, Hachidori"),
-    YOMIKATA("Yomikata: memory samples and inbox"),
-    SIGN_OUT("Sign out of RomM"),
+/** Everything the settings page can do. Each one has exactly one row in [SettingsGroups.DEFAULT]. */
+enum class SetupAction {
+    ENABLE_HOME,
+    DISABLE_HOME,
+    SYNC_LIBRARY,
+    DICTIONARIES,
+    ANKI,
+    READING_LOG,
+    USAGE_ACCESS,
+    SHIZUKU,
+    PSP_DEBUGGER,
+    AZAHAR_RPC,
+    BUILT_IN_PLAYER,
+    WORDS,
+    YOMIKATA,
+    SIGN_OUT,
 }
 
 @HiltViewModel
@@ -63,30 +63,41 @@ class SetupViewModel @Inject constructor(
     /** Whether DuckStation's and Dolphin's saves (in their own Android/data) can be synced. */
     val shizuku: StateFlow<Privileged.State> = _shizuku.asStateFlow()
 
-    val actions: List<SetupAction> = SetupAction.entries
+    val groups: List<SettingsGroup> = SettingsGroups.DEFAULT
 
-    private val _focusIndex = MutableStateFlow(0)
-    val focusIndex: StateFlow<Int> = _focusIndex.asStateFlow()
+    private val _focus = MutableStateFlow(SettingsFocus())
+    val focus: StateFlow<SettingsFocus> = _focus.asStateFlow()
 
     /**
-     * Gamepad navigation. Returns the action to run when the confirm button is pressed, null
-     * otherwise; consumed tells the activity whether to swallow the key.
+     * Gamepad navigation. Returns the action to run when a row is pressed, null otherwise;
+     * consumed tells the activity whether to swallow the key. B on the group list is not
+     * consumed, so the activity closes settings.
      */
-    fun onKey(keyCode: Int): KeyResult = when (keyCode) {
-        KeyEvent.KEYCODE_DPAD_UP -> move(-1)
-        KeyEvent.KEYCODE_DPAD_DOWN -> move(1)
-        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
-            KeyResult(consumed = true, action = actions[_focusIndex.value])
-        else -> KeyResult(consumed = false)
+    fun onKey(key: PadKey): KeyResult {
+        val current = _focus.value
+        val next = SettingsNavigator.onKey(current, key, groups) ?: return KeyResult(consumed = false)
+        _focus.value = next
+        val pressed = key == PadKey.A && current.pane == SettingsPane.ROWS
+        return KeyResult(consumed = true, action = if (pressed) actionFor(groups[next.group].rows[next.row]) else null)
     }
 
-    fun focus(action: SetupAction) {
-        _focusIndex.value = actions.indexOf(action)
+    /** A tap on a group in the list. */
+    fun selectGroup(index: Int) {
+        _focus.value = SettingsFocus(pane = SettingsPane.GROUPS, group = index)
     }
 
-    private fun move(delta: Int): KeyResult {
-        _focusIndex.update { (it + delta).coerceIn(0, actions.lastIndex) }
-        return KeyResult(consumed = true)
+    /** A tap on a row: the gamepad picks up from there. */
+    fun focusRow(group: Int, row: Int) {
+        _focus.value = SettingsFocus(pane = SettingsPane.ROWS, group = group, row = row)
+    }
+
+    /**
+     * The action a press on [row] runs now. Only Home's switch runs different actions for on and
+     * off; the others flip with one action, so only Home's state is read here.
+     */
+    private fun actionFor(row: SettingsRow): SetupAction = when (row) {
+        is SettingsRow.Button -> row.action
+        is SettingsRow.Switch -> row.action(on = row.key == SwitchKey.HOME && SetupState.homeOn(dualScreen.status.value))
     }
 
     data class KeyResult(val consumed: Boolean, val action: SetupAction? = null)

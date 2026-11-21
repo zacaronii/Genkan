@@ -1,18 +1,34 @@
 package app.genkan.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import app.genkan.privileged.Privileged
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -20,12 +36,13 @@ import androidx.tv.material3.Text
 import app.genkan.dictionary.DictionaryEntity
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
+import app.genkan.privileged.Privileged
 import app.genkan.romm.RomMState
 
 @Composable
 fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
     val status by viewModel.dualScreen.status.collectAsStateWithLifecycle()
-    val focusIndex by viewModel.focusIndex.collectAsStateWithLifecycle()
+    val focus by viewModel.focus.collectAsStateWithLifecycle()
     val romm by viewModel.romm.state.collectAsStateWithLifecycle()
     val sync by viewModel.librarySync.status.collectAsStateWithLifecycle()
     val usageAccess by viewModel.usageAccess.collectAsStateWithLifecycle()
@@ -48,10 +65,11 @@ fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
             textSamples = textSamples,
             dictionaries = dictionaries,
         ),
-        actions = viewModel.actions,
-        focusIndex = focusIndex,
-        onAction = { action ->
-            viewModel.focus(action)
+        groups = viewModel.groups,
+        focus = focus,
+        onSelectGroup = viewModel::selectGroup,
+        onRow = { group, row, action ->
+            viewModel.focusRow(group, row)
             onAction(action)
         },
     )
@@ -69,139 +87,266 @@ data class SetupState(
     val builtInPlayer: Boolean,
     val textSamples: Boolean,
     val dictionaries: List<DictionaryEntity>,
-)
+) {
+    /** Whether the switch for [key] shows on. */
+    fun isOn(key: SwitchKey): Boolean = when (key) {
+        SwitchKey.HOME -> homeOn(status)
+        SwitchKey.BUILT_IN_PLAYER -> builtInPlayer
+        SwitchKey.PSP_TEXT -> pspDebugger
+        SwitchKey.AZAHAR_TEXT -> azaharRpc
+    }
+
+    companion object {
+        /**
+         * Home counts as on once Genkan is the default Home app; an enabled Home entry alone
+         * still leaves another launcher answering Home.
+         */
+        fun homeOn(status: DualScreenStatus): Boolean = status.isDefaultHome
+    }
+}
 
 /**
- * The settings page drawn from plain state, so it can be shown without a ViewModel. [onAction]
- * runs when a row is touched; [focusIndex] is the row the gamepad is on. [scrollState] is the
- * page's scroll position, passed in only to show the page scrolled (the screenshot tests do).
+ * The settings page drawn from plain state, so it can be shown without a ViewModel: [groups] on
+ * the left, the focused group's rows on the right. [focus] is where the gamepad is. A tap on a
+ * group calls [onSelectGroup]; a tap on a row calls [onRow] with its place and the action it
+ * runs now.
  */
 @Composable
 fun SetupContent(
     state: SetupState,
-    actions: List<SetupAction>,
-    focusIndex: Int,
-    onAction: (SetupAction) -> Unit,
-    scrollState: ScrollState = rememberScrollState(),
+    groups: List<SettingsGroup>,
+    focus: SettingsFocus,
+    onSelectGroup: (Int) -> Unit,
+    onRow: (group: Int, row: Int, action: SetupAction) -> Unit,
 ) {
-    val status = state.status
-    val romm = state.romm
-    val sync = state.sync
-    val usageAccess = state.usageAccess
-    val shizuku = state.shizuku
-    val pspDebugger = state.pspDebugger
-    val azaharRpc = state.azaharRpc
-    val builtInPlayer = state.builtInPlayer
-    val textSamples = state.textSamples
-    val dictionaries = state.dictionaries
-
-    Column(
+    val colors = MaterialTheme.colorScheme
+    Row(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(scrollState)
-            .padding(48.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .background(colors.background)
+            .padding(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Text("Genkan settings", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-        StatusLines(status)
-        Text(
-            "RomM: " + when (val r = romm) {
-                is RomMState.SignedIn -> "${r.account.username} on ${r.account.baseUrl.removeSuffix("/")} (RomM ${r.account.serverVersion})"
-                else -> "not signed in"
-            } + "  ·  Library: " + when (val s = sync) {
-                is SyncStatus.Done -> "${s.games} games"
-                is SyncStatus.Running -> "syncing ${s.platform}…"
-                is SyncStatus.Failed -> "sync failed (${s.message})"
-                SyncStatus.Idle -> "not synced"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "Play time: " + if (usageAccess) "exact (usage access on)" else "approximate; allow usage access so sleep and other apps aren't counted",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "Emulator saves (DuckStation, Dolphin): " + when (shizuku) {
-                Privileged.State.READY -> "reachable through Shizuku"
-                Privileged.State.NOT_ALLOWED -> "Shizuku is running; allow Genkan below"
-                Privileged.State.STOPPED -> "start Shizuku (it stops at every reboot)"
-                Privileged.State.MISSING -> "install Shizuku to sync them"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "PSP text from PPSSPP: " + if (pspDebugger) {
-                "on; PPSSPP's debugger is reachable from your network while a game runs"
-            } else {
-                "off; PSP games use OCR (switching it on opens PPSSPP's debugger to your network while a game runs)"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "3DS text from Azahar: " + if (azaharRpc) {
-                "on; after OCR reads a line, Genkan follows it in memory. Azahar's RPC is reachable from your network while a game runs"
-            } else {
-                "off; 3DS games use OCR (switching it on opens Azahar's RPC server to your network while a game runs)"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "Built-in player: " + if (builtInPlayer) {
-                "on; GB, GBA, DS, PS1 and PSP games run inside Genkan, which reads their memory, frames and sound directly. Select+Start quits; on a DS game, a stick click swaps its lower screen and the reader"
-            } else {
-                "off; every game starts in its installed emulator"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "Yomikata samples: " + if (textSamples) {
-                "on; built-in player lines that aren't in memory as standard text are saved with what OCR read, for your Yomikata inbox (see Yomikata)"
-            } else {
-                "off"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            "Dictionaries: " + if (dictionaries.isEmpty()) "none imported" else
-                "${dictionaries.count { it.enabled }} of ${dictionaries.size} on (${dictionaries.filter { it.enabled }.joinToString { it.title }})",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("B: back", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            actions.forEachIndexed { index, action ->
-                ActionRow(action.label, focused = index == focusIndex, onClick = { onAction(action) })
+        Column(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Settings", style = MaterialTheme.typography.headlineMedium, color = colors.primary)
+            groups.forEachIndexed { index, group ->
+                GroupItem(
+                    title = group.title,
+                    selected = index == focus.group,
+                    listFocused = focus.pane == SettingsPane.GROUPS,
+                    onClick = { onSelectGroup(index) },
+                )
+            }
+            Box(Modifier.weight(1f))
+            Text(
+                if (focus.pane == SettingsPane.ROWS) "B: groups" else "B: back",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+            )
+        }
+        val group = groups.getOrNull(focus.group) ?: return@Row
+        // Keyed on the group so each one opens scrolled to its top.
+        key(focus.group) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(group.title, style = MaterialTheme.typography.headlineMedium, color = colors.onBackground)
+                group.info.forEach { info ->
+                    Text(infoLine(info, state), style = MaterialTheme.typography.bodyLarge, color = colors.onBackground)
+                }
+                group.rows.forEachIndexed { index, row ->
+                    val on = (row as? SettingsRow.Switch)?.let { state.isOn(it.key) }
+                    SettingRow(
+                        title = row.title,
+                        explanation = explanation(row, state),
+                        status = status(row, state),
+                        on = on,
+                        focused = focus.pane == SettingsPane.ROWS && index == focus.row,
+                        onClick = {
+                            val action = when (row) {
+                                is SettingsRow.Button -> row.action
+                                is SettingsRow.Switch -> row.action(on == true)
+                            }
+                            onRow(focus.group, index, action)
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StatusLines(status: DualScreenStatus) {
-    val lines = listOf(
-        "Default home" to yesNo(status.isDefaultHome),
-        "Home entry enabled" to yesNo(status.homeAliasEnabled),
-        "Second screen" to (status.secondaryDisplayId?.let { "display $it" } ?: "not found, or switched off"),
-        "Companion" to when {
-            !status.secondaryUsable -> "refused by the system (single-screen)"
-            status.lowerDisplayId != null -> "running on display ${status.lowerDisplayId}"
-            !status.companionEnabled -> "released"
+private fun GroupItem(title: String, selected: Boolean, listFocused: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(if (selected) colors.primary.copy(alpha = if (listFocused) 0.25f else 0.12f) else colors.surface, shape)
+            .border(2.dp, if (selected && listFocused) colors.primary else Color.Transparent, shape)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A row styled like [ActionRow], with an explanation under its title and, on the right, a short status and a switch. */
+@Composable
+private fun SettingRow(
+    title: String,
+    explanation: String,
+    status: Status?,
+    on: Boolean?,
+    focused: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    // The pad never moves Compose focus here, so the scrolling column follows the focused row by hand.
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) {
+        if (focused) bringIntoView.bringIntoView()
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoView)
+            .background(if (focused) colors.primary.copy(alpha = 0.2f) else colors.surface, shape)
+            .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Text(explanation, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        }
+        status?.let {
+            Text(
+                it.text,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (it.attention) colors.error else colors.onSurfaceVariant,
+            )
+        }
+        on?.let { SwitchMark(it) }
+    }
+}
+
+/** A switch drawn for show: the row is what the pad and touch press. */
+@Composable
+private fun SwitchMark(on: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .size(width = 44.dp, height = 24.dp)
+            .background(if (on) colors.primary else colors.onSurface.copy(alpha = 0.25f), CircleShape)
+            .padding(3.dp),
+        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Box(Modifier.size(18.dp).background(if (on) colors.background else colors.onSurface, CircleShape))
+    }
+}
+
+/** A short status at the right of a row; [attention] marks one that needs doing something. */
+private data class Status(val text: String, val attention: Boolean = false)
+
+private fun infoLine(info: SettingsInfo, state: SetupState): String = when (info) {
+    SettingsInfo.ROMM_ACCOUNT -> when (val r = state.romm) {
+        is RomMState.SignedIn ->
+            "Signed in as ${r.account.username} on ${r.account.baseUrl.removeSuffix("/")} (RomM ${r.account.serverVersion})"
+        else -> "Not signed in to RomM"
+    }
+    SettingsInfo.YOMIKATA_SAMPLES -> "Yomikata samples: " + if (state.textSamples) {
+        "on; built-in player lines that aren't in memory as standard text are saved with what OCR read, for your Yomikata inbox"
+    } else {
+        "off (switched on in Yomikata)"
+    }
+    SettingsInfo.SECOND_SCREEN -> "Second screen: " + (state.status.secondaryDisplayId?.let { "display $it" } ?: "not found, or switched off")
+    SettingsInfo.COMPANION -> "Companion: " + with(state.status) {
+        when {
+            !secondaryUsable -> "refused by the system (single-screen)"
+            lowerDisplayId != null -> "running on display $lowerDisplayId"
+            !companionEnabled -> "released"
             else -> "not running"
-        },
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        lines.forEach { (label, value) ->
-            Text("$label: $value", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
         }
     }
 }
 
-private fun yesNo(value: Boolean) = if (value) "yes" else "no"
+/** The line under a row's title: what it does, or what its state means. */
+private fun explanation(row: SettingsRow, state: SetupState): String = when (row) {
+    is SettingsRow.Switch -> switchExplanation(row.key, state)
+    is SettingsRow.Button -> when (row.action) {
+        SetupAction.SYNC_LIBRARY -> "Library: " + when (val s = state.sync) {
+            is SyncStatus.Done -> "${s.games} games"
+            is SyncStatus.Running -> "syncing ${s.platform}…"
+            is SyncStatus.Failed -> "sync failed (${s.message})"
+            SyncStatus.Idle -> "not synced"
+        }
+        SetupAction.SIGN_OUT -> "Forgets the RomM account on this device."
+        SetupAction.SHIZUKU -> "DuckStation and Dolphin saves: " + when (state.shizuku) {
+            Privileged.State.READY -> "reachable through Shizuku"
+            Privileged.State.NOT_ALLOWED -> "Shizuku is running; press to allow Genkan"
+            Privileged.State.STOPPED -> "start Shizuku (it stops at every reboot)"
+            Privileged.State.MISSING -> "install Shizuku to sync them"
+        }
+        SetupAction.USAGE_ACCESS -> if (state.usageAccess) {
+            "Play time is exact."
+        } else {
+            "Play time is approximate: sleep and other apps are counted too."
+        }
+        SetupAction.YOMIKATA -> "Memory samples and the inbox they go to."
+        SetupAction.DICTIONARIES -> with(state.dictionaries) {
+            if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"
+        }
+        SetupAction.WORDS -> "Known and ignored words, lookup counts, Hachidori."
+        SetupAction.ANKI -> "The AnkiConnect server, deck and note type for mined cards."
+        SetupAction.READING_LOG -> "Reading time and characters per game, logged in kechimochi."
+        // Switch actions never sit on a button row; SettingsGroupsTest checks the groups.
+        else -> ""
+    }
+}
+
+private fun switchExplanation(key: SwitchKey, state: SetupState): String = when (key) {
+    SwitchKey.HOME -> when {
+        state.isOn(key) -> "Home comes back here. Switching off opens Android's Home settings."
+        state.status.homeAliasEnabled -> "The Home entry is on, but another launcher is the default."
+        else -> "Another launcher answers Home."
+    }
+    SwitchKey.BUILT_IN_PLAYER -> if (state.builtInPlayer) {
+        "GB, GBA, DS, PS1 and PSP games run inside Genkan. " +
+            "Select+Start quits; on a DS game, a stick click swaps its lower screen and the reader."
+    } else {
+        "Every game starts in its installed emulator."
+    }
+    SwitchKey.PSP_TEXT -> if (state.pspDebugger) {
+        "PPSSPP's debugger is reachable from your network while a game runs."
+    } else {
+        "PSP games use OCR. Switching on opens PPSSPP's debugger to your network while a game runs."
+    }
+    SwitchKey.AZAHAR_TEXT -> if (state.azaharRpc) {
+        "After OCR reads a line, Genkan follows it in memory. Azahar's RPC server is reachable from your network while a game runs."
+    } else {
+        "3DS games use OCR. Switching on opens Azahar's RPC server to your network while a game runs."
+    }
+}
+
+/** The status at the right of a row, for the rows that can need attention. */
+private fun status(row: SettingsRow, state: SetupState): Status? = when {
+    row is SettingsRow.Switch && row.key == SwitchKey.HOME ->
+        if (state.isOn(row.key)) null else Status("Not default", attention = true)
+    row is SettingsRow.Button && row.action == SetupAction.SHIZUKU -> when (state.shizuku) {
+        Privileged.State.READY -> Status("Ready")
+        Privileged.State.NOT_ALLOWED -> Status("Not allowed", attention = true)
+        Privileged.State.STOPPED -> Status("Stopped", attention = true)
+        Privileged.State.MISSING -> Status("Not installed", attention = true)
+    }
+    row is SettingsRow.Button && row.action == SetupAction.USAGE_ACCESS ->
+        if (state.usageAccess) Status("On") else Status("Off", attention = true)
+    row is SettingsRow.Button && row.action == SetupAction.SYNC_LIBRARY && state.sync is SyncStatus.Failed ->
+        Status("Failed", attention = true)
+    else -> null
+}
