@@ -3,6 +3,7 @@ package app.genkan.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -98,6 +99,16 @@ internal object ShelfDefaults {
     const val WINDOW = 7
     /** Cases this far out start to fade, and are gone at [WINDOW]. */
     const val FADE_FROM = 5f
+    /**
+     * How far out cases are drawn while a direction is held: they fade from one case nearer and are
+     * gone here. The rest stay composed but at alpha 0, which costs the GPU nothing, and come back
+     * when the shelf rests.
+     */
+    const val HOLD_REACH = 5f
+    /** Steps closer together than this count as a held D-pad (key repeats are about 50 ms apart). */
+    const val HOLD_GAP_MS = 110L
+    /** How long the drawn reach takes to shrink or grow back. */
+    const val REACH_MS = 180
     /** How far the focused case steps toward the viewer, down from the shelf's edge. */
     val STEP_FORWARD = 10.dp
     /** The tallest a case may be, as a share of the shelf's height (the rest is media and shadow). */
@@ -129,9 +140,13 @@ internal object ShelfGeometry {
      */
     fun rotationY(d: Float): Float = -d.coerceIn(-1f, 1f) * ShelfDefaults.NEIGHBOUR_ANGLE
 
-    /** Fully opaque near the focus, fading out between [ShelfDefaults.FADE_FROM] and [ShelfDefaults.WINDOW]. */
-    fun alpha(d: Float): Float =
-        (1f - (abs(d) - ShelfDefaults.FADE_FROM) / (ShelfDefaults.WINDOW - ShelfDefaults.FADE_FROM)).coerceIn(0f, 1f)
+    /**
+     * Fully opaque near the focus, fading out over the last two cases before [reach]: at rest that
+     * is between [ShelfDefaults.FADE_FROM] and [ShelfDefaults.WINDOW], and while a direction is
+     * held it ends at [ShelfDefaults.HOLD_REACH].
+     */
+    fun alpha(d: Float, reach: Float = ShelfDefaults.WINDOW.toFloat()): Float =
+        ((reach - abs(d)) / (ShelfDefaults.WINDOW - ShelfDefaults.FADE_FROM)).coerceIn(0f, 1f)
 
     /** How much black lies over the case, for depth: none on the focused one. */
     fun shade(d: Float): Float = ShelfDefaults.NEIGHBOUR_SHADE * (abs(d) / ShelfDefaults.FADE_FROM).coerceAtMost(1f)
@@ -215,6 +230,24 @@ internal fun GameShelf(
     }
     val mediaNow = remember(media) { { media.value } }
 
+    // While a direction is held, only the cases near the focus are drawn: the far ones, mostly
+    // hidden under their neighbours anyway, cost the GPU a turned layer each on every frame. A tap
+    // never counts as holding, so the edges don't flicker on single steps.
+    var holding by remember(shelfId) { mutableStateOf(false) }
+    val lastStep = remember(shelfId) { longArrayOf(0L) }
+    LaunchedEffect(shelfId, focused) {
+        val now = System.nanoTime()
+        if (now - lastStep[0] < ShelfDefaults.HOLD_GAP_MS * 1_000_000) holding = true
+        lastStep[0] = now
+        delay(ShelfDefaults.HOLD_GAP_MS)
+        holding = false
+    }
+    val reach = animateFloatAsState(
+        if (holding) ShelfDefaults.HOLD_REACH else ShelfDefaults.WINDOW.toFloat(),
+        tween(ShelfDefaults.REACH_MS),
+        label = "shelf reach",
+    )
+
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val maxCaseHeight = maxHeight * ShelfDefaults.CASE_HEIGHT
@@ -243,7 +276,7 @@ internal fun GameShelf(
                             scaleY = s
                             rotationY = ShelfGeometry.rotationY(d)
                             translationY = ShelfGeometry.forward(d) * stepPx
-                            alpha = ShelfGeometry.alpha(d)
+                            alpha = ShelfGeometry.alpha(d, reach.value)
                             // Fade by scaling each draw's alpha instead of compositing the case in an
                             // offscreen buffer first, which the default does for any alpha below 1.
                             compositingStrategy = CompositingStrategy.ModulateAlpha

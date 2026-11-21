@@ -45,4 +45,15 @@ class ShelfGeometryTest {
         assertEquals(1f, ShelfGeometry.alpha(ShelfDefaults.FADE_FROM), 0f)
         assertEquals(0f, ShelfGeometry.alpha(ShelfDefaults.WINDOW.toFloat()), 0f)
     }
+
+    @Test
+    fun `while a direction is held, only the near cases are drawn`() {
+        val reach = ShelfDefaults.HOLD_REACH
+        assertEquals(1f, ShelfGeometry.alpha(-(reach - 2f), reach), 0f)
+        assertEquals(0.5f, ShelfGeometry.alpha(reach - 1f, reach), 0.0001f)
+        assertEquals(0f, ShelfGeometry.alpha(reach, reach), 0f)
+        assertEquals(0f, ShelfGeometry.alpha(-6f, reach), 0f)
+        // At rest the same cases are fully drawn.
+        assertEquals(1f, ShelfGeometry.alpha(reach - 1f), 0f)
+    }
 }
