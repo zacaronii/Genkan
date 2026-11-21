@@ -67,8 +67,9 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         if (lines.length() >= PER_GAME) return false
         // OCR flickers on a line (よかった, よなった): one that close is the same line, maybe misread.
         if ((0 until lines.length()).any { HookSearch.similarity(lines.getString(it), key) >= SAME_LINE }) return false
-        // A misread is a false constraint on the table: only a line OCR has read the same way twice.
-        if (seen.add(key)) return false
+        // A misread is a false constraint on the table: only a line OCR has read the same way
+        // twice, or a long one (a story told line by line is read once each), where one is a small part.
+        if (seen.add(key) && key.count { isJapanese(it) } < LONG_LINE) return false
         // What can't be read stays zeros: the dump keeps its addresses.
         val bytes = readRam(memory, ram) ?: return false
         dir.mkdirs()
@@ -94,6 +95,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
         private const val SAME_LINE = 0.8
+        private const val LONG_LINE = 15
 
         /**
          * A line worth a snapshot: at least [MIN_JAPANESE] kana or kanji, and little else besides
