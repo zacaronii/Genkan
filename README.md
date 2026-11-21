@@ -174,8 +174,9 @@ dictionary engine in `third_party/hoshidicts`.
 
 The library, the settings page and the bottom screen's game details are drawn on the JVM
 from made-up data (Roborazzi on Robolectric, `app/src/test/kotlin/app/genkan/ui/ScreenshotTest.kt`),
-at the Thor's sizes: 1920x1080 for the top screen and 1080x1240 for the bottom one, both
-at xhdpi. Record them after a UI change and commit the PNGs with it:
+at the Thor's sizes and density: 1920x1080 for the top screen and 1080x1240 for the bottom
+one, both at 369 dpi. The settings page is shot twice, at the top and scrolled to its
+action rows. Record them after a UI change and commit the PNGs with it:
 
 ```sh
 ./gradlew :app:recordRoborazziDebug     # writes app/src/test/screenshots/*.png

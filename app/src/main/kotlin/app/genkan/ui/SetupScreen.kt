@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -72,10 +73,17 @@ data class SetupState(
 
 /**
  * The settings page drawn from plain state, so it can be shown without a ViewModel. [onAction]
- * runs when a row is touched; [focusIndex] is the row the gamepad is on.
+ * runs when a row is touched; [focusIndex] is the row the gamepad is on. [scrollState] is the
+ * page's scroll position, passed in only to show the page scrolled (the screenshot tests do).
  */
 @Composable
-fun SetupContent(state: SetupState, actions: List<SetupAction>, focusIndex: Int, onAction: (SetupAction) -> Unit) {
+fun SetupContent(
+    state: SetupState,
+    actions: List<SetupAction>,
+    focusIndex: Int,
+    onAction: (SetupAction) -> Unit,
+    scrollState: ScrollState = rememberScrollState(),
+) {
     val status = state.status
     val romm = state.romm
     val sync = state.sync
@@ -91,7 +99,7 @@ fun SetupContent(state: SetupState, actions: List<SetupAction>, focusIndex: Int,
         Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

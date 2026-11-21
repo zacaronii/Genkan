@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -35,8 +36,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDisplay
 import java.util.Locale
 import java.util.TimeZone
 
@@ -44,9 +47,10 @@ import java.util.TimeZone
  * Screenshots of the main screens at the Thor's sizes, from made-up data. Record them with
  * `./gradlew :app:recordRoborazziDebug`; the PNGs land in app/src/test/screenshots.
  *
- * Both screens are drawn at xhdpi (2 px per dp): the top screen is 960x540 dp, so 1920x1080 px,
- * and the bottom one 540x620 dp, so 1080x1240 px. The plain Application stands in for Genkan's
- * Hilt one, which these stateless composables don't need.
+ * Both screens are drawn at the Thor's 369 dpi (about 2.31 px per dp): the top screen is
+ * 832x468 dp and the bottom one 468x538 dp. Those round down a pixel or two, so [shoot] sets
+ * the display to the real 1920x1080 and 1080x1240 px. The plain Application stands in for Genkan's Hilt one, which these
+ * stateless composables don't need.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -62,7 +66,7 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun library() = shoot("library") {
+    fun library() = shoot("library", TOP_PIXELS) {
         LibraryContent(
             platforms = FakeData.platforms,
             games = FakeData.games,
@@ -80,7 +84,7 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
-    fun gameDetails() = shoot("game_details") {
+    fun gameDetails() = shoot("game_details", BOTTOM_PIXELS) {
         val game = FakeData.games[2]
         GameDetailsContent(
             details = GameDetails(
@@ -96,47 +100,36 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settings() = shoot("settings") {
+    fun settings() = shoot("settings", TOP_PIXELS) {
+        SetupContent(FakeData.settings, SetupAction.entries, focusIndex = 2, onAction = {})
+    }
+
+    /** The same page scrolled to the end, where the action rows are. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsScrolled() = shoot("settings_scrolled", TOP_PIXELS) {
+        // The scroll position is clamped to the page's height once it is laid out.
         SetupContent(
-            state = SetupState(
-                status = DualScreenStatus(
-                    mode = ScreenMode.DUAL,
-                    lowerDisplayId = 4,
-                    secondaryDisplayId = 4,
-                    isDefaultHome = true,
-                    homeAliasEnabled = true,
-                ),
-                romm = RomMState.SignedIn(
-                    RomMAccount(
-                        baseUrl = "https://romm.example.com/",
-                        token = "fake-token",
-                        deviceId = null,
-                        userId = 1,
-                        username = "player1",
-                        serverVersion = "4.0.0",
-                    ),
-                ),
-                sync = SyncStatus.Done(games = 64),
-                usageAccess = true,
-                shizuku = Privileged.State.READY,
-                pspDebugger = false,
-                azaharRpc = false,
-                builtInPlayer = true,
-                textSamples = false,
-                dictionaries = FakeData.dictionaries,
-            ),
-            actions = SetupAction.entries,
-            focusIndex = 2,
+            FakeData.settings,
+            SetupAction.entries,
+            focusIndex = SetupAction.BUILT_IN_PLAYER.ordinal,
             onAction = {},
+            scrollState = rememberScrollState(Int.MAX_VALUE),
         )
     }
 
     /**
-     * Renders [content] in Genkan's theme and records it as [name].png. Covers come from
-     * [FakeCovers] through Coil's preview handler, which only runs in inspection mode.
+     * Renders [content] in Genkan's theme on a display of [pixels] (width to height) and records
+     * it as [name].png. Covers come from [FakeCovers] through Coil's preview handler, which only
+     * runs in inspection mode.
      */
     @OptIn(ExperimentalCoilApi::class)
-    private fun shoot(name: String, content: @Composable () -> Unit) {
+    private fun shoot(name: String, pixels: Pair<Int, Int>, content: @Composable () -> Unit) {
+        val display = ShadowDisplay.getDefaultDisplay()
+        shadowOf(display).setRealWidth(pixels.first)
+        shadowOf(display).setWidth(pixels.first)
+        shadowOf(display).setRealHeight(pixels.second)
+        shadowOf(display).setHeight(pixels.second)
         captureRoboImage("src/test/screenshots/$name.png") {
             CompositionLocalProvider(
                 LocalInspectionMode provides true,
@@ -150,8 +143,10 @@ class ScreenshotTest {
     }
 
     private companion object {
-        const val TOP_SCREEN = "w960dp-h540dp-land-xhdpi"
-        const val BOTTOM_SCREEN = "w540dp-h620dp-port-xhdpi"
+        const val TOP_SCREEN = "w832dp-h468dp-land-369dpi"
+        const val BOTTOM_SCREEN = "w468dp-h538dp-port-369dpi"
+        val TOP_PIXELS = 1920 to 1080
+        val BOTTOM_PIXELS = 1080 to 1240
     }
 }
 
@@ -219,6 +214,36 @@ private object FakeData {
             error = error,
             queuedAt = NOW,
         )
+
+    val settings by lazy {
+        SetupState(
+            status = DualScreenStatus(
+                mode = ScreenMode.DUAL,
+                lowerDisplayId = 4,
+                secondaryDisplayId = 4,
+                isDefaultHome = true,
+                homeAliasEnabled = true,
+            ),
+            romm = RomMState.SignedIn(
+                RomMAccount(
+                    baseUrl = "https://romm.example.com/",
+                    token = "fake-token",
+                    deviceId = null,
+                    userId = 1,
+                    username = "player1",
+                    serverVersion = "4.0.0",
+                ),
+            ),
+            sync = SyncStatus.Done(games = 64),
+            usageAccess = true,
+            shizuku = Privileged.State.READY,
+            pspDebugger = false,
+            azaharRpc = false,
+            builtInPlayer = true,
+            textSamples = false,
+            dictionaries = dictionaries,
+        )
+    }
 
     val dictionaries = listOf("Sample Terms", "Sample Frequencies", "Sample Pitch").mapIndexed { index, title ->
         DictionaryEntity(
