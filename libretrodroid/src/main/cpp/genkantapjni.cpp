@@ -56,6 +56,10 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_GenkanTap_readVideoR
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_requestFrame(JNIEnv *, jclass) {
+    GenkanTap::getInstance().requestFrame();
+}
+
 JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_GenkanTap_audioSampleRate(JNIEnv *, jclass) {
     return GenkanTap::getInstance().getSampleRate();
 }

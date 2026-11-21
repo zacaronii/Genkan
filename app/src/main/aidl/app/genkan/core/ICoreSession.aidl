@@ -19,4 +19,10 @@ interface ICoreSession {
 
     /** size bytes of video RAM from offset, or null. */
     byte[] readVideo(long offset, int size) = 6;
+
+    /** The core's savestate (retro_serialize), gzipped into the file at path; its size before gzip, or -1. */
+    long saveStateTo(String path) = 7;
+
+    /** The next frame at the core's own size (a PS1's 320x240), as frame() gives it, or null. */
+    Bundle nativeFrame() = 8;
 }

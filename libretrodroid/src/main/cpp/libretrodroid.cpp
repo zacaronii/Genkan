@@ -539,6 +539,9 @@ void LibretroDroid::handleVideoRefresh(
             // Genkan: the lower screen goes to the other display; this one draws the upper.
             tap.keepFrame(data, width, height, pitch, static_cast<retro_pixel_format>(Environment::getInstance().getPixelFormat()));
             height /= 2;
+        } else if (data != nullptr && data != RETRO_HW_FRAME_BUFFER_VALID && tap.takeFrameRequest()) {
+            // Genkan: one frame at the core's own size, asked for (a snapshot's screen).
+            tap.keepFrame(data, width, height, pitch, static_cast<retro_pixel_format>(Environment::getInstance().getPixelFormat()));
         }
         video->onNewFrame(data, width, height, pitch);
 

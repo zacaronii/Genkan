@@ -75,7 +75,7 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
         Text(
             "Memory samples help build character tables for games whose text isn't standard: when a built-in " +
                 "player line isn't in memory as Shift-JIS or UTF-16, Genkan saves a snapshot of the game's RAM with " +
-                "what OCR read (up to ${RamSnapshots.PER_GAME} lines a game) for the inbox to search, or for a " +
+                "what OCR read (up to ${RamSnapshots.PER_GAME} lines a game, with the emulator's state and the screen) for the inbox to search, or for a " +
                 "game the catalog lists as standard, the places matching the line's shape. They hold script text, " +
                 "so they go only to your own Yomikata inbox, after each play session. B: back",
             style = MaterialTheme.typography.bodyMedium,

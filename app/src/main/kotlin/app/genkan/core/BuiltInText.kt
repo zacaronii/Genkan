@@ -64,6 +64,13 @@ class BuiltInText @Inject constructor(
         }
     }
 
+    /** Everything the built-in player can add to a snapshot. */
+    private val extras = object : RamSnapshots.Extras {
+        override fun vram() = player.videoRam()
+        override fun state(file: java.io.File) = player.saveState(file)
+        override fun screen() = player.frame(native = true) ?: player.frame()
+    }
+
     /** The table reader for each game key that has one. */
     private val tables = HashMap<String, TableText>()
 
@@ -117,7 +124,7 @@ class BuiltInText @Inject constructor(
             samples.sample(memory, game, line)
         } else if (id != null) {
             val core = player.game.value?.core?.displayName ?: "built-in player"
-            snapshots.take(memory, game, id, line, "Genkan built-in player ($core)", player::videoRam)
+            snapshots.take(memory, game, id, line, "Genkan built-in player ($core)", extras)
         } else {
             Log.i(TAG, "No release id in ${game.title}'s RAM: no snapshot")
         }

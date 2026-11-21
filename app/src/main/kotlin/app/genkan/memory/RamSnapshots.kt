@@ -1,6 +1,7 @@
 package app.genkan.memory
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
 import app.genkan.BuildConfig
 import app.genkan.ppsspp.HookSearch
@@ -50,27 +51,48 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     /** The video RAM taken with a snapshot, when there is one. */
     fun vramOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".vram.gz")
 
+    /** The core's savestate taken with a snapshot, gzipped. */
+    fun stateOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".state.gz")
+
+    /** The frame on screen when the snapshot was taken, as a PNG. */
+    fun screenOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".screen.png")
+
+    /** Whether a snapshot carries anything besides RAM. */
+    fun hasExtras(meta: File): Boolean = vramOf(meta).isFile || stateOf(meta).isFile || screenOf(meta).isFile
+
+    /** What the emulator can add to a snapshot besides RAM, for the inbox's side to work from. */
+    interface Extras {
+        /** The video RAM, when the core gives it out. */
+        fun vram(): ByteArray? = null
+        /** The savestate, gzipped into [file]; its size before gzip, or null. */
+        fun state(file: File): Long? = null
+        /** The frame on screen. */
+        fun screen(): Bitmap? = null
+    }
+
     /** Sent or refused for good: gone from the device. */
     fun remove(meta: File) {
         ramOf(meta).delete()
         vramOf(meta).delete()
+        stateOf(meta).delete()
+        screenOf(meta).delete()
         meta.delete()
     }
 
     /**
      * Takes a snapshot of [memory]'s main RAM for [line] when it's clean and new for the game and
-     * the game has fewer than [PER_GAME]; returns whether it did. [vram], when the core gives
-     * it, goes along: on a PS1 it holds the scene's font and the text box as drawn, which can
-     * map kanji codes when the script isn't in RAM as codes (Persona 2).
+     * the game has fewer than its [cap]; returns whether it did. What [extras] gives goes along
+     * (the savestate, holding a PS1's video RAM with the scene's font, and the frame on screen):
+     * the inbox's side ties glyphs to characters with them when a script isn't in RAM as codes.
      */
     @Synchronized
-    fun take(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String, vram: (() -> ByteArray?)? = null): Boolean {
+    fun take(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String, extras: Extras? = null): Boolean {
         val ram = MainRam.of(game.platform) ?: return false
         if (!isClean(line)) return false
         val taken = runCatching { JSONObject(ledger.readText()) }.getOrNull() ?: JSONObject()
         val lines = taken.optJSONArray(id) ?: JSONArray()
         val key = layoutFree(line)
-        if (lines.length() >= PER_GAME) return false
+        if (lines.length() >= cap(id)) return false
         // OCR flickers on a line (よかった, よなった): one that close is the same line, maybe misread.
         if ((0 until lines.length()).any { HookSearch.similarity(lines.getString(it), key) >= SAME_LINE }) return false
         // A misread is a false constraint on the table: only a line OCR has read the same way
@@ -90,20 +112,30 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("app", "Genkan ${BuildConfig.VERSION_NAME}")
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
-        vram?.invoke()?.let { video ->
+        extras?.vram()?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
+        }
+        extras?.state(File(dir, "$name.state.gz"))?.let { size -> meta.put("state", JSONObject().put("bytes", size)) }
+        extras?.screen()?.let { frame ->
+            File(dir, "$name.screen.png").outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            meta.put("screen", JSONObject().put("width", frame.width).put("height", frame.height))
         }
         File(dir, "$name.meta.json").writeText(meta.toString())
         taken.put(id, lines.put(key))
         ledger.writeText(taken.toString())
-        Log.i(TAG, "Snapshot ${lines.length()} of $PER_GAME for ${game.title} ($id): ${bytes.size / 1024} KB at \"${line.take(12)}\"")
+        Log.i(TAG, "Snapshot ${lines.length()} of ${cap(id)} (${meta.optJSONObject("state")?.optLong("bytes")?.let { "state $it bytes" } ?: "no state"}) for ${game.title} ($id): ${bytes.size / 1024} KB at \"${line.take(12)}\"")
         return true
     }
 
     companion object {
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
+
+        /** Games the Yomikata server is working on now, which want more lines. */
+        private val ACTIVE = mapOf("SLPS-02100" to 10)
+
+        fun cap(id: String): Int = ACTIVE[id] ?: PER_GAME
         /** A PS1's video RAM is 1024 16-bit pixels wide (15-bit colour, bit 15 the mask bit). */
         private const val VRAM_WIDTH = 1024
         private const val SAME_LINE = 0.8

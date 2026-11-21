@@ -159,17 +159,24 @@ class SampleInbox @Inject constructor(
      */
     private suspend fun sendSnapshots(config: InboxConfig): Int? = withContext(Dispatchers.IO) {
         var sent = 0
-        for (meta in snapshots.pending()) {
+        val pending = snapshots.pending()
+        // An inbox that stores only RAM would take a snapshot and drop its state and screen, and
+        // the same RAM sent again later is a duplicate: those wait until the inbox keeps them.
+        val keepsExtras = pending.none(snapshots::hasExtras) || keepsExtras(config)
+        for (meta in pending) {
             val ram = snapshots.ramOf(meta)
             if (!ram.isFile) {
                 snapshots.remove(meta)
                 continue
             }
+            if (!keepsExtras && snapshots.hasExtras(meta)) continue
             val parts = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("meta", null, meta.readBytes().toRequestBody(JSON))
                 .addFormDataPart("ram", ram.name, ram.asRequestBody(GZIP))
             // Video RAM, when it was taken: an inbox that doesn't keep it yet ignores the part.
             snapshots.vramOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("vram", it.name, it.asRequestBody(GZIP)) }
+            snapshots.stateOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("state", it.name, it.asRequestBody(GZIP)) }
+            snapshots.screenOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("screen", it.name, it.asRequestBody(PNG)) }
             val body = parts.build()
             val request = Request.Builder()
                 .url(config.snapshotsEndpoint)
@@ -198,7 +205,19 @@ class SampleInbox @Inject constructor(
             }
         }
         if (sent > 0) Log.i(TAG, "Sent $sent RAM snapshots to the inbox")
+        if (!keepsExtras) Log.i(TAG, "Snapshots with state or screen wait until the inbox keeps them")
         sent
+    }
+
+    /** Whether the inbox keeps a snapshot's optional parts: its listing then counts them per game. */
+    private fun keepsExtras(config: InboxConfig): Boolean {
+        val request = Request.Builder().url(config.snapshotsEndpoint).header("Authorization", "Bearer ${config.token.trim()}").build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use false
+            val games = runCatching { JSONObject(response.body.string()).getJSONArray("games") }.getOrNull() ?: return@use false
+            // An empty inbox can't say; its answer to the first upload lists what it kept.
+            games.length() == 0 || (0 until games.length()).any { games.getJSONObject(it).has("with") }
+        }
     }
 
     /** How many games the inbox holds samples for; throws when it can't be reached or refuses. */
@@ -267,5 +286,6 @@ class SampleInbox @Inject constructor(
         val TOKEN = stringPreferencesKey("inbox_token")
         val JSON = "application/json".toMediaType()
         val GZIP = "application/gzip".toMediaType()
+        val PNG = "image/png".toMediaType()
     }
 }

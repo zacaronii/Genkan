@@ -70,10 +70,15 @@ public:
     /** Rows [firstRow, firstRow + rows) of the last kept frame into [out]; false when it has none that big. */
     bool copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsigned rows);
     std::pair<unsigned, unsigned> frameSize();
+    /** Keeps the next frame the core draws, at its own size, even with one screen. */
+    void requestFrame();
+    /** Whether a frame was asked for; asking again clears it. */
+    bool takeFrameRequest();
 
 private:
     GenkanTap() = default;
 
+    std::atomic<bool> frameRequested { false };
     std::mutex memoryLock;
     std::vector<Region> memory;
     void *(*systemRamData)(unsigned) = nullptr;

@@ -190,7 +190,34 @@ class CoreActivity : ComponentActivity() {
             runOnUiThread { quit() }
         }
 
+        override fun nativeFrame(): Bundle? {
+            if (core.splitScreens) return keptFrameBundle(scaled = false)
+            GenkanTap.requestFrame()
+            val until = System.currentTimeMillis() + FRAME_WAIT_MS
+            while (System.currentTimeMillis() < until) {
+                if (GenkanTap.frameSize() != null) return keptFrameBundle(scaled = false)
+                Thread.sleep(10)
+            }
+            return null
+        }
+
         override fun videoSize(): Long = GenkanTap.videoRamSize()
+
+        override fun saveStateTo(path: String): Long {
+            // Only into Genkan's own snapshot folder, which both processes share.
+            val file = java.io.File(path)
+            if (file.parentFile?.canonicalPath != java.io.File(filesDir, "yomikata-snapshots").canonicalPath) return -1
+            return try {
+                val state = retroView.serializeState()
+                if (state.isEmpty()) return -1
+                java.util.zip.GZIPOutputStream(file.outputStream()).use { it.write(state) }
+                state.size.toLong()
+            } catch (e: Exception) {
+                Log.w(TAG, "No savestate: $e")
+                file.delete()
+                -1
+            }
+        }
 
         override fun readVideo(offset: Long, size: Int): ByteArray? {
             if (size !in 1..MAX_READ) return null
@@ -220,11 +247,11 @@ class CoreActivity : ComponentActivity() {
     }
 
     /** The core's whole stacked frame, enlarged so small text is big enough to read. */
-    private fun keptFrameBundle(): Bundle? {
+    private fun keptFrameBundle(scaled: Boolean = true): Bundle? {
         val (width, height) = GenkanTap.frameSize() ?: return null
         val pixels = ByteBuffer.allocateDirect(width * height * 4)
         if (!GenkanTap.copyFrame(pixels, 0, height)) return null
-        val scale = (MIN_FRAME_SIDE + width - 1) / width
+        val scale = if (scaled) (MIN_FRAME_SIDE + width - 1) / width else 1
         val row = width * 4
         val memory = SharedMemory.create("genkan-frame", row * scale * height * scale)
         val out = memory.mapReadWrite()

@@ -177,6 +177,21 @@ bool GenkanTap::copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsi
     return true;
 }
 
+void GenkanTap::requestFrame() {
+    {
+        std::lock_guard<std::mutex> lock(frameLock);
+        if (!splitScreens) {
+            frameWidth = 0;
+            frameHeight = 0;
+        }
+    }
+    frameRequested = true;
+}
+
+bool GenkanTap::takeFrameRequest() {
+    return frameRequested.exchange(false);
+}
+
 std::pair<unsigned, unsigned> GenkanTap::frameSize() {
     std::lock_guard<std::mutex> lock(frameLock);
     return { frameWidth, frameHeight };

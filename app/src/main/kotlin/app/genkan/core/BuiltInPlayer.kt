@@ -52,11 +52,11 @@ class BuiltInPlayer @Inject constructor() {
         }
     }
 
-    /** The frame the player shows now, or null when no game runs in it. */
-    fun frame(): Bitmap? {
+    /** The frame the player shows now ([native]: at the core's own size), or null when no game runs in it. */
+    fun frame(native: Boolean = false): Bitmap? {
         val session = _game.value?.session ?: return null
         val bundle = try {
-            session.frame()
+            if (native) session.nativeFrame() else session.frame()
         } catch (e: RemoteException) {
             null
         } ?: return null
@@ -84,6 +84,16 @@ class BuiltInPlayer @Inject constructor() {
         val base = game.core.ramBase
         val regions = raw.toList().chunked(3).map { (start, length, mirror) -> (base + start until base + start + length) to (mirror != 0L) }
         return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base)
+    }
+
+    /** The running game's savestate, gzipped into [file] (in the snapshot folder); its size before gzip, or null. */
+    fun saveState(file: java.io.File): Long? {
+        val session = _game.value?.session ?: return null
+        return try {
+            session.saveStateTo(file.absolutePath).takeIf { it > 0 }
+        } catch (e: RemoteException) {
+            null
+        }
     }
 
     /**

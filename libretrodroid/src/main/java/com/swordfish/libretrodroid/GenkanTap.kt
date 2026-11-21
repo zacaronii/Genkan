@@ -31,6 +31,9 @@ object GenkanTap {
     /** [size] bytes at [address] into [out]; false when no region holds all of them. */
     @JvmStatic external fun readMemory(address: Long, out: ByteArray, size: Int): Boolean
 
+    /** Keeps the next frame the core draws at its own size ([frameSize], [copyFrame]). */
+    @JvmStatic external fun requestFrame()
+
     /** The size of the core's video RAM, 0 when it gives none. */
     @JvmStatic external fun videoRamSize(): Long
 
