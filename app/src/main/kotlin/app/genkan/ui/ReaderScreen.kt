@@ -198,6 +198,9 @@ internal fun Chip(label: String, onClick: () -> Unit) {
     )
 }
 
+/** A speaker known only by number ("#7"): kept to break runs, not shown. */
+private val UNNAMED_SPEAKER = Regex("#\\d+")
+
 @Composable
 private fun Backlog(
     lines: List<ReaderLineEntity>,
@@ -238,11 +241,15 @@ private fun Backlog(
     ) {
         itemsIndexed(lines, key = { _, line -> line.id }) { i, line ->
             val highlight = lookup?.takeIf { it.lineId == line.id }
-            Column {
-                // The speaker above their line, once for lines said in a row (a transcript's way).
-                val speaker = line.speaker
-                if (speaker != null && lines.getOrNull(i - 1)?.speaker != speaker) {
-                    Text(speaker, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            // A run: lines said in a row by one speaker (or by none). A new run shows its speaker's
+            // name above it, once; one without a name to show (narration, or a speaker the catalog
+            // only numbers, stored as "#n") is set apart by space instead.
+            val speaker = line.speaker
+            val newRun = i > 0 && lines[i - 1].speaker != speaker
+            val name = speaker?.takeUnless { UNNAMED_SPEAKER.matches(it) }
+            Column(Modifier.padding(top = if (newRun && name == null) 10.dp else 0.dp)) {
+                if (name != null && (i == 0 || newRun)) {
+                    Text(name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 }
                 TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty()) { onTap(line, it) }
             }
