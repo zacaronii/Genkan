@@ -34,7 +34,12 @@ class TextSamples @Inject constructor(private val settings: PlayerSettings) {
         val probes = TextShape.probes(line)
         if (probes.isEmpty()) return 0
         var total = 0L
-        val regions = memory.regions.filter { total += it.last - it.first + 1; total <= MAX_MEMORY }
+        // Main RAM only, where the system has one: elsewhere (a PS1's BIOS ROM) a shape matches by chance.
+        val main = MainRam.of(game.platform)?.range
+        val searched = if (main == null) memory.regions else memory.regions.mapNotNull { r ->
+            (maxOf(r.first, main.first)..minOf(r.last, main.last)).takeUnless { it.isEmpty() }
+        }
+        val regions = searched.filter { total += it.last - it.first + 1; total <= MAX_MEMORY }
         val memoryBytes = regions.mapNotNull { region -> readAll(memory, region)?.let { region to it } }
         val serial = memoryBytes.firstNotNullOfOrNull { ps1Serial(it.second) }
         for (probe in probes) {

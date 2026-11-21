@@ -22,6 +22,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -39,6 +41,9 @@ data class InboxConfig(val address: String = "", val token: String = "") {
     /** A bare host gets https; a full URL is used as written. */
     val endpoint: String get() = endpoint("samples")
 
+    /** Where RAM snapshots go. */
+    val snapshotsEndpoint: String get() = endpoint("snapshots")
+
     /** Where hook reports go (docs/hook-finder.md). */
     val hooksEndpoint: String get() = endpoint("hooks")
 
@@ -51,7 +56,7 @@ data class InboxConfig(val address: String = "", val token: String = "") {
 sealed interface InboxStatus {
     data object NotSet : InboxStatus
     data object Idle : InboxStatus
-    data class Sent(val files: Int, val added: Int) : InboxStatus
+    data class Sent(val files: Int, val added: Int, val snapshots: Int = 0) : InboxStatus
     data class Unreachable(val reason: String) : InboxStatus
     data class Refused(val reason: String) : InboxStatus
 }
@@ -69,6 +74,7 @@ class SampleInbox @Inject constructor(
     @ApplicationContext private val context: Context,
     okHttp: OkHttpClient,
     private val samples: TextSamples,
+    private val snapshots: RamSnapshots,
 ) {
     private val client = okHttp.newBuilder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -108,6 +114,7 @@ class SampleInbox @Inject constructor(
         val sent = context.yomikataStore.data.first()
         var files = 0
         var added = 0
+        var refused = false
         for ((file, count) in local()) {
             val key = sentKey(file)
             if (!all && (sent[key] ?: 0) >= count) continue
@@ -128,16 +135,68 @@ class SampleInbox @Inject constructor(
                     return@withLock
                 }
                 else -> {
-                    // A file the inbox refuses (too large, malformed) is left for the next try.
+                    // A file the inbox refuses (too large, malformed) is left for the next try; the others go.
                     val detail = runCatching { JSONObject(answer.body).optString("detail") }.getOrNull()
                     _status.value = InboxStatus.Refused("${file.name}: HTTP ${answer.code}${detail?.let { " $it" }.orEmpty()}")
                     Log.i(TAG, "Inbox refused ${file.name}: ${answer.code} $detail")
-                    return@withLock
+                    refused = true
                 }
             }
         }
-        _status.value = if (files > 0) InboxStatus.Sent(files, added) else InboxStatus.Idle
+        val sentSnapshots = try {
+            sendSnapshots(config)
+        } catch (e: IOException) {
+            _status.value = InboxStatus.Unreachable(e.message ?: e.javaClass.simpleName)
+            return@withLock
+        } ?: return@withLock
+        if (!refused) _status.value = if (files > 0 || sentSnapshots > 0) InboxStatus.Sent(files, added, sentSnapshots) else InboxStatus.Idle
         if (files > 0) Log.i(TAG, "Sent $files sample files to the inbox, $added new samples")
+    }
+
+    /**
+     * Sends the RAM snapshots waiting on the device, each removed once the inbox has it (or
+     * refuses it for good); null when the inbox refused the token.
+     */
+    private suspend fun sendSnapshots(config: InboxConfig): Int? = withContext(Dispatchers.IO) {
+        var sent = 0
+        for (meta in snapshots.pending()) {
+            val ram = snapshots.ramOf(meta)
+            if (!ram.isFile) {
+                snapshots.remove(meta)
+                continue
+            }
+            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("meta", null, meta.readBytes().toRequestBody(JSON))
+                .addFormDataPart("ram", ram.name, ram.asRequestBody(GZIP))
+                .build()
+            val request = Request.Builder()
+                .url(config.snapshotsEndpoint)
+                .header("Authorization", "Bearer ${config.token.trim()}")
+                .post(body)
+                .build()
+            client.newCall(request).execute().use { response ->
+                val text = response.body.string()
+                when (response.code) {
+                    200 -> {
+                        sent++
+                        snapshots.remove(meta)
+                        Log.i(TAG, "Snapshot ${meta.name}: $text")
+                    }
+                    401 -> {
+                        _status.value = InboxStatus.Refused("the inbox didn't accept the token")
+                        return@withContext null
+                    }
+                    // Not something a retry fixes (outside main RAM, too large): dropped.
+                    400, 413 -> {
+                        Log.w(TAG, "Inbox refused snapshot ${meta.name}: ${response.code} $text")
+                        snapshots.remove(meta)
+                    }
+                    else -> Log.i(TAG, "Snapshot ${meta.name} not sent yet: HTTP ${response.code}")
+                }
+            }
+        }
+        if (sent > 0) Log.i(TAG, "Sent $sent RAM snapshots to the inbox")
+        sent
     }
 
     /** How many games the inbox holds samples for; throws when it can't be reached or refuses. */
@@ -205,5 +264,6 @@ class SampleInbox @Inject constructor(
         val ADDRESS = stringPreferencesKey("inbox_address")
         val TOKEN = stringPreferencesKey("inbox_token")
         val JSON = "application/json".toMediaType()
+        val GZIP = "application/gzip".toMediaType()
     }
 }

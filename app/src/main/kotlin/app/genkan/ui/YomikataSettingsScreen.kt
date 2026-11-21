@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.memory.InboxStatus
+import app.genkan.memory.RamSnapshots
 import app.genkan.yomikata.CatalogStatus
 import java.text.DateFormat
 import java.util.Date
@@ -73,9 +74,10 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
         )
         Text(
             "Memory samples help build character tables for games whose text isn't standard: when a built-in " +
-                "player line isn't in memory as Shift-JIS or UTF-16, the places matching its shape are saved with " +
-                "what OCR read. They hold script text, so they go only to your own Yomikata inbox, after each play " +
-                "session; a copy stays in Download/Genkan/yomikata-samples. B: back",
+                "player line isn't in memory as Shift-JIS or UTF-16, Genkan saves a snapshot of the game's RAM with " +
+                "what OCR read (up to ${RamSnapshots.PER_GAME} lines a game) for the inbox to search, or for a " +
+                "game the catalog lists as standard, the places matching the line's shape. They hold script text, " +
+                "so they go only to your own Yomikata inbox, after each play session. B: back",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
         )
@@ -97,7 +99,8 @@ fun YomikataSettingsScreen(viewModel: YomikataSettingsViewModel) {
                     InboxStatus.NotSet -> "  ·  no inbox set"
                     is InboxStatus.Unreachable -> "  ·  inbox unreachable (${s.reason})"
                     is InboxStatus.Refused -> "  ·  inbox refused: ${s.reason}"
-                    is InboxStatus.Sent -> "  ·  just sent ${s.files} file${if (s.files == 1) "" else "s"}, ${s.added} new samples"
+                    is InboxStatus.Sent -> "  ·  just sent ${s.files} file${if (s.files == 1) "" else "s"}, ${s.added} new samples" +
+                        if (s.snapshots > 0) ", ${s.snapshots} RAM snapshot${if (s.snapshots == 1) "" else "s"}" else ""
                     InboxStatus.Idle -> ""
                 },
             style = MaterialTheme.typography.bodyLarge,
