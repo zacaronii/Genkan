@@ -2,6 +2,9 @@ package app.genkan.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -181,7 +184,7 @@ private fun LibraryBody(
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         PlatformRail(
-            names = platforms.map { if (it.id < 0) it.name else "${it.name}  ${it.romCount}" },
+            names = platforms.mapIndexed { i, p -> consoleLabel(p, shown = games.size.takeIf { downloadedOnly && i == focus.platformIndex }) },
             selected = focus.platformIndex,
             railFocused = focus.pane == LibraryPane.PLATFORMS,
             onSelect = onSelectPlatform,
@@ -281,6 +284,7 @@ private fun ShelfLibrary(
         ConsoleStrip(
             platforms = platforms,
             selected = focus.platformIndex,
+            shown = games.size.takeIf { downloadedOnly },
             stripFocused = focus.pane == LibraryPane.PLATFORMS,
             sync = sync,
             onSelect = onSelectPlatform,
@@ -327,6 +331,8 @@ private fun ShelfLibrary(
 private fun ConsoleStrip(
     platforms: List<PlatformEntity>,
     selected: Int,
+    /** How many of the selected console's games are on the shelf, when a filter leaves out some (else null). */
+    shown: Int?,
     stripFocused: Boolean,
     sync: SyncStatus,
     onSelect: (Int) -> Unit,
@@ -346,7 +352,7 @@ private fun ConsoleStrip(
             platforms.getOrNull(selected)?.let { current ->
                 val shape = RoundedCornerShape(8.dp)
                 Text(
-                    if (current.id < 0) current.name else "${current.name}  ${current.romCount}",
+                    consoleLabel(current, shown),
                     style = MaterialTheme.typography.titleLarge,
                     color = colors.primary,
                     maxLines = 1,
@@ -377,6 +383,13 @@ private fun ConsoleStrip(
         ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
     }
 }
+
+/**
+ * A console's name and how many games it has: RomM's count, or [shown] (what's on the shelf)
+ * while "Downloaded only" leaves some out. Shelves of Genkan's own (no RomM id) have no count.
+ */
+internal fun consoleLabel(platform: PlatformEntity, shown: Int? = null): String =
+    if (platform.id < 0) platform.name else "${platform.name}  ${shown ?: platform.romCount}"
 
 @Composable
 private fun NeighbourConsole(name: String, modifier: Modifier, onClick: () -> Unit) {
@@ -644,8 +657,8 @@ internal fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrde
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (focused) colors.primary.copy(alpha = 0.18f) else Color.Transparent)
+                    // The shape drawn, not clipped to: a Sort arrow's touch area reaches past the row.
+                    .background(if (focused) colors.primary.copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(8.dp))
                     .border(2.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(8.dp))
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, 1)) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -654,23 +667,9 @@ internal fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrde
                 Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
                 if (index == 0) {
                     // Each arrow steps its own way (the rest of the row steps on, as A does).
-                    Text(
-                        "‹",
-                        Modifier
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, -1)) }
-                            .padding(horizontal = 8.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.onSurface,
-                    )
+                    SortArrow("‹", Modifier.padding(horizontal = 8.dp)) { onOrder(OrderPanel.change(order, index, -1)) }
                     Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
-                    Text(
-                        "›",
-                        Modifier
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, 1)) }
-                            .padding(start = 8.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.onSurface,
-                    )
+                    SortArrow("›", Modifier.padding(start = 8.dp)) { onOrder(OrderPanel.change(order, index, 1)) }
                 } else {
                     Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
                 }
@@ -687,6 +686,36 @@ internal fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrde
         }
     }
 }
+
+/**
+ * One of the Sort row's arrows, drawn as before ([modifier]: its spacing) but taking taps over
+ * at least [ARROW_TARGET] square around it, past its glyph and the row's padding.
+ */
+@Composable
+private fun SortArrow(glyph: String, modifier: Modifier, onTap: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier.layout { measurable, constraints ->
+            // Laid out at the glyph's size, so the row doesn't move; the touch area grows past it.
+            val p = measurable.measure(constraints)
+            layout(p.width, p.height) { p.place(0, 0) }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(glyph, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+        Box(
+            Modifier
+                .matchParentSize()
+                .wrapContentSize(unbounded = true)
+                .size(ARROW_TARGET)
+                .testTag("sort-arrow-$glyph")
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
+        )
+    }
+}
+
+/** The least a Sort arrow takes taps over, either way (Material's minimum touch target). */
+private val ARROW_TARGET = 48.dp
 
 @Composable
 private fun EmptyLibrary(sync: SyncStatus) {
