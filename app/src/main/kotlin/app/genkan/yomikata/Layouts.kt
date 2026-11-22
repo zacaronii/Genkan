@@ -605,7 +605,10 @@ object Layouts {
             val pages = mutableListOf<Pair<Int, Int>>()
             var start = 0
             var i = 0
+            val inside = cursor in 0..data.size.toLong()
             while (i < data.size) {
+                // Past the cursor's page nothing more can be the one shown.
+                if (inside && start > cursor) break
                 if (mark.isNotEmpty() && i + mark.size <= data.size && mark.indices.all { data[i + it] == mark[it] }) {
                     pages += start to i
                     i += mark.size
@@ -614,17 +617,24 @@ object Layouts {
                     i += charLength(data, i, charset, width)
                 }
             }
-            pages += start to data.size
-            val inside = cursor in 0..data.size.toLong()
+            pages += start to i
             val full = pages.filter { (a, b) -> b > a && (!inside || a <= cursor) }
             return full.lastOrNull()?.let { (a, b) -> data.copyOfRange(a, minOf(b, data.size)) } ?: ByteArray(0)
         }
 
         /** The current text's codes (lead bytes, whole length): one character each, decoded to nothing. */
         private var codes: List<Pair<ByteArray, Int>> = emptyList()
+            set(value) {
+                field = value
+                leadFirst = BooleanArray(256).also { first -> value.forEach { (lead, _) -> first[lead[0].toInt() and 0xFF] = true } }
+            }
+
+        /** The first bytes the codes' leads start with: most characters skip the lead search on one look. */
+        private var leadFirst = BooleanArray(256)
 
         /** Bytes in the code starting at [i], or 0 when none starts there: the longest lead wins. */
-        private fun codeLength(data: ByteArray, i: Int): Int = if (codes.isEmpty()) 0 else CharTable.codeLength(data, i, codes)
+        private fun codeLength(data: ByteArray, i: Int): Int =
+            if (codes.isEmpty() || !leadFirst[data[i].toInt() and 0xFF]) 0 else CharTable.codeLength(data, i, codes)
 
         /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */
         private fun charLength(data: ByteArray, i: Int, charset: String, width: Int): Int {

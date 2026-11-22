@@ -1,4 +1,4 @@
-Copied unmodified from Yomikata, commit 92b57f6 (branch all-open, Yomikata's trial branch of the unmerged
+Copied unmodified from Yomikata, commit a32d139 (branch all-open, Yomikata's trial branch of the unmerged
 layout PRs), tools/tests/layout-vectors/, flag-mask.json included. Its README follows.
 
 # Layout conformance vectors
