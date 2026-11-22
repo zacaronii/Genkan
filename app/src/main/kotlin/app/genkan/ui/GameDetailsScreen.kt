@@ -339,6 +339,18 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
             GameDetailsFormat.detailLine(game)?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
+            // How this build reads the game's text, once it has run and the catalog knows it.
+            details.textSource?.let { source ->
+                Text(
+                    source.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.primary.copy(alpha = 0.18f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
             if (played.isNotEmpty() || hltb != null || hltbMore != null || rest.isNotEmpty()) {
                 Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     played.forEach { line(it) }

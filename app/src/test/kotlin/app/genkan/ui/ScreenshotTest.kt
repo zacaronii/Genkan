@@ -219,6 +219,13 @@ class ScreenshotTest {
         GameDetailsContent(details = FakeData.fullDetails, onShowReader = {})
     }
 
+    /** A PSP game whose text PPSSPP's hook reads: the chip under its details line. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsTextChip() = shoot("game_details_text_chip", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails.copy(textSource = app.genkan.yomikata.TextSource.HOOK), onShowReader = {})
+    }
+
     /** The same game scrolled to the end of its details, where the screenshot strip is. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
