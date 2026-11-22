@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -38,11 +39,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -51,6 +55,9 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -58,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.manual.PlayManual
+import app.genkan.ocr.ScreenText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
@@ -100,7 +108,11 @@ internal object PinchFocus {
 /**
  * A game's manual over the whole bottom screen: its pages one under the other, as wide as the
  * screen, scrolled with a finger. Pinch or double-tap zooms; "page n / N" shows where you are;
- * the Close button, Back, or pulling down past the first page closes it.
+ * the Close button, Back, or pulling down past the first page closes it. With [onTapText], a
+ * single tap on a page reports where (its index, the tap as fractions of the page, the unzoomed
+ * page width, and how far down the viewer the tap was, as a fraction of its height), for a word to
+ * be looked up there; [status] says how that's going, in the bar, and [mark] boxes the word on its
+ * page.
  *
  * Only the pages on screen (and the one or two the list lays out ahead) have bitmaps; each is
  * drawn off the main thread when its page comes into view and recycled when it leaves.
@@ -112,8 +124,13 @@ fun ManualViewer(
     listState: LazyListState = rememberLazyListState(),
     /** The close button's words: "Close" in the details, "Back to reader" during play. */
     closeLabel: String = "Close",
+    onTapText: ((page: Int, x: Float, y: Float, widthPx: Int, tapY: Float) -> Unit)? = null,
+    status: String? = null,
+    mark: ManualMark? = null,
 ) {
     BottomBackHandler(onBack = onClose)
+    // Where the viewer is in the window, to say how far down it a tap was.
+    var viewerBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val close by rememberUpdatedState(onClose)
     val closeAfter = with(LocalDensity.current) { PULL_CLOSE_DISTANCE.toPx() }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -156,13 +173,16 @@ fun ManualViewer(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF2A2A30))) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF2A2A30)).onGloballyPositioned { viewerBounds = it.boundsInWindow() }) {
         // A bar of its own, so where you are and the way out never sit over a page.
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            status?.let {
+                Text(it, style = MaterialTheme.typography.labelLarge, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+            }
             Text(
                 "page ${shownPage + 1} / ${pages.pageSizes.size}",
                 style = MaterialTheme.typography.labelLarge,
@@ -212,12 +232,6 @@ fun ManualViewer(
                             } while (event.changes.any { it.pressed })
                         }
                     }
-                    .pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = {
-                            zoom = if (zoom > 1f) 1f else 2f
-                            shiftX = 0f
-                        })
-                    }
                     .graphicsLayer {
                         scaleX = zoom
                         scaleY = zoom
@@ -228,16 +242,42 @@ fun ManualViewer(
             ) {
                 items(pages.pageSizes.size) { index ->
                     val size = pages.pageSizes[index]
-                    ManualPage(pages, index, size.width.toFloat() / size.height.coerceAtLeast(1), renderWidth, recycler)
+                    ManualPage(
+                        pages, index, size.width.toFloat() / size.height.coerceAtLeast(1), renderWidth, recycler,
+                        onTap = onTapText?.let { tap ->
+                            { x, y, windowY -> tap(index, x, y, widthPx, ((windowY - viewerBounds.top) / viewerBounds.height.coerceAtLeast(1f)).coerceIn(0f, 1f)) }
+                        },
+                        onDoubleTap = {
+                            zoom = if (zoom > 1f) 1f else 2f
+                            shiftX = 0f
+                        },
+                        mark = mark?.takeIf { it.page == index }?.box,
+                    )
                 }
             }
         }
     }
 }
 
-/** One page: white until its bitmap is drawn, then the bitmap at [renderWidth] pixels wide. */
+/** A word's box on a manual page: [box] as fractions of page [page]. */
+data class ManualMark(val page: Int, val box: ScreenText.Box)
+
+/**
+ * One page: white until its bitmap is drawn, then the bitmap at [renderWidth] pixels wide. Taps
+ * here are in the page's own coordinates, whatever the list's zoom: [onTap] gets a single tap as
+ * fractions of the page, and where it was in the window (y, pixels); [mark] is boxed over it.
+ */
 @Composable
-private fun ManualPage(pages: ManualPages, index: Int, aspect: Float, renderWidth: Int, recycler: CoroutineScope) {
+private fun ManualPage(
+    pages: ManualPages,
+    index: Int,
+    aspect: Float,
+    renderWidth: Int,
+    recycler: CoroutineScope,
+    onTap: ((x: Float, y: Float, windowY: Float) -> Unit)?,
+    onDoubleTap: () -> Unit,
+    mark: ScreenText.Box?,
+) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(renderWidth) {
         val fresh = pages.render(index, renderWidth) ?: return@LaunchedEffect
@@ -248,7 +288,36 @@ private fun ManualPage(pages: ManualPages, index: Int, aspect: Float, renderWidt
     DisposableEffect(Unit) {
         onDispose { bitmap?.let { recycleLater(it, recycler) } }
     }
-    Box(Modifier.fillMaxWidth().aspectRatio(aspect.coerceIn(0.1f, 10f)).background(Color.White)) {
+    val tap by rememberUpdatedState(onTap)
+    var placed by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val doubleTap by rememberUpdatedState(onDoubleTap)
+    val markColor = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(aspect.coerceIn(0.1f, 10f))
+            .background(Color.White)
+            .onGloballyPositioned { placed = it }
+            // A single tap waits out a possible second one only where taps look words up.
+            .pointerInput(onTap != null) {
+                detectTapGestures(
+                    onTap = if (onTap == null) null else { at ->
+                        val windowY = placed?.takeIf { it.isAttached }?.localToWindow(at)?.y ?: 0f
+                        tap?.invoke(at.x / size.width, at.y / size.height, windowY)
+                    },
+                    onDoubleTap = { doubleTap() },
+                )
+            }
+            .drawWithContent {
+                drawContent()
+                mark?.let { box ->
+                    val topLeft = Offset(box.left * size.width, box.top * size.height)
+                    val boxSize = Size((box.right - box.left) * size.width, (box.bottom - box.top) * size.height)
+                    drawRect(markColor.copy(alpha = 0.3f), topLeft, boxSize)
+                    drawRect(markColor, topLeft, boxSize, style = Stroke(width = 2.dp.toPx()))
+                }
+            },
+    ) {
         bitmap?.let {
             Image(it.asImageBitmap(), contentDescription = "Page ${index + 1}", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
         }
@@ -278,6 +347,10 @@ internal fun ManualFile(
     onClose: (file: File, problem: String?) -> Unit,
     listState: LazyListState = rememberLazyListState(),
     closeLabel: String = "Close",
+    /** A single tap on a page of [file] (see [ManualViewer]); null leaves single taps alone. */
+    onTapText: ((file: File, pages: ManualPages, page: Int, x: Float, y: Float, widthPx: Int, tapY: Float) -> Unit)? = null,
+    status: String? = null,
+    mark: ManualMark? = null,
 ) {
     val close by rememberUpdatedState(onClose)
     var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
@@ -298,21 +371,57 @@ internal fun ManualFile(
         null -> Box(Modifier.fillMaxSize().background(Color(0xFF2A2A30)), contentAlignment = Alignment.Center) {
             Text("Opening the manual…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
         }
-        else -> ManualViewer(open, onClose = { close(file, null) }, listState = listState, closeLabel = closeLabel)
+        else -> ManualViewer(
+            open,
+            onClose = { close(file, null) },
+            listState = listState,
+            closeLabel = closeLabel,
+            onTapText = onTapText?.let { tap -> { page, x, y, width, tapY -> tap(file, open, page, x, y, width, tapY) } },
+            status = status,
+            mark = mark,
+        )
     }
 }
 
 /**
  * The playing game's manual over the reader while [manual] has it open, at the page it was left
- * at; Back to reader (or Back) closes it and keeps that page.
+ * at; Back to reader (or Back) closes it and keeps that page. A tap on a page looks the word
+ * there up through [reader]: the word is boxed on its page and the lookup's panel opens over the
+ * manual, on the other half from the tap.
  */
 @Composable
-fun PlayManualLayer(manual: PlayManual) {
+fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
     val open by manual.open.collectAsStateWithLifecycle()
     val file = open ?: return
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = manual.pageOf(file))
+    val status by reader.manualTaps.status.collectAsStateWithLifecycle()
+    val hit by reader.manualTaps.hit.collectAsStateWithLifecycle()
+    val lookup by reader.lookup.collectAsStateWithLifecycle()
+    val popup by reader.popup.collectAsStateWithLifecycle()
+    var onTop by remember(file) { mutableStateOf(false) }
     DisposableEffect(file) {
-        onDispose { manual.keepPage(file, listState.firstVisibleItemIndex) }
+        onDispose {
+            manual.keepPage(file, listState.firstVisibleItemIndex)
+            reader.manualClosed()
+        }
     }
-    ManualFile(file, onClose = manual::closed, listState = listState, closeLabel = "Back to reader")
+    ManualWithLookup(
+        lookup = lookup?.takeIf { it.lineId == MANUAL_LINE },
+        onTop = onTop,
+        onCloseLookup = reader::closeLookup,
+        popup = { DictionaryPopup(popup, reader.dictionaries, reader, Modifier.fillMaxSize()) },
+    ) {
+        ManualFile(
+            file,
+            onClose = manual::closed,
+            listState = listState,
+            closeLabel = "Back to reader",
+            onTapText = { f, pages, page, x, y, width, tapY ->
+                onTop = panelOnTop(tapY)
+                reader.manualTaps.tap(f, pages, page, x, y, width)
+            },
+            status = status,
+            mark = manualMark(hit, lookup),
+        )
+    }
 }

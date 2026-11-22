@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Context
 import android.graphics.Bitmap
+import app.genkan.manual.ManualText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.MineSource
@@ -63,6 +64,7 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, v
     val end: Int get() = start + (result?.matchedLength ?: 0)
 }
 
+
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -87,6 +89,7 @@ class ReaderViewModel @Inject constructor(
     private val screenLooks: ScreenLooks,
     /** The playing game's manual, which the Manual chip opens over the reader. */
     val manual: PlayManual,
+    private val manualText: ManualText,
 ) : ViewModel(), PopupActions {
 
     /** The look the built-in player draws its game with now and whether it's the one kept, or null with no game there. */
@@ -223,11 +226,22 @@ class ReaderViewModel @Inject constructor(
         if (line != null) lookUp(line.id, line.text, line.text.indexOf(text) + offset) else lookUp(SCREEN_LINE, text, offset)
     }
 
+    /** Taps on the playing game's manual: each looks the word under it up as a line of its own. */
+    val manualTaps = ManualTaps(manualText, viewModelScope) { text, offset -> lookUp(MANUAL_LINE, text, offset) }
+
+    /** The manual went: its lookup goes with it. */
+    fun manualClosed() {
+        manualTaps.closed()
+        if (_lookup.value?.lineId == MANUAL_LINE) closeLookup()
+    }
+
     /** A tap at [offset] in answer [index] of the choice on screen: the answer is looked up as a line of its own. */
     fun lookUpAnswer(index: Int, text: String, offset: Int) = lookUp(answerLine(index), text, offset)
 
-    private fun lookUp(lineId: Long, text: String, offset: Int) {
-        if (offset !in text.indices) return
+    /** Looks the text from [offset] on up; false when [offset] isn't in [text], so nothing started. */
+    private fun lookUp(lineId: Long, text: String, offset: Int): Boolean {
+        if (offset !in text.indices) return false
+        manualTaps.clearHit()
         // Start on a whole character: never between the halves of a surrogate pair (𠮟).
         val start = if (offset > 0 && text[offset].isLowSurrogate()) offset - 1 else offset
         lookupJob?.cancel()
@@ -239,6 +253,7 @@ class ReaderViewModel @Inject constructor(
             _lookup.value = Lookup(lineId, start, result, text)
             show(result)
         }
+        return true
     }
 
     /** Shows [result] with each entry's Anki badge, then checks Anki itself for them. */
@@ -323,6 +338,11 @@ class ReaderViewModel @Inject constructor(
 
     override fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
         val lookup = _lookup.value ?: return
+        // A card from the manual needs its page as the picture, not the game's screen: not yet.
+        if (lookup.lineId == MANUAL_LINE) {
+            manualTaps.say("Cards from the manual aren't made yet")
+            return
+        }
         val hit = shownResult?.hits?.getOrNull(index) ?: return
         // The top screen as it is now: the game's scene for the card.
         val picture = if (capture.running.value) capture.frame() else null
@@ -385,6 +405,7 @@ class ReaderViewModel @Inject constructor(
         lookupJob?.cancel()
         _lookup.value = null
         _popup.value = null
+        manualTaps.clearHit()
     }
 
     fun openPicker() {
