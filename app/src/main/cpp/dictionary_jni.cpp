@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 //
 // JNI over hoshidicts' C API (include/hoshidicts_c.h). Text crosses as UTF-8 byte arrays, not
 // jstring: JNI's string calls use modified UTF-8, which mangles characters outside the BMP

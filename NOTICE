@@ -3,11 +3,13 @@ Copyright (C) 2026 Genkan contributors
 
 Genkan is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version. See LICENSE.
+Foundation, version 3 of the License only (GPL-3.0-only). See LICENSE.
 
 Genkan includes code adapted from the projects below. Each adapted file
-carries an "Adapted from" line naming its original path.
+carries an "Adapted from" line naming its original path. Where an adapted
+file names the terms it came under ("version 2 or later", "version 3 or
+later"), that notice is kept as it was; Genkan uses and distributes the file
+under version 3.
 
 --------------------------------------------------------------------------
 Argosy Launcher (GPL-3.0)
@@ -51,7 +53,7 @@ Pinned commit: 348081783b4e9d8505c1f13319b8ad312ee5220c
     -> app/src/main/kotlin/app/genkan/launch/PcGames.kt
 
 --------------------------------------------------------------------------
-Furoshiki (GPL-2.0-or-later, distributed here under GPL-3.0-or-later)
+Furoshiki (GPL-2.0-or-later, distributed here under GPL-3.0)
 https://github.com/sommepo/furoshiki
 Pinned commit: 738ccf5c70342b0aed17a9b6b5c56805785ab9fe
 
