@@ -1,5 +1,6 @@
 package app.genkan.ui
 
+import app.genkan.launch.applyTo
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -308,6 +309,18 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsLook() = shoot("game_details_look", BOTTOM_PIXELS) {
+        // Scrolled to the end of the buttons, where the look and Delete are.
+        GameDetailsContent(
+            details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP)),
+            onShowReader = {},
+            actionsScroll = rememberScrollState(Int.MAX_VALUE),
+        )
+    }
+
+    /** The same five buttons at rest: the first three whole, the art smaller, the column fading where it goes on. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsButtons() = shoot("game_details_buttons", BOTTOM_PIXELS) {
         GameDetailsContent(details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP)), onShowReader = {})
     }
 
@@ -330,6 +343,36 @@ class ScreenshotTest {
      * A game RomM knows little about, never downloaded or played: most lines are left out, and
      * with no cut-out or fan art the cover stands in, blurred behind as well.
      */
+    /** A PC game's details once Steam's store has answered: its Japanese name, summary, genres and screenshots. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsPc() = shoot("game_details_pc", BOTTOM_PIXELS) {
+        val game = app.genkan.library.GameEntity(
+            -1_004_242, app.genkan.launch.LocalShelves.PC_ID, app.genkan.launch.LocalShelves.PC_SLUG,
+            "Clock Tower", "clock tower", "4242", 0, null, false,
+        )
+        val steam = app.genkan.launch.SteamDetails(
+            name = "時計塔の弟子",
+            summary = "止まった時計をもう一度動かすため、見習いの少年が町の塔をひとつずつ巡る。全七章の物語。",
+            genres = listOf("アドベンチャー", "インディー"),
+            releaseYear = 2019,
+            developers = listOf("Example Soft"),
+            publishers = listOf("Sample Publishing"),
+            background = "fake-fanart:4242",
+            screenshots = listOf("fake-screenshot:4242-1", "fake-screenshot:4242-2", "fake-screenshot:4242-3"),
+        )
+        GameDetailsContent(
+            details = GameDetails(
+                focus = FocusedGame.Focus(steam.applyTo(game), "PC (GameNative)", "fake-cover:${game.id}"),
+                play = null,
+                reading = ReadingGameTotals(activeMs = 0, characters = 0),
+                download = null,
+                art = GameArt(fanart = steam.background, screenshots = steam.screenshots),
+            ),
+            onShowReader = {},
+        )
+    }
+
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsSparse() = shoot("game_details_sparse", BOTTOM_PIXELS) {
@@ -420,6 +463,21 @@ class ScreenshotTest {
         )
     }
 
+    /** The PlayStation's look list on the pad, one Right from the look in use: the "Show all" chip focused. */
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun screenLookPickerChipFocused() = shoot("screen_look_picker_chip_focused", TOP_PIXELS) {
+        androidx.compose.ui.platform.LocalInputModeManager.current.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
+        ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
+        val focus = androidx.compose.ui.platform.LocalFocusManager.current
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            // The list focuses the look in use a frame after it opens; Right then goes to the chip.
+            repeat(3) { androidx.compose.runtime.withFrameNanos {} }
+            focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+        }
+    }
+
     /** The screen look page: the defaults, with the GBA and PSP chosen. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -483,9 +541,9 @@ class ScreenshotTest {
 
     private companion object {
         const val TOP_SCREEN = "w832dp-h468dp-land-369dpi"
-        const val BOTTOM_SCREEN = "w468dp-h538dp-port-369dpi"
+        const val BOTTOM_SCREEN = "w538dp-h468dp-land-369dpi"
         val TOP_PIXELS = 1920 to 1080
-        val BOTTOM_PIXELS = 1080 to 1240
+        val BOTTOM_PIXELS = 1240 to 1080
     }
 }
 

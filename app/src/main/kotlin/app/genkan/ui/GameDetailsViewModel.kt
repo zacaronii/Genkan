@@ -11,6 +11,9 @@ import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LocalShelves
+import app.genkan.launch.SteamDetails
+import app.genkan.launch.SteamStore
+import app.genkan.launch.applyTo
 import app.genkan.library.FavouriteDao
 import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -106,6 +110,7 @@ class GameDetailsViewModel @Inject constructor(
     saveSync: SaveSync,
     private val session: RomMSession,
     private val manuals: Manuals,
+    private val steamStore: SteamStore,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
@@ -129,15 +134,26 @@ class GameDetailsViewModel @Inject constructor(
             val art = artFor(game)
             // Play sessions exist for RomM and PC games, downloads only for RomM's; reading is kept per game key.
             val play = if (LocalShelves.isLocal(game) && game.platformSlug != LocalShelves.PC_SLUG) flowOf(null) else playSessions.totals(game.id)
+            // A PC game's details come from Steam's store: shown without them first, then with them.
+            val steam = game.fsName?.toIntOrNull()?.takeIf { game.platformSlug == LocalShelves.PC_SLUG }
+                ?.let { appId -> flow<SteamDetails?> { emit(null); emit(steamStore.details(appId)) } }
+                ?: flowOf(null)
             combine(
-                play,
+                combine(play, steam) { p, st -> p to st },
                 // Reading and lookups are both kept per game key.
                 combine(readingDao.gameTotals("game:${game.id}"), gameLookups.totals("game:${game.id}")) { r, l -> r to l },
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
                 // Favourite, and how its text would be read (the cached catalog only, off the main thread).
                 combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game)) { f, t, l -> Triple(f, t, l) },
-            ) { p, r, d, s, f -> GameDetails(focus, p, r.first, d, s, art, f.first, r.second, f.second, f.third) }
+            ) { (p, st), r, d, s, f ->
+                GameDetails(
+                    st?.let { focus.copy(game = it.applyTo(game)) } ?: focus,
+                    p, r.first, d, s,
+                    st?.let { GameArt(fanart = it.background, screenshots = it.screenshots) } ?: art,
+                    f.first, r.second, f.second, f.third,
+                )
+            }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 

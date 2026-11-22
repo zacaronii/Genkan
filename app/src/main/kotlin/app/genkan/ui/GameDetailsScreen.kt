@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -125,6 +126,8 @@ fun GameDetailsContent(
     notice: String? = null,
     initialScreenshot: Int? = null,
     factsScroll: ScrollState = rememberScrollState(),
+    /** The art and buttons column's scroll, for a test to start it scrolled. */
+    actionsScroll: ScrollState = rememberScrollState(),
 ) {
     val colors = MaterialTheme.colorScheme
     val current = details ?: return Box(Modifier.fillMaxSize().background(colors.background))
@@ -152,7 +155,7 @@ fun GameDetailsContent(
                 Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, Modifier.width(176.dp).fillMaxHeight())
+                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, actionsScroll, Modifier.width(176.dp).fillMaxHeight())
                 Facts(current, factsScroll, onScreenshot = { viewing = it }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -199,6 +202,7 @@ private fun ArtAndActions(
     onDelete: () -> Unit,
     onToggleFavourite: () -> Unit,
     onLook: () -> Unit,
+    scroll: ScrollState,
     modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -212,63 +216,96 @@ private fun ArtAndActions(
         }
     }
 
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        details.art.logo?.let { logo ->
-            AsyncImage(
-                model = logo,
-                contentDescription = game.name,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-            )
-        }
-        Box(Modifier.size(176.dp), contentAlignment = Alignment.Center) {
-            val physical = details.art.physical
-            val cover = details.focus.cover
-            when {
-                physical != null -> AsyncImage(
-                    model = physical,
+    // The art gives way, down to ART_MIN, so the first three buttons fit whole; any after them
+    // (the look, Delete) scroll, the column's edges fading while there's more that way.
+    BoxWithConstraints(modifier) {
+        val buttons = listOf(true, details.art.hasManual, Favourites.canMark(game), details.look != null, installed).count { it }
+        val art = artSize(maxHeight, logo = details.art.logo != null, buttonsShown = minOf(buttons, 3), more = buttons > 3)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .edgeFade(top = scroll.canScrollBackward, bottom = scroll.canScrollForward, height = FADE)
+                .verticalScroll(scroll),
+            verticalArrangement = Arrangement.spacedBy(GAP),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            details.art.logo?.let { logo ->
+                AsyncImage(
+                    model = logo,
                     contentDescription = game.name,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().height(LOGO_HEIGHT),
                 )
-                cover != null -> AsyncImage(
-                    model = cover,
-                    contentDescription = game.name,
-                    contentScale = if (game.platformSlug == LocalShelves.APPS_SLUG) ContentScale.Fit else ContentScale.Crop,
-                    modifier = Modifier.fillMaxHeight().aspectRatio(3f / 4f).clip(RoundedCornerShape(12.dp)),
-                )
-                // No art at all: a plain card with the title, as the library shows it.
-                else -> Box(
-                    Modifier.fillMaxHeight().aspectRatio(3f / 4f).clip(RoundedCornerShape(12.dp)).background(colors.surface).padding(12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(game.name, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, textAlign = TextAlign.Center)
+            }
+            Box(Modifier.size(art), contentAlignment = Alignment.Center) {
+                val physical = details.art.physical
+                val cover = details.focus.cover
+                when {
+                    physical != null -> AsyncImage(
+                        model = physical,
+                        contentDescription = game.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    cover != null -> AsyncImage(
+                        model = cover,
+                        contentDescription = game.name,
+                        contentScale = if (game.platformSlug == LocalShelves.APPS_SLUG) ContentScale.Fit else ContentScale.Crop,
+                        modifier = Modifier.fillMaxHeight().aspectRatio(3f / 4f).clip(RoundedCornerShape(12.dp)),
+                    )
+                    // No art at all: a plain card with the title, as the library shows it.
+                    else -> Box(
+                        Modifier.fillMaxHeight().aspectRatio(3f / 4f).clip(RoundedCornerShape(12.dp)).background(colors.surface).padding(12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(game.name, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, textAlign = TextAlign.Center)
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(4.dp))
-        DetailsButton(GameDetailsFormat.primaryLabel(game, details.download), ButtonStyle.PRIMARY, onPlay)
-        if (details.art.hasManual) DetailsButton("Open manual", ButtonStyle.PLAIN, onOpenManual)
-        if (Favourites.canMark(game)) {
-            DetailsButton(if (details.favourite) "Remove from favourites" else "Add to favourites", ButtonStyle.PLAIN, onToggleFavourite)
-        }
-        details.look?.let { look ->
-            DetailsButton(GameDetailsFormat.lookLabel(look), ButtonStyle.PLAIN, onLook)
-        }
-        if (installed) {
-            DetailsButton(if (deleteArmed) "Tap again to delete" else "Delete download", ButtonStyle.DANGER) {
-                if (deleteArmed) {
-                    deleteArmed = false
-                    onDelete()
-                } else {
-                    deleteArmed = true
+            Spacer(Modifier.height(4.dp))
+            DetailsButton(GameDetailsFormat.primaryLabel(game, details.download), ButtonStyle.PRIMARY, onPlay)
+            if (details.art.hasManual) DetailsButton("Open manual", ButtonStyle.PLAIN, onOpenManual)
+            if (Favourites.canMark(game)) {
+                DetailsButton(if (details.favourite) "Remove from favourites" else "Add to favourites", ButtonStyle.PLAIN, onToggleFavourite)
+            }
+            details.look?.let { look ->
+                DetailsButton(GameDetailsFormat.lookLabel(look), ButtonStyle.PLAIN, onLook)
+            }
+            if (installed) {
+                DetailsButton(if (deleteArmed) "Tap again to delete" else "Delete download", ButtonStyle.DANGER) {
+                    if (deleteArmed) {
+                        deleteArmed = false
+                        onDelete()
+                    } else {
+                        deleteArmed = true
+                    }
                 }
             }
-        }
-        notice?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+            notice?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
         }
     }
+}
+
+private val GAP = 8.dp
+private val LOGO_HEIGHT = 64.dp
+private val BUTTON_HEIGHT = 44.dp
+private val ART_MAX = 176.dp
+private val ART_MIN = 112.dp
+private val FADE = 20.dp
+
+/**
+ * The art's size in a column [height] tall: as big as leaves room for the logo (if any) and the
+ * first [buttonsShown] buttons, between [ART_MIN] and [ART_MAX]. With [more] buttons after them it
+ * also leaves a gap and the fade, so the next one shows fading out below and the list reads as going on.
+ */
+internal fun artSize(height: Dp, logo: Boolean, buttonsShown: Int, more: Boolean = false): Dp {
+    val above = if (logo) LOGO_HEIGHT + GAP else 0.dp
+    // The art, a gap, the 4 dp spacer, a gap, then the buttons with gaps between them.
+    val below = GAP + 4.dp + GAP + BUTTON_HEIGHT * buttonsShown + GAP * (buttonsShown - 1).coerceAtLeast(0) +
+        (if (more) GAP + FADE else 0.dp)
+    return (height - above - below).coerceIn(ART_MIN, ART_MAX)
 }
 
 private enum class ButtonStyle { PRIMARY, PLAIN, DANGER }
@@ -286,7 +323,7 @@ private fun DetailsButton(label: String, style: ButtonStyle, onClick: () -> Unit
     Box(
         Modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(BUTTON_HEIGHT)
             .clip(shape)
             .background(fill)
             .border(1.dp, if (style == ButtonStyle.DANGER) colors.error.copy(alpha = 0.5f) else Color.Transparent, shape)
@@ -317,7 +354,7 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
     )
     val line = @Composable { text: String -> Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface) }
 
-    Box(modifier.topFade(scroll.value > 0)) {
+    Box(modifier.edgeFade(top = scroll.value > 0)) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(game.name, style = MaterialTheme.typography.headlineSmall, color = colors.primary)
             GameDetailsFormat.detailLine(game)?.let {
@@ -374,16 +411,22 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
 }
 
 /**
- * Once [enabled], fades the content's top [height] out to nothing, so scrolled text melts into
- * whatever backdrop is behind it instead of being cut off.
+ * Fades the content's [top] or [bottom] [height] out to nothing, so a scrolled list melts into
+ * whatever backdrop is behind it instead of being cut off, and reads as going on.
  */
-private fun Modifier.topFade(enabled: Boolean, height: Dp = 20.dp): Modifier = if (!enabled) this else
+private fun Modifier.edgeFade(top: Boolean, bottom: Boolean = false, height: Dp = 20.dp): Modifier = if (!top && !bottom) this else
     graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
         drawContent()
-        drawRect(
-            Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = height.toPx()),
-            blendMode = BlendMode.DstIn,
-        )
+        val fade = height.toPx()
+        if (top) {
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = fade), blendMode = BlendMode.DstIn)
+        }
+        if (bottom) {
+            drawRect(
+                Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - fade, endY = size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
     }
 
 /** A thin bar filled to [progress] (0 to 1), e.g. the time played against HowLongToBeat's. */
