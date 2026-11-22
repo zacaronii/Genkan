@@ -95,6 +95,9 @@ fun ReaderScreen(
     val overlayAvailable by viewModel.overlay.available.collectAsStateWithLifecycle()
     val look by viewModel.look.collectAsStateWithLifecycle()
     val choice by viewModel.builtIn.choice.collectAsStateWithLifecycle()
+    val manualGame by viewModel.manual.game.collectAsStateWithLifecycle()
+    val manualOpen by viewModel.manual.open.collectAsStateWithLifecycle()
+    val manualNotice by viewModel.manual.notice.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -110,6 +113,7 @@ fun ReaderScreen(
                     // This session's reading, then where the text comes from.
                     (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                         notice != null -> notice!!
+                        manualNotice != null -> manualNotice!!
                         finder is HookFinderState.Working -> (finder as HookFinderState.Working).message
                         finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
                         finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
@@ -147,6 +151,8 @@ fun ReaderScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 onShowGame?.let { Chip("Game", it) }
+                // The playing game's manual, over the reader until Back to reader.
+                if (manualGame != null && manualOpen == null) Chip("Manual") { viewModel.manual.show() }
                 Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
                 if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
                 if (ocrOn) Chip(engine.name) { viewModel.ocr.nextEngine() }
