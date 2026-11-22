@@ -9,6 +9,7 @@ import app.genkan.memory.MemoryScan
 import app.genkan.memory.RamSnapshots
 import app.genkan.memory.TableText
 import app.genkan.memory.TextSamples
+import app.genkan.yomikata.CatalogEntry
 import app.genkan.yomikata.YomikataCatalog
 import app.genkan.yomikata.YomikataIds
 import android.util.Log
@@ -112,16 +113,21 @@ class BuiltInText @Inject constructor(
         val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
         repeat(LAYOUT_TRIES) { attempt ->
             val id = withContext(Dispatchers.IO) {
-                ids[game.key] ?: GameId.choose(
+                // RAM first here too: the id found earlier in this run (another disc's, maybe)
+                // only stands in, as the stored one does.
+                GameId.choose(
                     ram = player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } },
-                    stored = stored,
+                    stored = ids[game.key] ?: stored,
                     attempt = attempt,
                 )
             }
             if (id != null) {
                 ids[game.key] = id
                 yomikataIds.learned(game.rommRomId, id)
-                val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
+                val entry = entryOf(id) ?: run {
+                    Log.w(TAG, "${game.title} ($id): no catalog entry (not listed, or it couldn't be fetched); no layout this play")
+                    return
+                }
                 // Genkan can't hash the executable: the release id's only listed version stands in.
                 // A version may have several layouts (one per chapter's program); the watch reads
                 // whichever's `when` is true.
@@ -134,6 +140,13 @@ class BuiltInText @Inject constructor(
             delay(LAYOUT_RETRY_MS)
         }
     }
+
+    /**
+     * The catalog's entry for [id]: asked again after each of [EntryRetry.waits] when it gives
+     * none, since a first fetch can fail (offline for a moment, GitHub slow) where the next works.
+     */
+    private suspend fun entryOf(id: String): CatalogEntry? =
+        EntryRetry.retrying { runCatching { catalog.entry(id) }.getOrNull() }
 
     /**
      * Debug builds: watch [layoutJson] (one layout, or a JSON array of a version's layouts) as if
@@ -323,4 +336,18 @@ internal object GameId {
      * has a first chance to appear.
      */
     fun choose(ram: String?, stored: String?, attempt: Int): String? = ram ?: stored?.takeIf { attempt >= 1 }
+}
+
+/** When the player asks the catalog for a game's entry again after it gave none: three more times, further apart. */
+internal object EntryRetry {
+    val waits: List<Long> = listOf(5_000L, 15_000L, 40_000L)
+
+    /** [ask]'s first answer, asking at once and again after each of [waits]; null when it never gave one. */
+    suspend fun <T : Any> retrying(ask: suspend () -> T?): T? {
+        for (wait in listOf(0L) + waits) {
+            delay(wait)
+            ask()?.let { return it }
+        }
+        return null
+    }
 }
