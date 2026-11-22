@@ -67,6 +67,7 @@ object Layouts {
     fun understood(layout: JSONObject): Boolean {
         if (!layout.keySet().all { it in FIELDS || it in OTHER_KEYS }) return false
         if (layout.optString("endian", "little") !in setOf("little", "big")) return false
+        if (layout.has("when") && !numberOk(layout.optJSONObject("when"), NUMBER_KEYS)) return false
         for ((key, kind) in FIELDS) {
             if (!layout.has(key)) continue
             val spec = layout.optJSONObject(key) ?: return false
@@ -100,7 +101,7 @@ object Layouts {
         "message" to "text", "choices" to "text", "speaker" to "either", "shown" to "number", "waiting" to "number",
         "choosing" to "number", "choice_count" to "number", "choice_cursor" to "number",
     )
-    private val OTHER_KEYS = setOf("versions", "endian", "poll", "speaker_names", "notes")
+    private val OTHER_KEYS = setOf("versions", "endian", "poll", "speaker_names", "notes", "when")
 
     /**
      * The layout for a release, for a reader that can't hash its executable (Genkan can't):
@@ -142,6 +143,23 @@ object Layouts {
         } catch (e: org.json.JSONException) {
             errors[name] = e.message.orEmpty()
             null
+        }
+
+        // The layout's own `when`: while false (outside the game's script, where the same memory
+        // holds something else) nothing else is read. Texts are empty, flags false, numbers left out.
+        layout.optJSONObject("when")?.let { spec ->
+            val live = attempt("when") { reader.flag(spec) } ?: return LayoutRead(errors = errors)
+            if (!live) {
+                fun text(name: String) = "".takeIf { layout.optJSONObject(name)?.has("charset") == true }
+                fun flag(name: String) = false.takeIf { layout.has(name) }
+                return LayoutRead(
+                    message = text("message"),
+                    speakerName = text("speaker"),
+                    waiting = flag("waiting"),
+                    choosing = flag("choosing"),
+                    choices = emptyList<String>().takeIf { layout.has("choices") },
+                )
+            }
         }
 
         val message = layout.optJSONObject("message")?.let { spec -> attempt("message") { reader.text(spec) } }
