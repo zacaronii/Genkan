@@ -202,9 +202,9 @@ with it:
 ```
 
 Open the PNGs in `app/src/test/screenshots`, or see them in a pull request's diff. CI
-compares them first and fails when a shot differs from its committed PNG (by 1% of its
-pixels or more), then records them and uploads them as the `screenshots` artifact of each
-run, with the comparisons as `screenshot-compare`.
+compares them, in its one run of the unit tests, and fails when a shot differs from its
+committed PNG (by 1% of its pixels or more); the comparisons are then uploaded as the
+`screenshot-compare` artifact.
 
 ### Try it on the emulator
 
