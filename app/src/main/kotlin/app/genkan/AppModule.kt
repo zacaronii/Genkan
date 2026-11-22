@@ -11,6 +11,7 @@ import app.genkan.saves.SaveFileDao
 import app.genkan.download.DownloadDao
 import app.genkan.download.DownloadService
 import app.genkan.download.DownloadStarter
+import app.genkan.library.FavouriteDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
 import app.genkan.words.AnkiWordDao
@@ -50,6 +51,9 @@ object AppModule {
 
     @Provides
     fun playSessionDao(db: LibraryDatabase): PlaySessionDao = db.playSessions()
+
+    @Provides
+    fun favouriteDao(db: LibraryDatabase): FavouriteDao = db.favourites()
 
     @Provides
     fun dictionaryDao(db: LibraryDatabase): DictionaryDao = db.dictionaries()

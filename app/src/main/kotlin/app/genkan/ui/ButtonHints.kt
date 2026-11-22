@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.library.Favourites
 import app.genkan.library.GameEntity
 
 /**
@@ -34,6 +35,7 @@ enum class PadButton(val label: String, val face: Boolean = false) {
     Y("Y", face = true),
     L1("L1"),
     R1("R1"),
+    R2("R2"),
     START("Start"),
     SELECT("Select"),
 }
@@ -86,13 +88,21 @@ object Hints {
     /**
      * The library, shelf or grid: what the pad does to the focused game. On the console strip
      * ([onGames] false) A goes down to the games; on a game it acts on it, X deletes an installed
-     * one, and B goes back to the strip. What works anywhere in the library is [libraryAnywhere].
+     * one, R2 marks a RomM game as a [favourite] or unmarks it, and B goes back to the strip. What
+     * works anywhere in the library is [libraryAnywhere].
      */
-    fun library(game: GameEntity?, download: DownloadEntity?, onGames: Boolean, emulatorFor: (String) -> String?): List<ButtonHint> =
+    fun library(
+        game: GameEntity?,
+        download: DownloadEntity?,
+        onGames: Boolean,
+        emulatorFor: (String) -> String?,
+        favourite: Boolean = false,
+    ): List<ButtonHint> =
         buildList {
             if (game != null && onGames) {
                 primary(game, download, emulatorFor)?.let { add(ButtonHint(PadButton.A, it)) }
                 if (download?.state == DownloadState.INSTALLED) add(ButtonHint(PadButton.X, "Delete"))
+                if (Favourites.canMark(game)) add(ButtonHint(PadButton.R2, if (favourite) "Unfavourite" else "Favourite"))
                 add(ButtonHint(PadButton.B, "Back"))
             } else if (game != null) {
                 add(ButtonHint(PadButton.A, "Choose"))

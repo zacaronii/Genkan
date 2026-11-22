@@ -29,6 +29,9 @@ import app.genkan.home.LauncherPresence
 import app.genkan.launch.LaunchPlan
 import app.genkan.library.ArtworkWarmer
 import app.genkan.library.ContinuePlaying
+import app.genkan.library.FavouriteDao
+import app.genkan.library.FavouriteEntity
+import app.genkan.library.Favourites
 import app.genkan.library.GameCase
 import app.genkan.library.InsertTimeline
 import app.genkan.library.MediaKind
@@ -79,6 +82,7 @@ class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     dao: LibraryDao,
     playSessions: PlaySessionDao,
+    private val favouriteDao: FavouriteDao,
     private val session: RomMSession,
     private val librarySync: LibrarySync,
     private val downloadQueue: DownloadQueue,
@@ -152,16 +156,27 @@ class LibraryViewModel @Inject constructor(
         playSessions.recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** The games on the "Favourites" shelf, by title. */
+    private val favourites: StateFlow<List<GameEntity>> =
+        favouriteDao.games().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Every game marked as a favourite, for what R2 and the hints say. */
+    val favouriteIds: StateFlow<Set<Long>> =
+        favouriteDao.ids().map { it.toSet() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
     /** Whether the player has moved the focus yet; until then the library opens on "Continue playing". */
     private var moved = false
 
     /**
-     * "Continue playing" first once a game has been played, then PC games (the visual novels live
-     * there), then RomM's platforms, then apps.
+     * "Continue playing" first once a game has been played, then "Favourites" once one is marked,
+     * then PC games (the visual novels live there), then RomM's platforms, then apps.
      */
     val platforms: StateFlow<List<PlatformEntity>> =
-        combine(dao.platforms(), local, recent) { romm, shelves, played ->
-            listOfNotNull(ContinuePlaying.platform(played.size).takeIf { played.isNotEmpty() }) +
+        combine(dao.platforms(), local, recent, favourites) { romm, shelves, played, marked ->
+            listOfNotNull(
+                ContinuePlaying.platform(played.size).takeIf { played.isNotEmpty() },
+                Favourites.platform(marked.size).takeIf { marked.isNotEmpty() },
+            ) +
                 shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -173,6 +188,7 @@ class LibraryViewModel @Inject constructor(
                 when {
                     id == null -> flowOf(emptyList())
                     id == ContinuePlaying.ID -> recent
+                    id == Favourites.ID -> favourites
                     id < 0 -> local.map { it.games[id].orEmpty() }
                     else -> dao.games(id)
                 }
@@ -189,14 +205,17 @@ class LibraryViewModel @Inject constructor(
                 before = after
             }
         }
-        // A play moves its game to the front of "Continue playing"; the focus goes with it.
-        viewModelScope.launch {
-            var before = emptyList<GameEntity>()
-            recent.collect { after ->
-                if (platforms.value.getOrNull(_focus.value.platformIndex)?.id == ContinuePlaying.ID) {
-                    _focus.update { it.copy(gameIndex = ContinuePlaying.keepGame(it.gameIndex, before, after)) }
+        // A play moves its game to the front of "Continue playing", and marking or unmarking a
+        // favourite changes "Favourites": the focus stays on its game, or the nearest place.
+        for ((shelf, list) in listOf(ContinuePlaying.ID to recent, Favourites.ID to favourites)) {
+            viewModelScope.launch {
+                var before = emptyList<GameEntity>()
+                list.collect { after ->
+                    if (platforms.value.getOrNull(_focus.value.platformIndex)?.id == shelf) {
+                        _focus.update { it.copy(gameIndex = ContinuePlaying.keepGame(it.gameIndex, before, after)) }
+                    }
+                    before = after
                 }
-                before = after
             }
         }
         refreshLocal()
@@ -271,6 +290,10 @@ class LibraryViewModel @Inject constructor(
         }
         if (focusedGame != null && key == PadKey.X) {
             deleteAction(focusedGame); return true
+        }
+        if (key == PadKey.R2) {
+            focusedGame?.takeIf(Favourites::canMark)?.let(::toggleFavourite)
+            return true
         }
         val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
             ?: return false
@@ -418,6 +441,15 @@ class LibraryViewModel @Inject constructor(
             val seen = skippedAt.value
             withTimeoutOrNull(wait) { skippedAt.first { it != seen } }
         }
+    }
+
+    /** Marks [game] as a favourite, or unmarks it. */
+    private fun toggleFavourite(game: GameEntity) {
+        val marked = game.id in favouriteIds.value
+        viewModelScope.launch {
+            if (marked) favouriteDao.remove(game.id) else favouriteDao.add(FavouriteEntity(game.id, System.currentTimeMillis()))
+        }
+        show(if (marked) "Removed ${game.name} from favourites" else "Added ${game.name} to favourites")
     }
 
     private fun deleteAction(game: GameEntity) {

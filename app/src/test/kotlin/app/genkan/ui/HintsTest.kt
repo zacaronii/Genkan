@@ -18,18 +18,18 @@ class HintsTest {
 
     @Test
     fun a_game_that_would_download_never_says_play() {
-        assertEquals("A Download | B Back", Hints.library(game, null, onGames = true, emulatorFor = emulator).text())
+        assertEquals("A Download | R2 Favourite | B Back", Hints.library(game, null, onGames = true, emulatorFor = emulator).text())
         assertEquals(
-            "A Play in DuckStation | X Delete | B Back",
+            "A Play in DuckStation | X Delete | R2 Favourite | B Back",
             Hints.library(game, download(DownloadState.INSTALLED), onGames = true, emulatorFor = emulator).text(),
         )
-        assertEquals("A Cancel | B Back", Hints.library(game, download(DownloadState.RUNNING), onGames = true, emulatorFor = emulator).text())
-        assertEquals("A Retry | B Back", Hints.library(game, download(DownloadState.FAILED), onGames = true, emulatorFor = emulator).text())
+        assertEquals("A Cancel | R2 Favourite | B Back", Hints.library(game, download(DownloadState.RUNNING), onGames = true, emulatorFor = emulator).text())
+        assertEquals("A Retry | R2 Favourite | B Back", Hints.library(game, download(DownloadState.FAILED), onGames = true, emulatorFor = emulator).text())
     }
 
     @Test
     fun without_an_emulator_a_has_no_hint_but_delete_stays() {
-        assertEquals("X Delete | B Back", Hints.library(game, download(DownloadState.INSTALLED), onGames = true, emulatorFor = none).text())
+        assertEquals("X Delete | R2 Favourite | B Back", Hints.library(game, download(DownloadState.INSTALLED), onGames = true, emulatorFor = none).text())
     }
 
     @Test
@@ -43,6 +43,14 @@ class HintsTest {
         assertEquals("Y Sync | Start Settings", Hints.libraryAnywhere().text())
         // After a failed sync both stay: retry, or fix the server in settings.
         assertEquals("Y Retry | Start Settings", Hints.libraryAnywhere(failed = true).text())
+    }
+
+    @Test
+    fun r2_marks_or_unmarks_a_favourite() {
+        assertEquals(
+            "A Download | R2 Unfavourite | B Back",
+            Hints.library(game, null, onGames = true, emulatorFor = emulator, favourite = true).text(),
+        )
     }
 
     @Test
