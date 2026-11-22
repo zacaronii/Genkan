@@ -583,7 +583,8 @@ private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, f
                 val isIcon = game.platformSlug == LocalShelves.APPS_SLUG
                 AsyncImage(
                     model = cover,
-                    contentDescription = game.name,
+                    // The card is titled (its semantics): its cover is decoration.
+                    contentDescription = null,
                     contentScale = if (isIcon) ContentScale.Fit else ContentScale.Crop,
                     modifier = if (isIcon) Modifier.fillMaxSize().padding(28.dp) else Modifier.fillMaxSize(),
                 )

@@ -49,8 +49,8 @@ class LibrarySemanticsTest {
                         sync = SyncStatus.Done(games = 64),
                         downloads = FakeData.downloads,
                         notice = null,
-                        coverModel = { null },
-                        artModel = { null },
+                        coverModel = { game -> "fake:${game.id}" },
+                        artModel = { path -> path?.let { "fake:$it" } },
                         emulatorFor = { null },
                         onSelectPlatform = {},
                         onColumns = {},
@@ -69,15 +69,23 @@ class LibrarySemanticsTest {
         compose.onAllNodes(isSelected() and SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription), useUnmergedTree = true)
             .fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull() }
 
+    /** The selected node's description as accessibility reads it: merged with everything under it. */
+    private fun mergedDescription(): List<String>? =
+        compose.onAllNodes(isSelected(), useUnmergedTree = false).fetchSemanticsNodes().single()
+            .config.getOrNull(SemanticsProperties.ContentDescription)
+
     @Test
     fun `on the shelf, the focused case is the one selected game`() {
         show(LibraryView.SHELF, gameIndex = 3)
         assertEquals(listOf(FakeData.psxGames[3].name), selectedTitles())
+        // Read once: the cover and logo under the case add nothing.
+        assertEquals(listOf(FakeData.psxGames[3].name), mergedDescription())
     }
 
     @Test
     fun `in the grid, the focused card is the one selected game`() {
         show(LibraryView.GRID, gameIndex = 2)
         assertEquals(listOf(FakeData.psxGames[2].name), selectedTitles())
+        assertEquals(listOf(FakeData.psxGames[2].name), mergedDescription())
     }
 }
