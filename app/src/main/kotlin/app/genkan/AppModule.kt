@@ -9,6 +9,8 @@ import app.genkan.reader.ReaderDao
 import app.genkan.stats.ReadingDao
 import app.genkan.saves.SaveFileDao
 import app.genkan.download.DownloadDao
+import app.genkan.download.DownloadService
+import app.genkan.download.DownloadStarter
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
 import app.genkan.words.AnkiWordDao
@@ -42,6 +44,9 @@ object AppModule {
 
     @Provides
     fun downloadDao(db: LibraryDatabase): DownloadDao = db.downloads()
+
+    @Provides
+    fun downloadStarter(@ApplicationContext context: Context): DownloadStarter = DownloadStarter { DownloadService.start(context) }
 
     @Provides
     fun playSessionDao(db: LibraryDatabase): PlaySessionDao = db.playSessions()
