@@ -40,6 +40,17 @@ data class CatalogConfig(val repo: String = "", val token: String = "") {
     }
 }
 
+/** What the catalog has for a release id. */
+sealed interface EntryLookup {
+    data class Found(val entry: CatalogEntry) : EntryLookup
+
+    /** The catalog doesn't list the id (or isn't set up): nothing to ask again for. */
+    data object NotListed : EntryLookup
+
+    /** The id is listed (or may be) but its entry couldn't be had; [retry]: whether asking again can help. */
+    data class Failed(val reason: String, val retry: Boolean) : EntryLookup
+}
+
 sealed interface CatalogStatus {
     data object NotSet : CatalogStatus
     data object Idle : CatalogStatus
@@ -86,28 +97,38 @@ class YomikataCatalog @Inject constructor(
     /** Fetches the index again when [force]d or older than [MAX_AGE_MS]; returns how many ids it lists. */
     suspend fun refresh(force: Boolean = false): Int? = lock.withLock { index(force)?.length() }
 
-    /** The entry for a release [id] (a main id or an alias), or null when the catalog has none. */
-    suspend fun entry(id: String): CatalogEntry? = lock.withLock {
-        val record = index(force = false)?.optJSONObject(id) ?: return@withLock null
+    /** The entry for a release [id] (a main id or an alias), or null when the catalog has none or can't give it. */
+    suspend fun entry(id: String): CatalogEntry? = (lookup(id) as? EntryLookup.Found)?.entry
+
+    /** The entry for a release [id], or why there is none: not listed, or couldn't be had. */
+    suspend fun lookup(id: String): EntryLookup = lock.withLock {
+        val entries = index(force = false)
+            ?: return@withLock if (_status.value == CatalogStatus.NotSet) EntryLookup.NotListed
+            else EntryLookup.Failed("the catalog's index can't be read", retry = true)
+        val record = entries.optJSONObject(id) ?: return@withLock EntryLookup.NotListed
         val path = record.getString("path")
         val cached = File(dir, path)
         val fresh = cached.isFile && sha256(cached.readBytes()) == record.optString("sha256")
         val text = if (fresh) {
             cached.readText()
         } else {
-            runCatching { fetch(path).also { save(path, it) } }
+            val fetched = runCatching { fetch(path).also { save(path, it) } }
                 .onFailure { Log.i(TAG, "Couldn't fetch $path: ${it.message}") }
-                .getOrNull()
+            fetched.getOrNull()
                 ?: cached.takeIf { it.isFile }?.readText()
-                ?: return@withLock null
+                ?: return@withLock EntryLookup.Failed("couldn't fetch $path: ${fetched.exceptionOrNull()?.message}", retry = true)
         }
-        val entry = runCatching { CatalogEntry.parse(text) }.onFailure { Log.w(TAG, "Bad entry $path: $it") }.getOrNull()
+        val entry = runCatching { CatalogEntry.parse(text) }
+            .getOrElse {
+                Log.w(TAG, "Bad entry $path: $it")
+                return@withLock EntryLookup.Failed("$path doesn't read as an entry: ${it.message}", retry = false)
+            }
         // Tables have no hash of their own: fetched again whenever their entry changed. A layout's
         // own table sets come along too.
-        entry?.let { it.tables + Layouts.setTablePaths(it.layouts) }?.forEach { table ->
+        (entry.tables + Layouts.setTablePaths(entry.layouts)).forEach { table ->
             if (!fresh || !File(dir, table).isFile) runCatching { save(table, fetch(table)) }
         }
-        entry
+        EntryLookup.Found(entry)
     }
 
     /** The catalog files at [paths] that are on the device, by path (a layout's table sets). */
