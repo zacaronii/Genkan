@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import app.genkan.input.HomeKeys
 import app.genkan.input.PadKey
+import app.genkan.library.InsertKey
 import app.genkan.ui.AnkiSettingsScreen
 import app.genkan.ui.AnkiSettingsViewModel
 import app.genkan.ui.AppViewModel
@@ -222,8 +223,11 @@ class HomeActivity : ComponentActivity() {
         if (event.action != KeyEvent.ACTION_DOWN) return pad != null || super.dispatchKeyEvent(event)
         when (screen) {
             Screen.LIBRARY -> {
-                // Any button skips the insert animation, and does nothing else.
-                if (libraryViewModel.skipInsert()) Unit
+                // A fresh press of any pad button skips the insert animation and does nothing else;
+                // a held button's repeats are used up; other keys (volume) go on as usual.
+                val insertKey = InsertKey.decide(libraryViewModel.insert.value != null, pad != null, event.repeatCount)
+                if (insertKey == InsertKey.SKIP) libraryViewModel.skipInsert()
+                else if (insertKey == InsertKey.CONSUME) Unit
                 else if (pad == PadKey.START) appViewModel.openSettings()
                 else if (pad == null || !libraryViewModel.onKey(pad, event.repeatCount)) return super.dispatchKeyEvent(event)
             }

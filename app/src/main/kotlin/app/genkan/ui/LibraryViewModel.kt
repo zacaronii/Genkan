@@ -123,8 +123,8 @@ class LibraryViewModel @Inject constructor(
     private val skippedAt = MutableStateFlow<Long?>(null)
 
     /**
-     * Skips the insert animation when one is playing. True when it was, so the key that did it is
-     * used up rather than also moving the shelf or opening settings.
+     * Skips the insert animation when one is playing (see [InsertKey] for which keys may). True
+     * when it was.
      */
     fun skipInsert(): Boolean {
         val state = _insert.value ?: return false
@@ -221,7 +221,8 @@ class LibraryViewModel @Inject constructor(
      * the shelf. Returns false for keys the library doesn't use.
      */
     fun onKey(key: PadKey, repeatCount: Int = 0): Boolean {
-        if (skipInsert()) return true
+        // The activity decides what a key does to the insert animation; nothing else moves under it.
+        if (_insert.value != null) return true
         if (key == PadKey.Y) {
             sync(); return true
         }
@@ -331,7 +332,14 @@ class LibraryViewModel @Inject constructor(
                         val timeline = InsertTimeline.forLaunch(animationMs, plan.builtIn)
                         waitUntil { timeline.launchAt(readyAt, skippedAt.value) }
                         plan.start().also { result ->
-                            if (result is LaunchResult.Launched) waitUntil { timeline.cutAt(readyAt, skippedAt.value) }
+                            if (result is LaunchResult.Launched) {
+                                waitUntil { timeline.cutAt(readyAt, skippedAt.value) }
+                                // The last frame (a disc still spinning) stays up until the game's
+                                // window has the screen, so the shelf never shows in between.
+                                if (_insert.value != null) {
+                                    withTimeoutOrNull(OVERLAY_HOLD_MS) { launcherPresence.inFront.first { !it } }
+                                }
+                            }
                         }
                     }
                 }
@@ -352,6 +360,8 @@ class LibraryViewModel @Inject constructor(
                 _insert.value = null
                 if (!launched) focusedGame.setLaunching(null)
             }
+            // Nothing started: A works again straight away.
+            if (!launched) return@launch
             // The bottom screen stays on the reader until the game has the top screen; then the
             // usual rule (details only while the launcher is in front) takes over.
             withTimeoutOrNull(LAUNCHING_HOLD_MS) { launcherPresence.inFront.first { !it } }
@@ -426,6 +436,8 @@ class LibraryViewModel @Inject constructor(
         const val SAVE_SYNC_TIMEOUT_MS = 15_000L
         /** The longest the bottom screen waits on the reader for a started game to take the top screen. */
         const val LAUNCHING_HOLD_MS = 5_000L
+        /** The longest the animation's last frame waits for a started game's window. */
+        const val OVERLAY_HOLD_MS = 3_000L
     }
 
     fun sync() {

@@ -49,3 +49,26 @@ data class InsertTimeline(val animationMs: Long, val leadMs: Long) {
             InsertTimeline(animationMs, if (builtIn || animationMs == 0L) 0L else min(EXTERNAL_LEAD_MS, animationMs))
     }
 }
+
+/** What a key press does while the insert animation may be showing. */
+enum class InsertKey {
+    /** Not the animation's: the screen handles it as usual. */
+    PASS,
+    /** Used up and ignored: a held button's repeats. */
+    CONSUME,
+    /** A fresh press of a pad button: the animation skips to its end. */
+    SKIP;
+
+    companion object {
+        /**
+         * For a key-down while the animation is [showing]: only a fresh press ([repeatCount] 0) of
+         * a pad button ([isPadKey]) skips. Its repeats are used up without skipping, since holding
+         * A, which started the game, sends them from about 400 ms on. Other keys (volume, say) pass.
+         */
+        fun decide(showing: Boolean, isPadKey: Boolean, repeatCount: Int): InsertKey = when {
+            !showing || !isPadKey -> PASS
+            repeatCount > 0 -> CONSUME
+            else -> SKIP
+        }
+    }
+}

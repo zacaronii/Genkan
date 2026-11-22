@@ -688,8 +688,12 @@ private fun FakeCovers.disc(model: String): Bitmap {
     canvas.drawCircle(c, c, c, paint)
     paint.color = (model.hashCode() or 0xFF000000.toInt())
     canvas.drawCircle(c, c, c * 0.92f, paint)
+    // A printed band across the label, inside the rim as on a real disc.
     paint.color = 0x55FFFFFF
+    canvas.save()
+    canvas.clipPath(android.graphics.Path().apply { addCircle(c, c, c * 0.92f, android.graphics.Path.Direction.CW) })
     canvas.drawRect(0f, c * 0.55f, size.toFloat(), c * 0.85f, paint)
+    canvas.restore()
     paint.color = 0xFFD5D8DE.toInt()
     canvas.drawCircle(c, c, c * 0.24f, paint)
     paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)

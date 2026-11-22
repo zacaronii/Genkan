@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -170,6 +172,15 @@ fun InsertOverlay(state: InsertState, onSkip: () -> Unit, staticProgress: Float?
             Canvas(Modifier.fillMaxSize()) { drawMachineFront(state.kind, scene, p(), density.density) }
         }
 
+        // A dark ground under the label, so the shelf's caption row doesn't show through it.
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(110.dp)
+                .graphicsLayer { alpha = InsertBeats.phase(p(), 0.05f, 0.25f) }
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black, Color.Black))),
+        )
         Text(
             "Starting ${state.title}",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

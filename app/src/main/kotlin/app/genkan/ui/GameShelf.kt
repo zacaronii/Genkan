@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -701,10 +701,18 @@ private fun BoxScope.PhysicalMedia(
  */
 @Composable
 internal fun MediaArt(kind: MediaKind, model: Any?, logo: Any?, title: String, caseColor: Color, outline: Shape) {
+    // Clipped to the medium's outline, so nothing drawn on a spinning disc sticks out past its rim.
+    // A cut-out is clipped only when it is a disc: a cartridge's own shape has notches and grips.
+    val disc = kind == MediaKind.DISC || kind == MediaKind.UNKNOWN
     if (model != null) {
-        AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        AsyncImage(
+            model = model,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = if (disc) Modifier.fillMaxSize().clip(outline) else Modifier.fillMaxSize(),
+        )
     } else {
-        DrawnMedia(kind, logo, title, caseColor, outline)
+        Box(Modifier.fillMaxSize().clip(outline)) { DrawnMedia(kind, logo, title, caseColor, outline) }
     }
 }
 
@@ -754,14 +762,16 @@ private fun DrawnMedia(kind: MediaKind, logo: Any?, title: String, caseColor: Co
                 drawCircle(Color(0xFFBFC3CA), radius = r * 0.22f)
                 drawCircle(Color(0xFF111114), radius = r * 0.13f)
             }
-            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.fillMaxSize(0.5f).offset(y = (-6).dp).padding(bottom = 18.dp))
+            // The label prints in the band above the hub, clear of the hole.
+            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, -0.58f)).fillMaxWidth(0.5f).fillMaxHeight(0.19f))
         }
         MediaKind.UMD -> Box(Modifier.fillMaxSize().clip(outline).background(Color(0xFF2A2B30)), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize(0.82f)) {
                 drawCircle(Brush.sweepGradient(listOf(Color(0xFFB8BCC6), Color(0xFFDCD3E2), Color(0xFFB8BCC6))), radius = size.minDimension / 2f)
                 drawCircle(Color(0xFF2A2B30), radius = size.minDimension * 0.08f)
             }
-            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.fillMaxSize(0.46f).offset(y = 18.dp))
+            // Below the hub, on the lower part of the disc window.
+            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, 0.62f)).fillMaxWidth(0.56f).fillMaxHeight(0.2f))
         }
         MediaKind.CARD, MediaKind.CARTRIDGE, MediaKind.DISK_CARD -> {
             val shell = when (kind) {

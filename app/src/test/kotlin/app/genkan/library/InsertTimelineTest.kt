@@ -62,6 +62,20 @@ class InsertTimelineTest {
     }
 
     @Test
+    fun `only a fresh press of a pad button skips`() {
+        assertEquals(InsertKey.SKIP, InsertKey.decide(showing = true, isPadKey = true, repeatCount = 0))
+        // Holding A, which started the game, repeats from about 400 ms: used up, never a skip.
+        assertEquals(InsertKey.CONSUME, InsertKey.decide(showing = true, isPadKey = true, repeatCount = 1))
+        assertEquals(InsertKey.CONSUME, InsertKey.decide(showing = true, isPadKey = true, repeatCount = 30))
+        // Volume and other keys that aren't the pad's go on as usual.
+        assertEquals(InsertKey.PASS, InsertKey.decide(showing = true, isPadKey = false, repeatCount = 0))
+        assertEquals(InsertKey.PASS, InsertKey.decide(showing = true, isPadKey = false, repeatCount = 5))
+        // No animation: the library has every key.
+        assertEquals(InsertKey.PASS, InsertKey.decide(showing = false, isPadKey = true, repeatCount = 0))
+        assertEquals(InsertKey.PASS, InsertKey.decide(showing = false, isPadKey = true, repeatCount = 3))
+    }
+
+    @Test
     fun `the lead never exceeds a short animation`() {
         val short = InsertTimeline.forLaunch(300, builtIn = false)
         assertEquals(300L, short.leadMs)
