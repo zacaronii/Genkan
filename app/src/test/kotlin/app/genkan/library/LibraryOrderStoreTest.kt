@@ -5,7 +5,8 @@ import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -25,7 +26,9 @@ class LibraryOrderStoreTest {
         return try {
             runBlocking { use(store) }
         } finally {
-            scope.cancel()
+            // Waits for the store to let go of its file: a store opened on it before then (the
+            // next withStore) fails with "multiple DataStores active for the same file".
+            runBlocking { scope.coroutineContext.job.cancelAndJoin() }
         }
     }
 
