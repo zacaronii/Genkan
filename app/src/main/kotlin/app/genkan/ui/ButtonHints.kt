@@ -99,8 +99,12 @@ object Hints {
             }
         }
 
-    /** What works anywhere in the library, whatever is focused. */
-    val libraryAnywhere: List<ButtonHint> = listOf(ButtonHint(PadButton.Y, "Sync"), ButtonHint(PadButton.START, "Settings"))
+    /**
+     * What works anywhere in the library, whatever is focused. After a sync that [failed], Y
+     * retries it (and Settings is where the server's address is fixed).
+     */
+    fun libraryAnywhere(failed: Boolean = false): List<ButtonHint> =
+        listOf(ButtonHint(PadButton.Y, if (failed) "Retry" else "Sync"), ButtonHint(PadButton.START, "Settings"))
 
     /** What A does on [game], or null when it can't start it (no emulator for its console). */
     fun primary(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String? {

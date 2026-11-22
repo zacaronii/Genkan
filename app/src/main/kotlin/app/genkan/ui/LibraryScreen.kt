@@ -189,7 +189,7 @@ private fun LibraryBody(
             val gridGame = games.getOrNull(focus.gameIndex)
             HintRow(
                 Hints.library(gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor) +
-                    Hints.libraryAnywhere,
+                    Hints.libraryAnywhere(failed = sync is SyncStatus.Failed),
                 Modifier.padding(top = 12.dp),
             )
         }
@@ -329,15 +329,17 @@ private fun ConsoleStrip(
         }
         ButtonGlyph(PadButton.R1)
         // What the pad does anywhere in the library; the focused game's own hints are under the shelf.
-        // While a sync runs or has failed, its state stands in for them.
-        when (sync) {
-            SyncStatus.Idle, is SyncStatus.Done -> HintRow(Hints.libraryAnywhere, Modifier.padding(start = 16.dp))
-            is SyncStatus.Running, is SyncStatus.Failed -> Text(
+        // While a sync runs, its state stands in for them; after one failed, it comes first and Y retries.
+        if (sync is SyncStatus.Running || sync is SyncStatus.Failed) {
+            Text(
                 if (sync is SyncStatus.Running) "Syncing ${sync.platform}…" else "Sync failed",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp),
             )
+        }
+        if (sync !is SyncStatus.Running) {
+            HintRow(Hints.libraryAnywhere(failed = sync is SyncStatus.Failed), Modifier.padding(start = 16.dp))
         }
         ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
     }
@@ -583,7 +585,7 @@ private fun syncLabel(sync: SyncStatus): String = when (sync) {
     SyncStatus.Idle -> ""
     is SyncStatus.Running -> "Syncing ${sync.platform}…"
     is SyncStatus.Done -> ""
-    is SyncStatus.Failed -> "Sync failed · Y to retry"
+    is SyncStatus.Failed -> "Sync failed"
 }
 
 internal fun formatSize(bytes: Long): String = when {

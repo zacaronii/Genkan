@@ -40,7 +40,9 @@ class HintsTest {
 
     @Test
     fun sync_and_settings_work_anywhere_in_the_library() {
-        assertEquals("Y Sync | Start Settings", Hints.libraryAnywhere.text())
+        assertEquals("Y Sync | Start Settings", Hints.libraryAnywhere().text())
+        // After a failed sync both stay: retry, or fix the server in settings.
+        assertEquals("Y Retry | Start Settings", Hints.libraryAnywhere(failed = true).text())
     }
 
     @Test
