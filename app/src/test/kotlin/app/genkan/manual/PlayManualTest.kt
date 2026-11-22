@@ -9,8 +9,11 @@ import app.genkan.library.GameEntity
 import app.genkan.library.LibraryDatabase
 import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -56,11 +59,15 @@ class PlayManualTest {
 
     private fun pdf(name: String) = File(context.cacheDir, name).apply { writeText("pdf") }
 
+    /** The PlayManuals' scope: cancelled before the database closes, so nothing of theirs outlives the test. */
+    private val scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher())
+
     @Before
     fun main() = Dispatchers.setMain(UnconfinedTestDispatcher())
 
     @After
     fun close() {
+        scope.cancel()
         db.close()
         Dispatchers.resetMain()
     }
@@ -68,7 +75,7 @@ class PlayManualTest {
     /** A PlayManual with [game] playing, once it has looked the game up. */
     private fun playing(game: GameEntity): PlayManual = runBlocking {
         db.library().upsertGames(listOf(game))
-        val manual = PlayManual(nowPlaying, db.library(), source)
+        val manual = PlayManual(nowPlaying, db.library(), source, scope)
         nowPlaying.started(game.id, game.name, "psx")
         if (game.manualPath != null) withTimeout(5_000) { manual.game.first { it?.id == game.id } }
         manual
