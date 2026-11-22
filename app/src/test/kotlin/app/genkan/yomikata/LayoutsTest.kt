@@ -167,6 +167,24 @@ class LayoutsTest {
         fun rested(rest: Any) = JSONObject(scripted.toString()).also { it.getJSONObject("message").getJSONObject("script").put("rest", rest) }
         assertTrue(Layouts.understood(rested(1)) && Layouts.understood(rested(16)))
         for (rest in listOf<Any>(0, 17, -1, 2.5, "2")) assertFalse("rest $rest", Layouts.understood(rested(rest)))
+        // A script without open is one text from its start; texts and rest need open.
+        fun unopened(edit: (JSONObject) -> Unit = {}) = JSONObject(scripted.toString()).also {
+            it.getJSONObject("message").getJSONObject("script").remove("open")
+            it.getJSONObject("message").getJSONObject("script").remove("texts")
+            edit(it.getJSONObject("message").getJSONObject("script"))
+        }
+        assertTrue(Layouts.understood(unopened()))
+        assertFalse(Layouts.understood(unopened { it.put("texts", "rows") }))
+        assertFalse(Layouts.understood(unopened { it.put("rest", 2) }))
+        // rows.pointers may only be true, and not with rows.lengths.
+        fun pointed(value: Any, lengths: Boolean = false) = JSONObject(known.toString()).also {
+            val rows = it.getJSONObject("message").getJSONObject("rows").put("pointers", value)
+            if (!lengths) rows.remove("lengths")
+        }
+        assertTrue(Layouts.understood(pointed(true)))
+        assertFalse(Layouts.understood(pointed(false)))
+        assertFalse(Layouts.understood(pointed("true")))
+        assertFalse(Layouts.understood(pointed(true, lengths = true)))
         fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
         val unknown = listOf(
             changed { it.put("typing_speed", JSONObject()) },

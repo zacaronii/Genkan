@@ -151,11 +151,12 @@ object Layouts {
             // hex bytes and offset a number.
             val script = spec.optJSONObject("script") ?: return false
             if (spec.optString("charset") != "table" || listOf("rows", "pages", "terminator", "length").any(spec::has)) return false
-            // open and offset, and optionally texts, whose only value is "rows".
-            if (!script.keySet().containsAll(setOf("open", "offset")) || !setOf("open", "offset", "texts", "rest").containsAll(script.keySet())) return false
+            // offset, and optionally open; texts (whose only value is "rows") and rest need open.
+            if (!script.has("offset") || !setOf("open", "offset", "texts", "rest").containsAll(script.keySet())) return false
+            if (!script.has("open") && (script.has("texts") || script.has("rest"))) return false
             if (script.has("rest") && script.opt("rest").let { it !is Int || it !in 1..16 }) return false
             if (script.has("texts") && script.opt("texts") != "rows") return false
-            if ((script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
+            if (script.has("open") && (script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
             // The offset counts bytes, or codes of the entry's unit.
             if (!numberOk(script.optJSONObject("offset"), LENGTH_KEYS, setOf("bytes", "codes"))) return false
         }
@@ -168,7 +169,9 @@ object Layouts {
         }
         if (!spec.has("rows")) return true
         val rows = spec.optJSONObject("rows") ?: return false
-        if (!rows.keySet().all { it in setOf("count", "stride", "lengths") }) return false
+        if (!rows.keySet().all { it in setOf("count", "stride", "lengths", "pointers") }) return false
+        // pointers may only be true, and not with lengths (a pointed-to text has no length cell).
+        if (rows.has("pointers") && (rows.opt("pointers") != true || rows.has("lengths"))) return false
         return !rows.has("lengths") || numberOk(rows.optJSONObject("lengths"), LENGTH_KEYS)
     }
 
@@ -406,9 +409,11 @@ object Layouts {
             val stride = rows?.getInt("stride") ?: maxBytes
             val length = spec.optJSONObject("length")
             val rowLengths = rows?.optJSONObject("lengths")
+            // Each row a 32-bit pointer to its text, `stride` apart; the text runs to its terminator or max_bytes.
+            val pointers = rows?.opt("pointers") == true
             val decoder = decoderFor(charset)
             val lines = MutableList(count) { r ->
-                var size = minOf(maxBytes, stride)
+                var size = if (pointers) maxBytes else minOf(maxBytes, stride)
                 var chars: Long? = null
                 // `length` holds for every row, `rows.lengths` for its own; where both are given, both hold.
                 for ((lengthSpec, index) in listOf(length to 0, rowLengths to r)) {
@@ -421,7 +426,13 @@ object Layouts {
                         size = minOf(size.toLong(), n).toInt()
                     }
                 }
-                var raw = cut(read(start + r.toLong() * stride, size), charset, width, terminator, chars)
+                var at = start + r.toLong() * stride
+                if (pointers) {
+                    at = java.nio.ByteBuffer.wrap(read(at, 4)).order(order).int.toLong() and 0xFFFFFFFFL
+                    // A null pointer is an empty row.
+                    if (at == 0L) return@MutableList ""
+                }
+                var raw = cut(read(at, size), charset, width, terminator, chars)
                 // A buffer of pages walked by the game's cursor: only the page the cursor is on.
                 spec.optJSONObject("pages")?.let { pages ->
                     raw = page(raw, charset, width, bytes(pages.getString("break")), int(pages.getJSONObject("cursor")) - start)
@@ -445,7 +456,8 @@ object Layouts {
             val offset = script.getJSONObject("offset")
             val at = int(offset) * if (offset.optString("counts") == "codes") unit else 1
             val size = maxOf(0L, minOf(spec.getInt("max_bytes").toLong(), at)).toInt()
-            val mark = bytes(script.getString("open"))
+            // Without open, the script is one text from its start.
+            val mark = script.optString("open").takeIf { script.has("open") }?.let(::bytes)
             val ends = HashSet<String>()
             val breaks = HashSet<String>()
             for ((code, what) in controls) {
@@ -454,10 +466,13 @@ object Layouts {
             }
             val rows = script.optString("texts") == "rows"
             // At or before the script's start there is nothing to read.
-            val texts = if (size > 0) {
-                scriptPage(read(start + at - size, size + mark.size), size, mark, { t.isEnd(it) || it in ends }, breaks, rows, script.optInt("rest"))
-            } else {
-                emptyList()
+            val isEnd = { c: String -> t.isEnd(c) || c in ends }
+            val texts = when {
+                size <= 0 -> emptyList()
+                mark != null -> scriptPage(read(start + at - size, size + mark.size), size, mark, isEnd, breaks, rows, script.optInt("rest"))
+                // One text from the start: only when what's read reaches back to it.
+                size.toLong() == at -> pagesFrom(read(start, size), 0, null, isEnd, breaks, rows = false)
+                else -> emptyList()
             }
             var text = texts.joinToString("\n") { t.decode(it, unit, controls, codes).trimEnd('\n') }
             for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
@@ -516,6 +531,17 @@ object Layouts {
                 p = q - unit
             }
             if (start < 0) return emptyList()
+            return pagesFrom(data, start, mark, isEnd, breaks, rows)
+        }
+
+        /**
+         * What a script holds from [start] to its end ([data]), less the pages that are off the
+         * screen; with a [mark], two texts of the page join where an end code meets it (each a
+         * piece of its own with [rows]).
+         */
+        private fun pagesFrom(data: ByteArray, start: Int, mark: ByteArray?, isEnd: (String) -> Boolean, breaks: Set<String>, rows: Boolean): List<ByteArray> {
+            fun code(i: Int): String = if (i >= 0 && i + unit <= data.size) hexOf(data, i, unit) else ""
+            fun ends(i: Int) = code(i).let { it.isNotEmpty() && isEnd(it) }
             // Where the end codes at the position begin: a page code with only those after it ended a
             // page that is still up.
             var tail = data.size
@@ -524,7 +550,7 @@ object Layouts {
             var i = start
             while (i + unit <= data.size) {
                 val n = codeLength(data, i)
-                if (n == 0 && ends(i) && i + unit + mark.size <= data.size && mark.indices.all { data[i + unit + it] == mark[it] }) {
+                if (n == 0 && mark != null && ends(i) && i + unit + mark.size <= data.size && mark.indices.all { data[i + unit + it] == mark[it] }) {
                     // Where two texts of the page join: with rows, the next text is a row of its own.
                     i += unit + mark.size
                     if (rows) pieces += java.io.ByteArrayOutputStream()
