@@ -38,6 +38,7 @@ import coil3.annotation.ExperimentalCoilApi
 import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
+import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Test
@@ -311,7 +312,7 @@ class ScreenshotTest {
         shadowOf(display).setWidth(pixels.first)
         shadowOf(display).setRealHeight(pixels.second)
         shadowOf(display).setHeight(pixels.second)
-        captureRoboImage("src/test/screenshots/$name.png") {
+        captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = COMPARE) {
             CompositionLocalProvider(
                 LocalInspectionMode provides true,
                 LocalAsyncImagePreviewHandler provides AsyncImagePreviewHandler { request ->
@@ -761,3 +762,9 @@ private class FakeManual(pages: Int) : ManualPages {
 
     override fun close() {}
 }
+
+/**
+ * When verifying (CI's compare step), a shot passes while under 1% of its pixels differ: the PNGs
+ * are recorded on macOS and CI renders on Linux, where text antialiasing differs.
+ */
+private val COMPARE = RoborazziOptions(compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01F))
