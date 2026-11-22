@@ -48,6 +48,7 @@ class GameOverlay @Inject constructor(
     @ApplicationContext private val context: Context,
     private val player: BuiltInPlayer,
     private val ocr: OcrReader,
+    builtIn: BuiltInText,
     dualScreen: DualScreenState,
     nowPlaying: NowPlaying,
 ) {
@@ -67,6 +68,12 @@ class GameOverlay @Inject constructor(
                 .distinctUntilChanged()
                 .collect { (on, screen, game) -> game?.let { send(it, if (on) screen else ScreenText.EMPTY) } }
         }
+        // A layout's choice, as a panel of its answers over the game, while the overlay is on.
+        scope.launch {
+            combine(enabled, builtIn.choice, player.game) { on, choice, game -> Triple(on, choice, game) }
+                .distinctUntilChanged()
+                .collect { (on, choice, game) -> game?.let { sendPanel(it, OverlayPanel.of(choice).takeIf { on }) } }
+        }
     }
 
     /** Taps on a line of the overlay, to look up. */
@@ -78,6 +85,14 @@ class GameOverlay @Inject constructor(
     fun toggle() {
         val on = !enabled.value
         scope.launch { context.overlayStore.edit { it[ON] = on } }
+    }
+
+    private fun sendPanel(game: CoreGame, panel: OverlayPanel?) {
+        try {
+            game.session.showPanel(panel?.toJson().orEmpty())
+        } catch (e: RemoteException) {
+            Log.w(TAG, "Player unreachable: $e")
+        }
     }
 
     private fun send(game: CoreGame, screen: ScreenText) {

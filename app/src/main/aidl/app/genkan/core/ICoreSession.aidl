@@ -48,4 +48,6 @@ interface ICoreSession {
     Bundle keptFrame() = 12;
     /** Draws the game with the ScreenLook named [look] from now on (this play only). */
     oneway void setLook(String look) = 13;
+    /** A list to draw over the game, apart from the backlog (OverlayPanel's JSON): a choice's answers; blank: none. */
+    oneway void showPanel(String panelJson) = 14;
 }
