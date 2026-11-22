@@ -143,6 +143,11 @@ class LayoutsTest {
             "rows": {"count": 2, "stride": 4, "lengths": {"address": "0x10", "counts": "characters"}},
             "when": {"address": "0x20", "equals": 2}}, "waiting": {"address": "0x30"}}""")
         assertTrue(Layouts.understood(known))
+        val paged = JSONObject(known.toString()).also {
+            it.getJSONObject("message").remove("rows")
+            it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40", "type": "u32"}}"""))
+        }
+        assertTrue(Layouts.understood(paged))
         fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
         val unknown = listOf(
             changed { it.put("typing_speed", JSONObject()) },
@@ -153,6 +158,12 @@ class LayoutsTest {
             changed { it.getJSONObject("waiting").put("type", "u64") },
             // `counts` belongs to lengths, not to a flag.
             changed { it.getJSONObject("waiting").put("counts", "characters") },
+            // Pages and rows never go together, and pages has exactly a break and a cursor.
+            changed { it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40"}}""")) },
+            changed {
+                it.getJSONObject("message").remove("rows")
+                it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40"}, "skip": 1}"""))
+            },
         )
         for (layout in unknown) {
             assertEquals(layout.toString(), false, Layouts.understood(layout))

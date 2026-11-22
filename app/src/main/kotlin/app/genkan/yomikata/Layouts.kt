@@ -103,6 +103,12 @@ object Layouts {
         if (!spec.keySet().all { it in TEXT_KEYS } || spec.optString("charset") !in CODECS.keys + "table") return false
         if (spec.has("length") && !numberOk(spec.optJSONObject("length"), LENGTH_KEYS)) return false
         if (spec.has("when") && !numberOk(spec.optJSONObject("when"), NUMBER_KEYS)) return false
+        if (spec.has("pages")) {
+            // Pages and rows never go together.
+            val pages = spec.optJSONObject("pages") ?: return false
+            if (spec.has("rows") || pages.keySet() != setOf("break", "cursor")) return false
+            if (!numberOk(pages.optJSONObject("cursor"), WHERE + "type")) return false
+        }
         if (!spec.has("rows")) return true
         val rows = spec.optJSONObject("rows") ?: return false
         if (!rows.keySet().all { it in setOf("count", "stride", "lengths") }) return false
@@ -112,7 +118,7 @@ object Layouts {
     private val WHERE = setOf("address", "base", "offsets")
     private val NUMBER_KEYS = WHERE + setOf("type", "equals")
     private val LENGTH_KEYS = WHERE + setOf("type", "counts")
-    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "when", "cleanup")
+    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "when", "cleanup")
     private val FIELDS = mapOf(
         "message" to "text", "choices" to "text", "speaker" to "either", "shown" to "number", "waiting" to "number",
         "choosing" to "number", "choice_count" to "number", "choice_cursor" to "number",
@@ -319,7 +325,12 @@ object Layouts {
                         size = minOf(size.toLong(), n).toInt()
                     }
                 }
-                decode(cut(read(start + r.toLong() * stride, size), charset, width, terminator, chars), charset, width, decoder)
+                var raw = cut(read(start + r.toLong() * stride, size), charset, width, terminator, chars)
+                // A buffer of pages walked by the game's cursor: only the page the cursor is on.
+                spec.optJSONObject("pages")?.let { pages ->
+                    raw = page(raw, charset, width, bytes(pages.getString("break")), int(pages.getJSONObject("cursor")) - start)
+                }
+                decode(raw, charset, width, decoder)
             }
             if (rows != null) while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
             var text = lines.joinToString("\n")
@@ -346,6 +357,31 @@ object Layouts {
                 count++
             }
             return data.copyOf(i)
+        }
+
+        /**
+         * The page a script cursor is on: [data] split at each [mark] that starts a character;
+         * the last page with anything in it that starts at or before [cursor] (an offset into
+         * [data]). A cursor outside the text is on its last page with anything in it: a game may
+         * drop its cursor once the last page has typed out.
+         */
+        private fun page(data: ByteArray, charset: String, width: Int, mark: ByteArray, cursor: Long): ByteArray {
+            val pages = mutableListOf<Pair<Int, Int>>()
+            var start = 0
+            var i = 0
+            while (i < data.size) {
+                if (mark.isNotEmpty() && i + mark.size <= data.size && mark.indices.all { data[i + it] == mark[it] }) {
+                    pages += start to i
+                    i += mark.size
+                    start = i
+                } else {
+                    i += charLength(data, i, charset, width)
+                }
+            }
+            pages += start to data.size
+            val inside = cursor in 0..data.size.toLong()
+            val full = pages.filter { (a, b) -> b > a && (!inside || a <= cursor) }
+            return full.lastOrNull()?.let { (a, b) -> data.copyOfRange(a, minOf(b, data.size)) } ?: ByteArray(0)
         }
 
         /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */

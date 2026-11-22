@@ -1,4 +1,4 @@
-Copied unmodified from Yomikata, commit d141304 (branch layout-row-lengths, Yomikata PR #23, not merged yet),
+Copied unmodified from Yomikata, commit dfbe18c (branch page-cursor, Yomikata PR #28 on top of #23, not merged yet),
 tools/tests/layout-vectors/. Its README follows.
 
 # Layout conformance vectors
