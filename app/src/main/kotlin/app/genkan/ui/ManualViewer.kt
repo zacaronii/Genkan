@@ -398,14 +398,14 @@ fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
         onDispose { manual.keepPage(file, listState.firstVisibleItemIndex) }
     }
     // Its lookups count for the game being played.
-    LookupManual(file, reader, onClose = manual::closed, listState = listState, closeLabel = "Back to reader", gameKey = null)
+    LookupManual(file, reader, onClose = manual::closed, listState = listState, closeLabel = "Back to reader", gameKey = null, gameTitle = null)
 }
 
 /**
  * A manual whose words look up through [reader] on a tap: the word is boxed on its page and the
  * lookup's panel opens over the manual, on the other half from the tap. The lookups count for
- * [gameKey]'s game ("game:<id>"), or with null for the game being played. Closing the manual
- * closes its lookup.
+ * [gameKey]'s game ("game:<id>"), and its cards carry [gameTitle]; with nulls, the game being
+ * played's. Closing the manual closes its lookup.
  */
 @Composable
 fun LookupManual(
@@ -415,16 +415,19 @@ fun LookupManual(
     listState: LazyListState = rememberLazyListState(),
     closeLabel: String = "Close",
     gameKey: String?,
+    gameTitle: String?,
 ) {
     val status by reader.manualTaps.status.collectAsStateWithLifecycle()
     val hit by reader.manualTaps.hit.collectAsStateWithLifecycle()
     val lookup by reader.lookup.collectAsStateWithLifecycle()
     val popup by reader.popup.collectAsStateWithLifecycle()
     val onTop by reader.manualTaps.onTop.collectAsStateWithLifecycle()
-    DisposableEffect(file, gameKey) {
+    DisposableEffect(file, gameKey, gameTitle) {
         reader.manualGameKey = gameKey
+        reader.manualGameTitle = gameTitle
         onDispose {
             reader.manualGameKey = null
+            reader.manualGameTitle = null
             reader.manualClosed()
         }
     }

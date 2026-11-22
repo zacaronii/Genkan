@@ -243,6 +243,9 @@ class ReaderViewModel @Inject constructor(
      */
     var manualGameKey: String? = null
 
+    /** That game's title, for a card from its manual; null with the game being played. */
+    var manualGameTitle: String? = null
+
     /** The manual went: its lookup goes with it. */
     fun manualClosed() {
         manualTaps.closed()
@@ -352,16 +355,19 @@ class ReaderViewModel @Inject constructor(
 
     override fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
         val lookup = _lookup.value ?: return
-        // A card from the manual needs its page as the picture, not the game's screen: not yet.
-        if (lookup.lineId == MANUAL_LINE) {
-            manualTaps.say("Cards from the manual aren't made yet")
-            return
-        }
         val hit = shownResult?.hits?.getOrNull(index) ?: return
-        // The top screen as it is now: the game's scene for the card.
-        val picture = if (capture.running.value) capture.frame() else null
-        val voice = sentenceAudio(lookup.lineId)
+        // From a manual: its page around the line is the card's picture, and there's no voice.
+        val fromManual = lookup.lineId == MANUAL_LINE
+        val manualHit = manualTaps.hit.value
+        if (fromManual && manualHit == null) return
+        // Otherwise the top screen as it is now: the game's scene for the card.
+        val screen = if (!fromManual && capture.running.value) capture.frame() else null
+        val voice = if (fromManual) null else sentenceAudio(lookup.lineId)
+        val title = (if (fromManual) manualGameTitle else null) ?: session.game.value.title
         viewModelScope.launch {
+            val picture = if (fromManual) manualHit?.let { manualTaps.picture(it) } else screen
+            // The page wouldn't render again: the card still goes, without its picture.
+            if (fromManual && picture == null) manualTaps.say("Card made without a picture of the page")
             miner.mine(
                 MineSource(
                     hit = hit,
@@ -371,11 +377,13 @@ class ReaderViewModel @Inject constructor(
                     glossaryHtml = glossaryHtml,
                     firstGlossaryHtml = firstGlossaryHtml,
                     furiganaPlain = furiganaPlain,
-                    gameTitle = session.game.value.title,
+                    gameTitle = title,
                 ),
                 picture,
                 voice,
             )
+            // The page's crop is this card's alone once its file is written.
+            if (fromManual) picture?.recycle()
             refreshStates()
         }
     }
