@@ -197,8 +197,7 @@ private fun LibraryBody(
                 Hints.library(
                     gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor,
                     favourite = gridGame?.id in favourites,
-                ) +
-                    Hints.libraryAnywhere(failed = sync is SyncStatus.Failed),
+                ),
                 Modifier.padding(top = 12.dp),
             )
         }
@@ -455,7 +454,14 @@ private fun Header(title: String, sync: SyncStatus, subtitle: String?, onToggleV
             )
         }
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(syncLabel(sync), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            // What the pad does anywhere in the library, as on the shelf's console strip; the
+            // focused game's own hints are under the grid. While a sync runs, its state stands in.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                syncLabel(sync).takeIf { it.isNotEmpty() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                }
+                if (sync !is SyncStatus.Running) HintRow(Hints.libraryAnywhere(failed = sync is SyncStatus.Failed))
+            }
             ViewToggle(LibraryView.SHELF, onToggleView)
         }
     }

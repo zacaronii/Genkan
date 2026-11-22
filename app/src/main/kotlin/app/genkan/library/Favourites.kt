@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -34,6 +35,23 @@ interface FavouriteDao {
 
     @Query("DELETE FROM favourites WHERE romId = :romId")
     suspend fun remove(romId: Long)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favourites WHERE romId = :romId)")
+    suspend fun isFavourite(romId: Long): Boolean
+
+    /**
+     * Marks [romId] or unmarks it, deciding from what is stored, in one transaction: two quick
+     * presses mark and unmark, whatever the screen had caught up with. True when it is now marked.
+     */
+    @Transaction
+    suspend fun toggle(romId: Long, now: Long): Boolean {
+        if (isFavourite(romId)) {
+            remove(romId)
+            return false
+        }
+        add(FavouriteEntity(romId, now))
+        return true
+    }
 }
 
 /**

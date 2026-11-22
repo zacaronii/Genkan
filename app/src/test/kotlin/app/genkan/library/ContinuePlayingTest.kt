@@ -99,6 +99,20 @@ class ContinuePlayingTest {
     }
 
     @Test
+    fun before_the_player_moves_the_library_opens_at_the_strip_start_whatever_loaded_first() {
+        val pc = platform(-1)
+        val favourites = Favourites.platform(3)
+        // The PC shelf arrives first and the focus sits on it; then "Favourites" lands in front.
+        val onPc = ContinuePlaying.refocus(LibraryFocus(), emptyList(), listOf(pc, psx), moved = false)
+        assertEquals(LibraryFocus(), ContinuePlaying.refocus(onPc, listOf(pc, psx), listOf(favourites, pc, psx), moved = false))
+        // "Continue playing" arriving last still takes the focus to its first game.
+        assertEquals(
+            LibraryFocus(pane = LibraryPane.GAMES, platformIndex = 0, gameIndex = 0),
+            ContinuePlaying.refocus(LibraryFocus(), listOf(favourites, pc, psx), listOf(shelfPlatform, favourites, pc, psx), moved = false),
+        )
+    }
+
+    @Test
     fun once_moved_the_focus_stays_on_its_console_as_the_strip_shifts() {
         val onSnes = LibraryFocus(pane = LibraryPane.GAMES, platformIndex = 1, gameIndex = 4)
         // The shelf appears in front: SNES moves from 1 to 2, its game kept.

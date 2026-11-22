@@ -8,7 +8,6 @@ import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LocalShelves
 import app.genkan.library.FavouriteDao
-import app.genkan.library.FavouriteEntity
 import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
@@ -172,9 +171,9 @@ class GameDetailsViewModel @Inject constructor(
         val game = details.focus.game
         if (!Favourites.canMark(game)) return
         viewModelScope.launch {
-            if (details.favourite) favouriteDao.remove(game.id) else favouriteDao.add(FavouriteEntity(game.id, System.currentTimeMillis()))
+            val marked = favouriteDao.toggle(game.id, System.currentTimeMillis())
+            show(if (marked) "Added to favourites" else "Removed from favourites")
         }
-        show(if (details.favourite) "Removed from favourites" else "Added to favourites")
     }
 
     /** Deletes the focused game's download; the screen asks for a second tap first. */
