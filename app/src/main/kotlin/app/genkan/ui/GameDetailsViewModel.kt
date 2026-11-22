@@ -136,8 +136,8 @@ class GameDetailsViewModel @Inject constructor(
             if (focus == null) return@flatMapLatest flowOf(null)
             val game = focus.game
             val art = artFor(game)
-            // Play sessions and downloads exist only for RomM games; reading is kept per game key.
-            val play = if (LocalShelves.isLocal(game)) flowOf(null) else playSessions.totals(game.id)
+            // Play sessions exist for RomM and PC games, downloads only for RomM's; reading is kept per game key.
+            val play = if (LocalShelves.isLocal(game) && game.platformSlug != LocalShelves.PC_SLUG) flowOf(null) else playSessions.totals(game.id)
             combine(
                 play,
                 // Reading and lookups are both kept per game key.

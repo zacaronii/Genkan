@@ -9,7 +9,7 @@ import app.genkan.library.GameEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * One play of a RomM game. Open (no [endedAt]) while the game is running; kept in Room so a
+ * One play of a RomM game, or of a PC game (its negative local id; never sent to RomM). Open (no [endedAt]) while the game is running; kept in Room so a
  * session survives Genkan being killed mid-game, and so it waits here while RomM is unreachable.
  */
 @Entity(tableName = "play_sessions")
@@ -39,7 +39,8 @@ interface PlaySessionDao {
     @Query("UPDATE play_sessions SET endedAt = :endedAt, durationMs = :durationMs WHERE id = :id")
     suspend fun close(id: Long, endedAt: Long, durationMs: Long)
 
-    @Query("SELECT * FROM play_sessions WHERE endedAt IS NOT NULL AND NOT uploaded ORDER BY startedAt LIMIT :limit")
+    /** Finished plays RomM hasn't had yet; a PC game's (a negative id) is never RomM's. */
+    @Query("SELECT * FROM play_sessions WHERE endedAt IS NOT NULL AND NOT uploaded AND romId > 0 ORDER BY startedAt LIMIT :limit")
     suspend fun pending(limit: Int): List<PlaySessionEntity>
 
     @Query("UPDATE play_sessions SET uploaded = 1 WHERE id IN (:ids)")
@@ -64,6 +65,16 @@ interface PlaySessionDao {
            ORDER BY played.lastPlayed DESC LIMIT :limit""",
     )
     fun recentlyPlayed(minMs: Long, limit: Int): Flow<List<GameEntity>>
+
+    /**
+     * Every game's latest play of at least [minMs], newest first, RomM's and PC games' alike, for
+     * the order of "Continue playing" ([recentlyPlayed] gives RomM's games themselves).
+     */
+    @Query(
+        """SELECT romId, MAX(startedAt) AS lastPlayed FROM play_sessions
+           WHERE endedAt IS NOT NULL AND durationMs >= :minMs GROUP BY romId ORDER BY lastPlayed DESC""",
+    )
+    fun recentPlays(minMs: Long): Flow<List<GameLastPlayed>>
 
     /** Each game's latest finished play, for sorting by last played. */
     @Query("SELECT romId, MAX(startedAt) AS lastPlayed FROM play_sessions WHERE endedAt IS NOT NULL GROUP BY romId")

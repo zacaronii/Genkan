@@ -32,7 +32,7 @@ class LocalShelves @Inject constructor(
             entry(id = -(pkg.hashCode().toLong() and 0x7fffffff) - 1, platformId = APPS_ID, slug = APPS_SLUG, name = label, cover = null, fsName = pkg)
         }
         val platforms = listOfNotNull(
-            PlatformEntity(PC_ID, PC_SLUG, null, "PC (GameNative)", pc.size, null).takeIf { pc.isNotEmpty() },
+            PlatformEntity(PC_ID, PC_SLUG, null, "PC", pc.size, null).takeIf { pc.isNotEmpty() },
             PlatformEntity(APPS_ID, APPS_SLUG, null, "Apps", apps.size, null).takeIf { apps.isNotEmpty() },
         )
         Shelves(platforms, mapOf(PC_ID to pc, APPS_ID to apps))

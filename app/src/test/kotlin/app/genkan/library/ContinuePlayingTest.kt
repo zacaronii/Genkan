@@ -139,4 +139,42 @@ class ContinuePlayingTest {
         assertEquals(1, ContinuePlaying.keepGame(2, before, listOf(game(1), game(2))))
         assertEquals(0, ContinuePlaying.keepGame(1, before, emptyList()))
     }
+
+    private fun pcGame(id: Long) = GameEntity(id, -1, "genkan-pc", "PC game $id", "pc $id", "${-id}", 0, null, false)
+
+    private fun merged() = runBlocking {
+        ContinuePlaying.merge(
+            db.playSessions().recentPlays(ContinuePlaying.MIN_PLAY_MS).first(),
+            db.playSessions().recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES).first(),
+            listOf(pcGame(-1_000_001), pcGame(-1_000_002)),
+        ).map { it.id }
+    }
+
+    @Test
+    fun pc_games_take_their_place_among_the_consoles_by_their_last_play() = runBlocking {
+        db.library().upsertGames((1L..2L).map { game(it) })
+        played(1, startedAt = 100)
+        played(-1_000_001, startedAt = 200)
+        played(2, startedAt = 300)
+        // A PC game no longer on the PC shelf (uninstalled) is skipped.
+        played(-1_000_009, startedAt = 400)
+        assertEquals(listOf(2L, -1_000_001L, 1L), merged())
+    }
+
+    @Test
+    fun the_shelf_holds_at_most_its_size_across_both() = runBlocking {
+        db.library().upsertGames((1L..12L).map { game(it) })
+        (1L..12L).forEach { played(it, startedAt = it * 10) }
+        played(-1_000_002, startedAt = 1_000)
+        val shelf = merged()
+        assertEquals(ContinuePlaying.MAX_GAMES, shelf.size)
+        assertEquals(listOf(-1_000_002L, 12L, 11L), shelf.take(3))
+    }
+
+    @Test
+    fun a_pc_game_s_play_is_never_sent_to_romm() = runBlocking {
+        played(5, startedAt = 100)
+        played(-1_000_001, startedAt = 200)
+        assertEquals(listOf(5L), db.playSessions().pending(10).map { it.romId })
+    }
 }

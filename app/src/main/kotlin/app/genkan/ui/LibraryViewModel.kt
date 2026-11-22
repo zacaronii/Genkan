@@ -7,6 +7,7 @@ import app.genkan.download.DownloadQueue
 import app.genkan.download.DownloadState
 import app.genkan.input.PadKey
 import app.genkan.launch.GameLauncher
+import app.genkan.launch.GameNative
 import app.genkan.launch.EmulatorCatalog
 import app.genkan.launch.EmulatorDef
 import android.app.ActivityManager
@@ -153,9 +154,14 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { viewSettings.setView(next) }
     }
 
-    /** The games on the "Continue playing" shelf, most recently played first. */
+    /** The games on the "Continue playing" shelf, RomM's and PC games, most recently played first. */
     private val recent: StateFlow<List<GameEntity>> =
-        playSessions.recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES)
+        combine(
+            playSessions.recentPlays(ContinuePlaying.MIN_PLAY_MS),
+            playSessions.recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES),
+            local,
+        ) { plays, romm, shelves -> ContinuePlaying.merge(plays, romm, shelves.games[LocalShelves.PC_ID].orEmpty()) }
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** The games on the "Favourites" shelf, by title. */
@@ -394,6 +400,8 @@ class LibraryViewModel @Inject constructor(
             // PC games read their text through the hook kit on D:; refresh it while the game loads.
             if (game.platformSlug == LocalShelves.PC_SLUG && hasStorageAccess()) viewModelScope.launch { hookKit.install() }
             if (localShelves.launch(game)) {
+                // A PC game's play is timed like an emulator's, under its local id, for "Continue playing".
+                if (game.platformSlug == LocalShelves.PC_SLUG) viewModelScope.launch { sessionTracker.begin(game.id, GameNative.PACKAGE) }
                 nowPlaying.started(game.id, game.name, game.platformSlug)
                 show("Opening ${game.name}…")
             } else {

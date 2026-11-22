@@ -99,6 +99,20 @@ class ScreenshotTest {
         )
     }
 
+    /** "Continue playing" with a PC game played last: its plain tile first, the consoles' cases after it. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfContinuePcFirst() = shoot("shelf_continue_pc_first", TOP_PIXELS) {
+        library(
+            LibraryView.SHELF,
+            platformIndex = 0,
+            listOf(FakeData.pcGame) + FakeData.psxGames.take(3) + FakeData.dsGames.take(2),
+            gameIndex = 1,
+            staticMedia = true,
+            platforms = listOf(app.genkan.library.ContinuePlaying.platform(6)) + FakeData.platforms,
+        )
+    }
+
     /** DS cases, narrower and rounder. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -202,10 +216,11 @@ class ScreenshotTest {
         order: LibraryOrder = LibraryOrder(),
         orderPanel: Int? = null,
         pane: LibraryPane = LibraryPane.GAMES,
+        platforms: List<PlatformEntity> = FakeData.platforms,
     ) {
         LibraryContent(
             view = view,
-            platforms = FakeData.platforms,
+            platforms = platforms,
             games = games,
             focus = LibraryFocus(pane = pane, platformIndex = platformIndex, gameIndex = gameIndex),
             sync = SyncStatus.Done(games = 64),
@@ -414,7 +429,7 @@ internal object FakeData {
         PlatformEntity(2, "psx", "psx", "PlayStation", 8, null),
         PlatformEntity(3, "psp", "psp", "PlayStation Portable", 14, null),
         PlatformEntity(4, "nds", "nds", "Nintendo DS", 9, null),
-        PlatformEntity(-1, "genkan-pc", null, "PC (GameNative)", 3, null),
+        PlatformEntity(-1, "genkan-pc", null, "PC", 3, null),
         PlatformEntity(-2, "genkan-apps", null, "Apps", 5, null),
     )
 
@@ -467,6 +482,19 @@ internal object FakeData {
             physicalPath = "/physical/disc/$index.png",
         )
     }
+
+    /** A PC game from GameNative's export: a plain 1:1 tile with no case. */
+    val pcGame = GameEntity(
+        id = -1_000_001L,
+        platformId = -1,
+        platformSlug = "genkan-pc",
+        name = "Northern Lights Inn",
+        sortTitle = "northern lights inn",
+        fsName = "1000001",
+        fsSizeBytes = 0,
+        coverPath = "/covers/pc/0.png",
+        hasMultipleFiles = false,
+    )
 
     private val dsTitles = listOf(
         "Pocket Atelier", "Sky Whale Courier", "Mystery of Room 7", "Picross Shrine", "Little Fox Bakery",
