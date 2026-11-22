@@ -43,6 +43,8 @@ object RomMApiFactory {
         }
 
         val httpClient = client.newBuilder()
+            // Outermost, so a retry goes through the token and timeout interceptors again.
+            .addInterceptor(RomMRetryInterceptor())
             .addInterceptor(authInterceptor)
             .addInterceptor(downloadTimeoutInterceptor)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)

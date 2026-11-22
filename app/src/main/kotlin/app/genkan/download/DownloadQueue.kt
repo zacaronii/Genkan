@@ -5,6 +5,7 @@ import android.os.Environment
 import android.util.Log
 import app.genkan.library.GameEntity
 import app.genkan.romm.RomMApiFactory
+import app.genkan.romm.RomMRetryInterceptor
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMUnauthorizedException
 import app.genkan.romm.describeFailure
@@ -37,7 +38,9 @@ class DownloadQueue @Inject constructor(
     httpClient: OkHttpClient,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val downloader = Downloader(httpClient)
+    // The file requests carry the token too, so they can meet the same 5xx; the retry only ever
+    // repeats a request whose answer was refused, never a body already streaming.
+    private val downloader = Downloader(httpClient.newBuilder().addInterceptor(RomMRetryInterceptor()).build())
 
     val downloads: StateFlow<Map<Long, DownloadEntity>> =
         dao.all().map { rows -> rows.associateBy { it.romId } }
@@ -94,9 +97,12 @@ class DownloadQueue @Inject constructor(
         dao.delete(romId)
     }
 
+    /** Whether anything is queued or running. */
+    suspend fun hasWork(): Boolean = dao.next() != null
+
     /**
      * Works through the queue until it is empty. Called by [DownloadService]; [onProgress] feeds
-     * its notification.
+     * its notification. A game that fails is marked FAILED and the next one runs.
      */
     suspend fun runQueue(onProgress: (DownloadEntity) -> Unit) {
         dao.requeueInterrupted()
