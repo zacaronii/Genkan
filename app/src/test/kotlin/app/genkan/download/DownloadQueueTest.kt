@@ -69,7 +69,7 @@ class DownloadQueueTest {
 }
 
 /** The downloads table in memory. */
-private class FakeDownloadDao : DownloadDao {
+internal class FakeDownloadDao : DownloadDao {
     private val rows = MutableStateFlow<Map<Long, DownloadEntity>>(emptyMap())
 
     override fun all(): Flow<List<DownloadEntity>> = MutableStateFlow(emptyList())
