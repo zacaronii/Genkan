@@ -461,9 +461,9 @@ class ScreenshotTest {
 
     private companion object {
         const val TOP_SCREEN = "w832dp-h468dp-land-369dpi"
-        const val BOTTOM_SCREEN = "w468dp-h538dp-port-369dpi"
+        const val BOTTOM_SCREEN = "w538dp-h468dp-land-369dpi"
         val TOP_PIXELS = 1920 to 1080
-        val BOTTOM_PIXELS = 1080 to 1240
+        val BOTTOM_PIXELS = 1240 to 1080
     }
 }
 
