@@ -60,6 +60,23 @@ jobs:
           sudo apt-get install -y -q gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
           tools/hookbridge/kit.sh
 
+      # Compares the screenshot tests with the committed PNGs (a shot passes while under 1% of its
+      # pixels differ). It doesn't fail the build yet: first the numbers, then a decision. It runs
+      # before the step below, whose recording rewrites the PNGs.
+      - name: Compare screenshots (not failing the build yet)
+        continue-on-error: true
+        run: ./gradlew :app:verifyRoborazziDebug
+
+      - name: Upload screenshot comparisons
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-compare
+          path: |
+            app/build/outputs/roborazzi/*_compare.png
+            app/build/test-results/testDebugUnitTest/TEST-app.genkan.ui.ScreenshotTest.xml
+          if-no-files-found: ignore
+
       # recordRoborazziDebug runs the unit tests with the screenshot tests recording, so a
       # changed screen never fails the build; the PNGs are uploaded below for review.
       - name: Build, test and lint
