@@ -60,15 +60,14 @@ jobs:
           sudo apt-get install -y -q gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
           tools/hookbridge/kit.sh
 
-      # Compares the screenshot tests with the committed PNGs (a shot passes while under 1% of its
-      # pixels differ) and fails the build when one differs: a changed screen comes with its
-      # re-recorded PNG (./gradlew :app:recordRoborazziDebug). It runs before the step below,
-      # whose recording rewrites the PNGs.
-      - name: Compare screenshots
-        run: ./gradlew :app:verifyRoborazziDebug
+      # One run of the unit tests: verifyRoborazziDebug runs every one of them, with the screenshot
+      # tests comparing against the committed PNGs (a shot passes while under 1% of its pixels
+      # differ). A changed screen comes with its re-recorded PNG (./gradlew :app:recordRoborazziDebug).
+      - name: Build, test and lint
+        run: ./gradlew assembleDebug lintDebug :app:verifyRoborazziDebug
 
       - name: Upload screenshot comparisons
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: screenshot-compare
@@ -77,21 +76,8 @@ jobs:
             app/build/test-results/testDebugUnitTest/TEST-app.genkan.ui.ScreenshotTest.xml
           if-no-files-found: ignore
 
-      # recordRoborazziDebug runs the unit tests with the screenshot tests recording, so a
-      # changed screen never fails the build; the PNGs are uploaded below for review.
-      - name: Build, test and lint
-        run: ./gradlew assembleDebug testDebugUnitTest :app:recordRoborazziDebug lintDebug
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload screenshots
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: app/src/test/screenshots/*.png
-          if-no-files-found: warn

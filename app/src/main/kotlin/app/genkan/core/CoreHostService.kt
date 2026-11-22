@@ -15,9 +15,9 @@ class CoreHostService : Service() {
     @Inject lateinit var audio: GameAudioRecorder
 
     private val binder = object : ICoreHost.Stub() {
-        override fun attach(session: ICoreSession, romId: Long, coreId: String) {
+        override fun attach(session: ICoreSession, romId: Long, coreId: String, look: String) {
             val core = CoreCatalog.cores.firstOrNull { it.id == coreId } ?: return
-            player.attach(session, romId, core)
+            player.attach(session, romId, core, ScreenLook.of(look))
         }
 
         override fun audio(pcm: ByteArray, sampleRate: Int, endMs: Long) {

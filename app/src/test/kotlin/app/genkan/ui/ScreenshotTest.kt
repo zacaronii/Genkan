@@ -256,6 +256,13 @@ class ScreenshotTest {
         GameDetailsContent(details = FakeData.fullDetails, onShowReader = {})
     }
 
+    /** A game with the built-in player on: the look button, taking its console's. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsLook() = shoot("game_details_look", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP)), onShowReader = {})
+    }
+
     /** A PSP game whose text PPSSPP's hook reads: the chip under its details line. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
@@ -315,6 +322,16 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = TOP_SCREEN)
     fun settingsLibrary() = shootSettings(0, SettingsFocus(pane = SettingsPane.GROUPS, group = 0))
+
+    /** The screen look page: the defaults, with the GBA and PSP chosen. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun screenLook() = shoot("screen_look", TOP_PIXELS) {
+        ScreenLookContent(
+            consoles = mapOf("gba" to app.genkan.core.ScreenLook.SHARP, "psp" to app.genkan.core.ScreenLook.CUT),
+            onStep = {},
+        )
+    }
 
     @Test
     @Config(qualifiers = TOP_SCREEN)

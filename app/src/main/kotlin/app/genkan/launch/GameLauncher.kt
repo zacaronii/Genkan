@@ -13,6 +13,7 @@ import app.genkan.core.CoreCatalog
 import app.genkan.core.CoreDef
 import app.genkan.core.CoreFirmware
 import app.genkan.core.PlayerSettings
+import app.genkan.core.ScreenLooks
 import app.genkan.download.DownloadEntity
 import app.genkan.library.GameEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -55,6 +56,7 @@ class GameLauncher @Inject constructor(
     private val playerSettings: PlayerSettings,
     private val player: BuiltInPlayer,
     private val firmware: CoreFirmware,
+    private val screenLooks: ScreenLooks,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -136,6 +138,7 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_ROM, rom.absolutePath)
             .putExtra(CoreActivity.EXTRA_ROM_ID, game.id)
             .putExtra(CoreActivity.EXTRA_PLATFORM, game.platformSlug)
+            .putExtra(CoreActivity.EXTRA_LOOK, screenLooks.forLaunch(game.id, game.platformSlug).name)
         return LaunchPlan.Ready(builtIn = true) {
             Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
             try {

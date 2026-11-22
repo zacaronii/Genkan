@@ -66,6 +66,7 @@ object SettingsGroups {
             title = "Playing",
             rows = listOf(
                 SettingsRow.Switch("Built-in player", SwitchKey.BUILT_IN_PLAYER, SetupAction.BUILT_IN_PLAYER),
+                SettingsRow.Button("Screen look", SetupAction.SCREEN_LOOK),
                 SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
                 SettingsRow.Button("Emulator saves through Shizuku", SetupAction.SHIZUKU),
                 SettingsRow.Button("Usage access for play time", SetupAction.USAGE_ACCESS),

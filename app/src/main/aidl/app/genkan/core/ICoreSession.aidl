@@ -46,4 +46,6 @@ interface ICoreSession {
 
     /** The frame the last captureTo kept, at the core's own size, as frame() gives it, or null. */
     Bundle keptFrame() = 12;
+    /** Draws the game with the ScreenLook named [look] from now on (this play only). */
+    oneway void setLook(String look) = 13;
 }
