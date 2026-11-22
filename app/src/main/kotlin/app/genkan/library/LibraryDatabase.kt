@@ -183,20 +183,21 @@ interface LibraryDao {
         ReaderLineEntity::class, HookThreadEntity::class, OcrRegion::class,
         OutboxCard::class, MinedWord::class,
         ReadingSessionEntity::class, ReadingDailyEntity::class, ReadingSeenEntity::class, SaveFileEntity::class,
-        WordStatusEntity::class, LookupCountEntity::class, AnkiWordEntity::class],
-    version = 16,
+        WordStatusEntity::class, LookupCountEntity::class, AnkiWordEntity::class, FavouriteEntity::class],
+    version = 17,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15),
-        AutoMigration(from = 15, to = 16)],
+        AutoMigration(from = 15, to = 16), AutoMigration(from = 16, to = 17)],
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun library(): LibraryDao
     abstract fun downloads(): DownloadDao
     abstract fun playSessions(): PlaySessionDao
+    abstract fun favourites(): FavouriteDao
     abstract fun dictionaries(): DictionaryDao
     abstract fun reader(): ReaderDao
     abstract fun ocrRegions(): OcrRegionDao

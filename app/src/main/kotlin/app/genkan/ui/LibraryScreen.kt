@@ -69,7 +69,9 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
+    val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
     LibraryContent(
+        favourites = favourites,
         view = view,
         platforms = platforms,
         games = games,
@@ -117,12 +119,14 @@ fun LibraryContent(
     insert: InsertState? = null,
     onSkipInsert: () -> Unit = {},
     staticInsertProgress: Float? = null,
+    /** The games marked as favourites, for what R2 says. */
+    favourites: Set<Long> = emptySet(),
 ) {
     Box(Modifier.fillMaxSize()) {
         // While the insert animation has the disc or cartridge, the shelf's own goes back in its case.
         LibraryBody(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
-            onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia,
+            onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
         )
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
     }
@@ -145,9 +149,10 @@ private fun LibraryBody(
     onSelectGame: (Int) -> Unit,
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
+    favourites: Set<Long>,
 ) {
     if (view == LibraryView.SHELF) {
-        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia)
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites)
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -189,7 +194,10 @@ private fun LibraryBody(
             }
             val gridGame = games.getOrNull(focus.gameIndex)
             HintRow(
-                Hints.library(gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor) +
+                Hints.library(
+                    gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor,
+                    favourite = gridGame?.id in favourites,
+                ) +
                     Hints.libraryAnywhere(failed = sync is SyncStatus.Failed),
                 Modifier.padding(top = 12.dp),
             )
@@ -243,6 +251,7 @@ private fun ShelfLibrary(
     onSelectGame: (Int) -> Unit,
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
+    favourites: Set<Long>,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -285,6 +294,7 @@ private fun ShelfLibrary(
             notice = notice,
             onShelf = focus.pane == LibraryPane.GAMES,
             emulatorFor = emulatorFor,
+            favourite = game?.id in favourites,
         )
     }
 }
@@ -387,6 +397,7 @@ private fun HintBar(
     notice: String?,
     onShelf: Boolean,
     emulatorFor: (String) -> String?,
+    favourite: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -406,7 +417,7 @@ private fun HintBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        HintRow(Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor), Modifier.padding(start = 16.dp))
+        HintRow(Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite), Modifier.padding(start = 16.dp))
     }
 }
 

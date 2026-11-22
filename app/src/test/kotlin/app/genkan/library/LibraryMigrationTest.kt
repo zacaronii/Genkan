@@ -23,6 +23,8 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36], application = Application::class)
 class LibraryMigrationTest {
+    // Each test builds its starting version from Room's exported schema, then opens the real
+    // database at its current version, which runs the auto-migrations from there.
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
@@ -49,6 +51,35 @@ class LibraryMigrationTest {
                     assertEquals(0, row.getInt(5))
                     assertTrue(row.isNull(6))
                 }
+        } finally {
+            library.close()
+        }
+    }
+
+    /** 16 to 17 adds the favourites table: the games and play sessions stay, and it starts empty. */
+    @Test
+    fun favourites_arrive_empty_from_16_to_17() {
+        val file = context.getDatabasePath(DB).apply { parentFile?.mkdirs(); delete() }
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            createFromSchema(db, 16)
+            db.execSQL(
+                "INSERT INTO games (id, platformId, platformSlug, name, sortTitle, fsName, fsSizeBytes, coverPath, " +
+                    "hasMultipleFiles) VALUES (1, 2, 'psx', 'Example Quest', 'example quest', NULL, 10, NULL, 0)",
+            )
+            db.execSQL("INSERT INTO play_sessions (romId, emulatorPackage, startedAt, endedAt, durationMs, uploaded) VALUES (1, 'x', 5, 65005, 65000, 0)")
+        }
+        val library = Room.databaseBuilder(context, LibraryDatabase::class.java, DB).allowMainThreadQueries().build()
+        try {
+            val db = library.openHelper.readableDatabase
+            db.query("SELECT COUNT(*) FROM games").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+            db.query("SELECT COUNT(*) FROM play_sessions").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+            db.query("SELECT COUNT(*) FROM favourites").use { assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0)) }
+            library.openHelper.writableDatabase.execSQL("INSERT INTO favourites (romId, addedAt) VALUES (1, 7)")
+            db.query("SELECT romId, addedAt FROM favourites").use { row ->
+                assertTrue(row.moveToFirst())
+                assertEquals(1L, row.getLong(0))
+                assertEquals(7L, row.getLong(1))
+            }
         } finally {
             library.close()
         }

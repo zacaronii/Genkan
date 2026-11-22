@@ -7,6 +7,9 @@ import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LocalShelves
+import app.genkan.library.FavouriteDao
+import app.genkan.library.FavouriteEntity
+import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
 import app.genkan.play.PlaySessionDao
@@ -68,6 +71,8 @@ data class GameDetails(
     val download: DownloadEntity?,
     val save: SaveStatus? = null,
     val art: GameArt = GameArt(),
+    /** Whether the game is on the "Favourites" shelf. */
+    val favourite: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -79,6 +84,7 @@ class GameDetailsViewModel @Inject constructor(
     playSessions: PlaySessionDao,
     readingDao: ReadingDao,
     private val downloadQueue: DownloadQueue,
+    private val favouriteDao: FavouriteDao,
     saveSync: SaveSync,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -115,7 +121,8 @@ class GameDetailsViewModel @Inject constructor(
                 readingDao.gameTotals("game:${game.id}"),
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
-            ) { p, r, d, s -> GameDetails(focus, p, r, d, s, art) }
+                favouriteDao.ids().map { game.id in it },
+            ) { p, r, d, s, f -> GameDetails(focus, p, r, d, s, art, f) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -157,6 +164,17 @@ class GameDetailsViewModel @Inject constructor(
     /** Play, download or cancel, exactly as A on the top screen would. */
     fun play() {
         details.value?.focus?.game?.let { focusedGame.requestPlay(it.id) }
+    }
+
+    /** Marks the focused game as a favourite, or unmarks it. */
+    fun toggleFavourite() {
+        val details = details.value ?: return
+        val game = details.focus.game
+        if (!Favourites.canMark(game)) return
+        viewModelScope.launch {
+            if (details.favourite) favouriteDao.remove(game.id) else favouriteDao.add(FavouriteEntity(game.id, System.currentTimeMillis()))
+        }
+        show(if (details.favourite) "Removed from favourites" else "Added to favourites")
     }
 
     /** Deletes the focused game's download; the screen asks for a second tap first. */
