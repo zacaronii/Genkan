@@ -2,6 +2,7 @@ package app.genkan.yomikata
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -54,10 +55,16 @@ class LayoutsTest {
             // The entry's tables, in the order it lists them, from the vector's path -> text.
             val tables = vector.optJSONObject("tables")
             val paths = entry.optJSONArray("tables")
-            val table = paths?.let { p -> CharTable.parse(List(p.length()) { tables!!.getString(p.getString(it)) }) }
+            val entryFiles = paths?.let { p -> List(p.length()) { tables!!.getString(p.getString(it)) } }.orEmpty()
+            val table = paths?.let { CharTable.parse(entryFiles) }
+            // A layout's own set: the entry's tables, then the set's files.
+            val withSet = { set: List<String> -> CharTable.parse(entryFiles + set.map { tables!!.getString(it) }) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
             val cleanup = CleanupStep.parse(entry.optJSONArray("cleanup"))
-            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls, cleanup)
+            // One layout, or a version's several: the first whose own `when` is true is read.
+            val layout = vector.optJSONObject("layout")
+                ?: vector.getJSONArray("layouts").let { a -> Layouts.liveOf(List(a.length()) { a.getJSONObject(it) }, memory(vector))!! }
+            val read = Layouts.read(layout, memory(vector), entry.optInt("unit", 2), table, controls, cleanup, withSet)
             val expected = vector.getJSONObject("expected")
             val actual = asReference(read)
             val name = vector.getString("name")
@@ -82,6 +89,37 @@ class LayoutsTest {
 
     private fun message(spec: String, memory: LayoutMemory): String? =
         Layouts.read(JSONObject("{\"message\": $spec}"), memory).message
+
+    @Test
+    fun `a 36 KB paged table text with its cursor on the last page reads that page`() {
+        // A game that keeps a whole scene's script and a cursor into it (Persona 2's 36 KB): the
+        // walk to the cursor goes code by code, so a slow path here was a big cost every read.
+        val table = CharTable.parse(listOf("0100=あ\n0200=い\n0300=う\n/FF00\n"))
+        val page = byteArrayOf(1, 0, 2, 0, 1, 0)
+        val last = byteArrayOf(3, 0, 3, 0, 2, 0)
+        val breakCode = byteArrayOf(0x11, 0x03)
+        // A 4-byte code (lead 0512, two argument bytes) inside each page, skipped whole.
+        val code = byteArrayOf(0x05, 0x12, 0x11, 0x03)
+        val buffer = java.io.ByteArrayOutputStream()
+        while (buffer.size() < 36 * 1024 - 32) { buffer.write(page); buffer.write(code); buffer.write(breakCode) }
+        val lastAt = buffer.size()
+        buffer.write(last); buffer.write(breakCode)
+        val text = buffer.toByteArray().copyOf(36 * 1024)
+        val cursorAt = 0x10000L + lastAt + 2
+        val memory = LayoutMemory { address, size ->
+            when {
+                address >= 0x10000 && address + size <= 0x10000 + text.size -> text.copyOfRange((address - 0x10000).toInt(), (address - 0x10000).toInt() + size)
+                address == 0x100L && size == 4 -> java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(cursorAt.toInt()).array()
+                else -> throw LayoutError("outside")
+            }
+        }
+        val layout = JSONObject(
+            """{"message": {"address": "0x10000", "charset": "table", "max_bytes": ${36 * 1024},
+            "pages": {"break": "1103", "cursor": {"address": "0x100", "type": "u32"}}, "codes": {"0512": 4}}}""",
+        )
+        // The code's argument bytes (1103) are skipped with it, not taken for a page break.
+        assertEquals("ううい", Layouts.read(layout, memory, 2, table).message)
+    }
 
     @Test
     fun `a huge length is clamped, not turned negative`() {
@@ -148,6 +186,38 @@ class LayoutsTest {
             it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40", "type": "u32"}}"""))
         }
         assertTrue(Layouts.understood(paged))
+        // Codes with a table (controls that take arguments), a script page, a layout's table sets.
+        val scripted = JSONObject(known.toString()).also {
+            it.getJSONObject("message").put("charset", "table").remove("rows")
+            it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 4}"""))
+            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32", "counts": "codes"}, "texts": "rows"}"""))
+            it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
+        }
+        assertTrue(Layouts.understood(scripted))
+        // A code's whole length may be up to 32 bytes (a control with many argument words).
+        assertTrue(Layouts.understood(JSONObject(scripted.toString()).also { it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 32}""")) }))
+        // A script's `rest` is a whole number of codes from 1 to 16.
+        fun rested(rest: Any) = JSONObject(scripted.toString()).also { it.getJSONObject("message").getJSONObject("script").put("rest", rest) }
+        assertTrue(Layouts.understood(rested(1)) && Layouts.understood(rested(16)))
+        for (rest in listOf<Any>(0, 17, -1, 2.5, "2")) assertFalse("rest $rest", Layouts.understood(rested(rest)))
+        // A script without open is one text from its start; texts and rest need open.
+        fun unopened(edit: (JSONObject) -> Unit = {}) = JSONObject(scripted.toString()).also {
+            it.getJSONObject("message").getJSONObject("script").remove("open")
+            it.getJSONObject("message").getJSONObject("script").remove("texts")
+            edit(it.getJSONObject("message").getJSONObject("script"))
+        }
+        assertTrue(Layouts.understood(unopened()))
+        assertFalse(Layouts.understood(unopened { it.put("texts", "rows") }))
+        assertFalse(Layouts.understood(unopened { it.put("rest", 2) }))
+        // rows.pointers may only be true, and not with rows.lengths.
+        fun pointed(value: Any, lengths: Boolean = false) = JSONObject(known.toString()).also {
+            val rows = it.getJSONObject("message").getJSONObject("rows").put("pointers", value)
+            if (!lengths) rows.remove("lengths")
+        }
+        assertTrue(Layouts.understood(pointed(true)))
+        assertFalse(Layouts.understood(pointed(false)))
+        assertFalse(Layouts.understood(pointed("true")))
+        assertFalse(Layouts.understood(pointed(true, lengths = true)))
         fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
         val unknown = listOf(
             changed { it.put("typing_speed", JSONObject()) },
@@ -174,10 +244,28 @@ class LayoutsTest {
                 }
             }.toTypedArray(),
             // Codes: whole hex leads of 1-4 bytes, integer lengths from the lead's up to 16, never with a table.
-            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 17}""", """{"0102030405": 6}""").map { codes ->
+            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 33}""", """{"0102030405": 6}""").map { codes ->
                 changed { it.getJSONObject("message").put("codes", JSONObject(codes)) }
             }.toTypedArray(),
-            changed { it.getJSONObject("message").put("charset", "table").put("codes", JSONObject("""{"03": 2}""")) },
+            // A script only with a table, without rows; open whole hex bytes; offset a number.
+            changed { it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40"}}""")) },
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8", "offset": {"address": "0x40"}}"""))
+            },
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "counts": "characters"}}"""))
+            },
+            // texts, when given, is "rows".
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40"}, "texts": "columns"}"""))
+            },
+            // A layout's tables: a number and at least one set of files, by decimal values.
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {}}""")) },
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {"x1": ["a.tbl"]}}""")) },
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {"1": []}}""")) },
         )
         for (layout in unknown) {
             assertEquals(layout.toString(), false, Layouts.understood(layout))
@@ -195,6 +283,28 @@ class LayoutsTest {
         assertEquals(false, LayoutRead(choosing = true).asking)
         assertEquals(true, LayoutRead(choosing = true, choices = listOf("はい", "いいえ")).asking)
         assertEquals(false, LayoutRead(choosing = false, choices = listOf("はい")).asking)
+    }
+
+    @Test
+    fun `a version's layouts come in the entry's order, those naming it before the general ones`() {
+        val a = JSONObject("""{"message": {"address": "0x0", "charset": "utf8", "max_bytes": 4}}""")
+        val b = JSONObject("""{"message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val mine = JSONObject("""{"versions": ["aa"], "message": {"address": "0x20", "charset": "utf8", "max_bytes": 4}}""")
+        val unknown = JSONObject("""{"message": {"address": "0x30", "charset": "utf8", "max_bytes": 4}, "typing_speed": {}}""")
+        assertEquals(listOf(a, b), Layouts.layoutsFor(listOf(a, unknown, mine, b), null))
+        assertEquals(listOf(mine), Layouts.layoutsFor(listOf(a, mine, b), "aa"))
+        // Parsed anew: compared as text (JSONObject compares by identity).
+        assertEquals(listOf(a, b).map { it.toString() }, Layouts.parseLayouts(org.json.JSONArray(listOf(a, b)).toString()).map { it.toString() })
+        assertEquals(listOf(a.toString()), Layouts.parseLayouts(a.toString()).map { it.toString() })
+    }
+
+    @Test
+    fun `a layout whose when can't be read is passed over`() {
+        val unread = JSONObject("""{"when": {"address": "0x9000", "equals": 1}, "message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val second = JSONObject("""{"when": {"address": "0x10", "equals": 65}, "message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val memory = bytesAt(0x10, 'A'.code, 'B'.code, 0, 0)
+        assertEquals(false, Layouts.live(unread, memory))
+        assertEquals(second, Layouts.liveOf(listOf(unread, second), memory))
     }
 
     @Test

@@ -58,17 +58,37 @@ data class LayoutRead(
 object Layouts {
 
     /** The layout for this version: one that lists [exeSha1], else the first that lists none. */
-    fun pick(layouts: List<JSONObject>, exeSha1: String?): JSONObject? {
-        var general: JSONObject? = null
-        for (layout in layouts) {
-            // A layout with a key this reader doesn't know is passed over, not half-read.
-            if (!understood(layout)) continue
-            val versions = layout.optJSONArray("versions").strings()
-            if (exeSha1 != null && exeSha1 in versions) return layout
-            if (versions.isEmpty() && general == null) general = layout
-        }
-        return general
+    fun pick(layouts: List<JSONObject>, exeSha1: String?): JSONObject? = layoutsFor(layouts, exeSha1).firstOrNull()
+
+    /**
+     * A version's layouts, in the entry's order: those naming [exeSha1], else those naming no
+     * versions (docs/format.md, "Which layout"). Usually one; a game that loads a program per
+     * chapter has one per program, and [liveOf] picks among them on every read.
+     */
+    fun layoutsFor(layouts: List<JSONObject>, exeSha1: String?): List<JSONObject> {
+        // A layout with a key this reader doesn't know is passed over, not half-read.
+        val known = layouts.filter(::understood)
+        return known.filter { exeSha1 != null && exeSha1 in it.optJSONArray("versions").strings() }
+            .ifEmpty { known.filter { it.optJSONArray("versions").strings().isEmpty() } }
     }
+
+    /** One layout, or a JSON array of a version's layouts, as a list. */
+    fun parseLayouts(json: String): List<JSONObject> {
+        val text = json.trim()
+        if (text.isEmpty()) return emptyList()
+        return if (text.startsWith("[")) JSONArray(text).let { a -> List(a.length()) { a.getJSONObject(it) } } else listOf(JSONObject(text))
+    }
+
+    /** [layoutsFor] for a release, as [pick] does with an entry. */
+    fun layoutsFor(entry: CatalogEntry, releaseId: String?): List<JSONObject> = layoutsFor(entry.layouts, versionFor(entry, releaseId))
+
+    /**
+     * Which of a version's [layouts] to read now: the first whose own `when` is true, or that has
+     * none; one whose `when` can't be read is passed over. With none true, the first: reading it
+     * gives what a false `when` gives.
+     */
+    fun liveOf(layouts: List<JSONObject>, memory: LayoutMemory): JSONObject? =
+        layouts.firstOrNull { live(it, memory) != false } ?: layouts.firstOrNull()
 
     /**
      * The layout's own `when` as it reads now: null when the layout has none, false when it is
@@ -96,6 +116,7 @@ object Layouts {
         if (!layout.keySet().all { it in FIELDS || it in OTHER_KEYS }) return false
         if (layout.optString("endian", "little") !in setOf("little", "big")) return false
         if (layout.has("when") && !numberOk(layout.optJSONObject("when"), NUMBER_KEYS)) return false
+        if (layout.has("tables") && !switchOk(layout.optJSONObject("tables"))) return false
         for ((key, kind) in FIELDS) {
             if (!layout.has(key)) continue
             val spec = layout.optJSONObject(key) ?: return false
@@ -107,9 +128,9 @@ object Layouts {
 
     private fun JSONObject.keySet(): Set<String> = keys().asSequence().toSet()
 
-    private fun numberOk(spec: JSONObject?, keys: Set<String>): Boolean =
+    private fun numberOk(spec: JSONObject?, keys: Set<String>, counts: Set<String> = setOf("bytes", "characters")): Boolean =
         spec != null && spec.keySet().all { it in keys } && spec.optString("type", "u8") in SIZES &&
-            spec.optString("counts", "bytes") in setOf("bytes", "characters") &&
+            spec.optString("counts", "bytes") in counts &&
             (!spec.has("mask") || spec.opt("mask").let { (it is Int && it >= 0) || (it is Long && it >= 0) })
 
     private fun textOk(spec: JSONObject): Boolean {
@@ -117,13 +138,27 @@ object Layouts {
         if (spec.has("length") && !numberOk(spec.optJSONObject("length"), LENGTH_KEYS)) return false
         if (spec.has("when") && !numberOk(spec.optJSONObject("when"), NUMBER_KEYS)) return false
         if (spec.has("codes")) {
-            // Each lead 1-4 whole hex bytes; each length an integer from the lead's own up to 16.
+            // Each lead 1-4 whole hex bytes; each length an integer from the lead's own up to 32.
             val codes = spec.optJSONObject("codes") ?: return false
-            if (spec.optString("charset") == "table" || codes.length() == 0) return false
+            if (codes.length() == 0) return false
             for (lead in codes.keys()) {
                 val n = codes.opt(lead)
-                if (!LEAD.matches(lead) || n !is Int || n < lead.length / 2 || n > 16) return false
+                if (!LEAD.matches(lead) || n !is Int || n < lead.length / 2 || n > 32) return false
             }
+        }
+        if (spec.has("script")) {
+            // Only with a table, never with rows, pages, a terminator or a length; open is whole
+            // hex bytes and offset a number.
+            val script = spec.optJSONObject("script") ?: return false
+            if (spec.optString("charset") != "table" || listOf("rows", "pages", "terminator", "length").any(spec::has)) return false
+            // offset, and optionally open; texts (whose only value is "rows") and rest need open.
+            if (!script.has("offset") || !setOf("open", "offset", "texts", "rest").containsAll(script.keySet())) return false
+            if (!script.has("open") && (script.has("texts") || script.has("rest"))) return false
+            if (script.has("rest") && script.opt("rest").let { it !is Int || it !in 1..16 }) return false
+            if (script.has("texts") && script.opt("texts") != "rows") return false
+            if (script.has("open") && (script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
+            // The offset counts bytes, or codes of the entry's unit.
+            if (!numberOk(script.optJSONObject("offset"), LENGTH_KEYS, setOf("bytes", "codes"))) return false
         }
         if (spec.has("pages")) {
             // Pages and rows never go together; the break is whole hex bytes.
@@ -134,21 +169,42 @@ object Layouts {
         }
         if (!spec.has("rows")) return true
         val rows = spec.optJSONObject("rows") ?: return false
-        if (!rows.keySet().all { it in setOf("count", "stride", "lengths") }) return false
+        if (!rows.keySet().all { it in setOf("count", "stride", "lengths", "pointers") }) return false
+        // pointers may only be true, and not with lengths (a pointed-to text has no length cell).
+        if (rows.has("pointers") && (rows.opt("pointers") != true || rows.has("lengths"))) return false
         return !rows.has("lengths") || numberOk(rows.optJSONObject("lengths"), LENGTH_KEYS)
     }
 
     private val WHERE = setOf("address", "base", "offsets")
     private val NUMBER_KEYS = WHERE + setOf("type", "equals", "mask")
     private val LENGTH_KEYS = WHERE + setOf("type", "counts")
-    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "codes", "when", "cleanup")
+    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "script", "codes", "when", "cleanup")
     private val LEAD = Regex("([0-9A-Fa-f]{2}){1,4}")
     private val HEX_BYTES = Regex("([0-9A-Fa-f]{2})+")
     private val FIELDS = mapOf(
         "message" to "text", "choices" to "text", "speaker" to "either", "shown" to "number", "waiting" to "number",
         "choosing" to "number", "choice_count" to "number", "choice_cursor" to "number",
     )
-    private val OTHER_KEYS = setOf("versions", "endian", "poll", "speaker_names", "notes", "when")
+    private val OTHER_KEYS = setOf("versions", "endian", "poll", "speaker_names", "notes", "when", "tables")
+
+    /** A layout's own `tables`: a number `by`, and for each value (decimal) a list of table files. */
+    private fun switchOk(spec: JSONObject?): Boolean {
+        if (spec == null || spec.keySet() != setOf("by", "sets") || !numberOk(spec.optJSONObject("by"), WHERE + "type")) return false
+        val sets = spec.optJSONObject("sets") ?: return false
+        if (sets.length() == 0) return false
+        return sets.keys().asSequence().all { n ->
+            val paths = sets.optJSONArray(n)
+            SET_NUMBER.matches(n) && paths != null && paths.length() > 0 && (0 until paths.length()).all { paths.opt(it) is String }
+        }
+    }
+
+    private val SET_NUMBER = Regex("-?[0-9]{1,10}")
+
+    /** The table files every layout of [entry] may switch to (its `tables.sets`), for fetching. */
+    fun setTablePaths(layouts: List<JSONObject>): Set<String> = layouts.flatMap { layout ->
+        val sets = layout.optJSONObject("tables")?.optJSONObject("sets") ?: return@flatMap emptyList()
+        sets.keys().asSequence().flatMap { n -> sets.optJSONArray(n)?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty() }.toList()
+    }.filter { it.isNotEmpty() }.toSet()
 
     /**
      * The layout for a release, for a reader that can't hash its executable (Genkan can't):
@@ -170,6 +226,8 @@ object Layouts {
      * Everything [layout] names, read from [memory]. A field that can't be read is left out and
      * its reason kept in [LayoutRead.errors]. [unit], [table] and [controls] are the entry's,
      * for `table` text; [cleanup] is the entry's, applied to every text after the text's own.
+     * A layout with its own `tables` decodes with [withSet] instead: the entry's tables and then
+     * the files of the set its number names (null when they aren't all there).
      */
     fun read(
         layout: JSONObject,
@@ -178,6 +236,7 @@ object Layouts {
         table: CharTable? = null,
         controls: Map<String, String> = emptyMap(),
         cleanup: List<CleanupStep> = emptyList(),
+        withSet: ((List<String>) -> CharTable?)? = null,
     ): LayoutRead {
         val order = if (layout.optString("endian", "little") == "big") ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
         val reader = Reader(memory, order, unit, table, controls, cleanup)
@@ -207,6 +266,17 @@ object Layouts {
                     choices = emptyList<String>().takeIf { layout.has("choices") },
                 )
             }
+        }
+
+        // The set of tables the layout's number names, after the entry's. No set, or a number that
+        // can't be read: no table at all, so table texts fail rather than read wrong characters.
+        layout.optJSONObject("tables")?.let { switch ->
+            val more = try {
+                switch.getJSONObject("sets").optJSONArray(reader.int(switch.getJSONObject("by")).toString())
+            } catch (e: LayoutError) {
+                null
+            }
+            reader.table = more?.let { a -> List(a.length()) { a.getString(it) } }?.let { withSet?.invoke(it) }
         }
 
         val message = layout.optJSONObject("message")?.let { spec -> attempt("message") { reader.text(spec) } }
@@ -285,7 +355,7 @@ object Layouts {
         val memory: LayoutMemory,
         val order: ByteOrder,
         val unit: Int,
-        val table: CharTable?,
+        var table: CharTable?,
         val controls: Map<String, String>,
         val entryCleanup: List<CleanupStep>,
     ) {
@@ -330,6 +400,7 @@ object Layouts {
             // The game's own codes in the text (a colour, a style): each lead's whole length.
             codes = spec.optJSONObject("codes")?.let { c -> c.keys().asSequence().map { bytes(it) to c.getInt(it) }.toList() }.orEmpty()
             val width = if (charset == "table") unit else 1
+            spec.optJSONObject("script")?.let { script -> return scriptText(spec, script) }
             val terminator = spec.optString("terminator").takeIf { spec.has("terminator") }?.let(::bytes)
             val start = resolve(spec)
             val maxBytes = spec.getInt("max_bytes")
@@ -338,9 +409,11 @@ object Layouts {
             val stride = rows?.getInt("stride") ?: maxBytes
             val length = spec.optJSONObject("length")
             val rowLengths = rows?.optJSONObject("lengths")
+            // Each row a 32-bit pointer to its text, `stride` apart; the text runs to its terminator or max_bytes.
+            val pointers = rows?.opt("pointers") == true
             val decoder = decoderFor(charset)
             val lines = MutableList(count) { r ->
-                var size = minOf(maxBytes, stride)
+                var size = if (pointers) maxBytes else minOf(maxBytes, stride)
                 var chars: Long? = null
                 // `length` holds for every row, `rows.lengths` for its own; where both are given, both hold.
                 for ((lengthSpec, index) in listOf(length to 0, rowLengths to r)) {
@@ -353,7 +426,13 @@ object Layouts {
                         size = minOf(size.toLong(), n).toInt()
                     }
                 }
-                var raw = cut(read(start + r.toLong() * stride, size), charset, width, terminator, chars)
+                var at = start + r.toLong() * stride
+                if (pointers) {
+                    at = java.nio.ByteBuffer.wrap(read(at, 4)).order(order).int.toLong() and 0xFFFFFFFFL
+                    // A null pointer is an empty row.
+                    if (at == 0L) return@MutableList ""
+                }
+                var raw = cut(read(at, size), charset, width, terminator, chars)
                 // A buffer of pages walked by the game's cursor: only the page the cursor is on.
                 spec.optJSONObject("pages")?.let { pages ->
                     raw = page(raw, charset, width, bytes(pages.getString("break")), int(pages.getJSONObject("cursor")) - start)
@@ -366,6 +445,135 @@ object Layouts {
             for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
             return text
         }
+
+        /**
+         * A text read straight out of a script (docs/format.md, "With `script`"): the page the
+         * game's position is on, as far as it has read it.
+         */
+        private fun scriptText(spec: JSONObject, script: JSONObject): String {
+            val t = table ?: throw LayoutError("no table to decode with")
+            val start = resolve(spec)
+            val offset = script.getJSONObject("offset")
+            val at = int(offset) * if (offset.optString("counts") == "codes") unit else 1
+            val size = maxOf(0L, minOf(spec.getInt("max_bytes").toLong(), at)).toInt()
+            // Without open, the script is one text from its start.
+            val mark = script.optString("open").takeIf { script.has("open") }?.let(::bytes)
+            // Codes as ints (memory byte order), as the table packs them: a script is walked code by
+            // code, and a string per code made a big one cost tens of milliseconds a read.
+            if (unit !in 1..4) throw LayoutError("a script's unit is 1 to 4 bytes")
+            val ends = HashSet<Int>()
+            val breaks = HashSet<Int>()
+            for ((code, what) in controls) {
+                if (code.length != unit * 2) continue
+                if (what == "end") ends += code.toLong(16).toInt()
+                if (what == "page" || what == "clear") breaks += code.toLong(16).toInt()
+            }
+            val rows = script.optString("texts") == "rows"
+            // At or before the script's start there is nothing to read.
+            val isEnd = { c: Int -> t.isEndCode(c, unit) || c in ends }
+            val texts = when {
+                size <= 0 -> emptyList()
+                mark != null -> scriptPage(read(start + at - size, size + mark.size), size, mark, isEnd, breaks, rows, script.optInt("rest"))
+                // One text from the start: only when what's read reaches back to it.
+                size.toLong() == at -> pagesFrom(read(start, size), 0, null, isEnd, breaks, rows = false)
+                else -> emptyList()
+            }
+            var text = texts.joinToString("\n") { t.decode(it, unit, controls, codes).trimEnd('\n') }
+            for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
+            return text
+        }
+
+        /**
+         * The page in [both] ([size] bytes of script up to the position, then as many as [mark]),
+         * in one piece, or with [rows] a piece for each of its texts: a text starts after a mark
+         * and stops at an end code; a mark right after an end code with no page break before it
+         * carries the page on. Nothing when the position isn't in a text, or a text is about to
+         * start a new page. With [rest], a position up to that many codes past an end code is read
+         * as just past it. A port of the reference's `_script`.
+         */
+        private fun scriptPage(
+            read: ByteArray,
+            readSize: Int,
+            mark: ByteArray,
+            isEnd: (Int) -> Boolean,
+            breaks: Set<Int>,
+            rows: Boolean,
+            /** How many codes past an end code the game may rest while its text stays up (0: none). */
+            rest: Int = 0,
+        ): List<ByteArray> {
+            var both = read
+            var size = readSize
+            // The nearest end code behind the position, k codes back: the position is read as just past it.
+            for (k in 0..(if (rest > 0) rest else -1)) {
+                val at = size - (k + 1) * unit
+                if (at >= 0 && isEnd(CharTable.packedCode(both, at, unit))) {
+                    size -= k * unit
+                    both = both.copyOf(size + mark.size)
+                    break
+                }
+            }
+            val data = both.copyOf(size)
+            val ahead = both.copyOfRange(size, both.size)
+            // -1: no whole code there.
+            fun code(i: Int): Int = if (i >= 0 && i + unit <= data.size) CharTable.packedCode(data, i, unit) else -1
+            fun markAt(p: Int) = p >= mark.size && mark.indices.all { data[p - mark.size + it] == mark[it] }
+            fun ends(i: Int) = code(i).let { it >= 0 && isEnd(it) }
+            // A mark ending at q carries the page on.
+            fun joins(q: Int) = ends(q - unit) && code(q - 2 * unit) !in breaks
+            var p = data.size
+            var start = -1
+            if (ahead.contentEquals(mark) && !joins(p)) return emptyList()
+            // The text has just ended.
+            if (ends(p - unit)) p -= unit
+            while (true) {
+                while (p >= mark.size && !markAt(p) && !ends(p - unit)) p -= unit
+                // Out of what was read, or a second end code: not a text.
+                if (p < mark.size || !markAt(p)) break
+                start = p
+                val q = p - mark.size
+                if (!joins(q)) break
+                // On through the text before.
+                p = q - unit
+            }
+            if (start < 0) return emptyList()
+            return pagesFrom(data, start, mark, isEnd, breaks, rows)
+        }
+
+        /**
+         * What a script holds from [start] to its end ([data]), less the pages that are off the
+         * screen; with a [mark], two texts of the page join where an end code meets it (each a
+         * piece of its own with [rows]).
+         */
+        private fun pagesFrom(data: ByteArray, start: Int, mark: ByteArray?, isEnd: (Int) -> Boolean, breaks: Set<Int>, rows: Boolean): List<ByteArray> {
+            fun code(i: Int): Int = if (i >= 0 && i + unit <= data.size) CharTable.packedCode(data, i, unit) else -1
+            fun ends(i: Int) = code(i).let { it >= 0 && isEnd(it) }
+            // Where the end codes at the position begin: a page code with only those after it ended a
+            // page that is still up.
+            var tail = data.size
+            while (tail - unit >= start && ends(tail - unit)) tail -= unit
+            var pieces = mutableListOf(java.io.ByteArrayOutputStream())
+            var i = start
+            while (i + unit <= data.size) {
+                val n = codeLength(data, i)
+                if (n == 0 && mark != null && ends(i) && i + unit + mark.size <= data.size && mark.indices.all { data[i + unit + it] == mark[it] }) {
+                    // Where two texts of the page join: with rows, the next text is a row of its own.
+                    i += unit + mark.size
+                    if (rows) pieces += java.io.ByteArrayOutputStream()
+                    continue
+                }
+                if (n == 0 && code(i) in breaks && i + unit < tail) {
+                    // A new page: what came before it is off the screen, and the code goes with it.
+                    pieces = mutableListOf(java.io.ByteArrayOutputStream())
+                    i += unit
+                    continue
+                }
+                val take = if (n > 0) n else unit
+                pieces.last().write(data, i, minOf(take, data.size - i))
+                i += take
+            }
+            return pieces.map { it.toByteArray() }
+        }
+
 
         private fun read(address: Long, size: Int): ByteArray =
             memory.read(address, size).also { if (it.size < size) throw LayoutError("0x%08X+%d is outside memory".format(address, size)) }
@@ -397,7 +605,10 @@ object Layouts {
             val pages = mutableListOf<Pair<Int, Int>>()
             var start = 0
             var i = 0
+            val inside = cursor in 0..data.size.toLong()
             while (i < data.size) {
+                // Past the cursor's page nothing more can be the one shown.
+                if (inside && start > cursor) break
                 if (mark.isNotEmpty() && i + mark.size <= data.size && mark.indices.all { data[i + it] == mark[it] }) {
                     pages += start to i
                     i += mark.size
@@ -406,19 +617,24 @@ object Layouts {
                     i += charLength(data, i, charset, width)
                 }
             }
-            pages += start to data.size
-            val inside = cursor in 0..data.size.toLong()
+            pages += start to i
             val full = pages.filter { (a, b) -> b > a && (!inside || a <= cursor) }
             return full.lastOrNull()?.let { (a, b) -> data.copyOfRange(a, minOf(b, data.size)) } ?: ByteArray(0)
         }
 
         /** The current text's codes (lead bytes, whole length): one character each, decoded to nothing. */
         private var codes: List<Pair<ByteArray, Int>> = emptyList()
+            set(value) {
+                field = value
+                leadFirst = BooleanArray(256).also { first -> value.forEach { (lead, _) -> first[lead[0].toInt() and 0xFF] = true } }
+            }
+
+        /** The first bytes the codes' leads start with: most characters skip the lead search on one look. */
+        private var leadFirst = BooleanArray(256)
 
         /** Bytes in the code starting at [i], or 0 when none starts there: the longest lead wins. */
         private fun codeLength(data: ByteArray, i: Int): Int =
-            codes.filter { (lead, _) -> i + lead.size <= data.size && lead.indices.all { data[i + it] == lead[it] } }
-                .maxByOrNull { it.first.size }?.second ?: 0
+            if (codes.isEmpty() || !leadFirst[data[i].toInt() and 0xFF]) 0 else CharTable.codeLength(data, i, codes)
 
         /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */
         private fun charLength(data: ByteArray, i: Int, charset: String, width: Int): Int {
@@ -458,8 +674,8 @@ object Layouts {
          */
         private fun decode(data: ByteArray, charset: String, width: Int, decoder: java.nio.charset.CharsetDecoder?): String {
             if (charset == "table") {
-                val t = table ?: throw LayoutError("a table charset needs the entry's tables")
-                return t.decode(data, unit, controls).trimEnd('\n')
+                val t = table ?: throw LayoutError("no table to decode with")
+                return t.decode(data, unit, controls, codes).trimEnd('\n')
             }
             val out = StringBuilder()
             var i = 0

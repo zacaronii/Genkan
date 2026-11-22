@@ -17,12 +17,15 @@ import org.json.JSONObject
  */
 class LayoutWatch(private val core: CoreDef, private val report: (String) -> Unit) {
     private class Watched(
-        val layout: JSONObject,
+        /** A version's layouts, in the entry's order; each read takes the first whose `when` is true. */
+        val layouts: List<JSONObject>,
         val table: CharTable?,
         val unit: Int,
         val controls: Map<String, String>,
         val cleanup: List<CleanupStep>,
         val every: Int,
+        /** The entry's tables then a set's files, built once per set; null when one is missing. */
+        val withSet: (List<String>) -> CharTable?,
     )
 
     @Volatile private var watched: Watched? = null
@@ -40,17 +43,26 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
             return true
         }
         return try {
-            val layout = JSONObject(layoutJson)
+            val layouts = Layouts.parseLayouts(layoutJson)
+            val layout = layouts.first()
             val entry = entryJson.takeIf { it.isNotBlank() }?.let { JSONObject(it) } ?: JSONObject()
             val poll = layout.opt("poll")
             // "frame", or a rate in Hz: the frames between reads at 60 a second.
             val every = (poll as? Number)?.toInt()?.takeIf { it > 0 }?.let { maxOf(1, FRAMES_PER_SECOND / it) } ?: 1
             val table = tableText.takeIf { it.isNotBlank() }?.let { CharTable.parse(listOf(it)) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
+            val setTexts = entry.optJSONObject("set_tables")?.let { s -> s.keys().asSequence().associateWith { s.getString(it) } }.orEmpty()
+            val sets = HashMap<List<String>, CharTable?>()
+            val withSet = { paths: List<String> ->
+                sets.getOrPut(paths) {
+                    val files = paths.map { setTexts[it] }
+                    if (files.any { it == null }) null else CharTable.parse(listOfNotNull(tableText.takeIf { it.isNotBlank() }) + files.filterNotNull())
+                }
+            }
             last = null
             gate.reset()
-            watched = Watched(layout, table, entry.optInt("unit", 2), controls, CleanupStep.parse(entry.optJSONArray("cleanup")), every)
-            Log.i(TAG, "Watching a layout every $every frame(s)")
+            watched = Watched(layouts, table, entry.optInt("unit", 2), controls, CleanupStep.parse(entry.optJSONArray("cleanup")), every, withSet)
+            Log.i(TAG, "Watching ${layouts.size} layout(s) every $every frame(s)")
             true
         } catch (e: Exception) {
             Log.w(TAG, "Couldn't take the layout: $e")
@@ -66,8 +78,9 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
         try {
             // The read right after the layout's `when` turns true can still hold what the memory
             // held before (a movie's data): it waits for the next.
-            if (!gate.admit(Layouts.live(w.layout, memory))) return
-            val read = Layouts.read(w.layout, memory, w.unit, w.table, w.controls, w.cleanup)
+            val layout = Layouts.liveOf(w.layouts, memory) ?: return
+            if (!gate.admit(Layouts.live(layout, memory))) return
+            val read = Layouts.read(layout, memory, w.unit, w.table, w.controls, w.cleanup, w.withSet)
             // Compared as values; turned into JSON only when it changed.
             if (read == last) return
             last = read
