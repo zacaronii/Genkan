@@ -202,8 +202,9 @@ with it:
 ```
 
 Open the PNGs in `app/src/test/screenshots`, or see them in a pull request's diff. CI
-records them too and uploads them as the `screenshots` artifact of each run; it doesn't
-fail on differences yet, since fonts can render slightly differently on Linux.
+compares them first and fails when a shot differs from its committed PNG (by 1% of its
+pixels or more), then records them and uploads them as the `screenshots` artifact of each
+run, with the comparisons as `screenshot-compare`.
 
 ### Try it on the emulator
 
