@@ -159,7 +159,8 @@ class BuiltInText @Inject constructor(
                 ?: ocr.latest.value?.takeIf { it.isNotBlank() }
                 ?: return@withContext "Nothing read yet: turn OCR on, or wait for a line"
             val moment = when {
-                read?.waiting == true -> "waiting for a press"
+                read?.asking == true -> "a question on screen"
+                read?.waitingOnLine == true -> "waiting for a press"
                 read?.shown != null && read.onScreen != read.message?.replace("\n", "") -> "typing out"
                 else -> "line on screen"
             }

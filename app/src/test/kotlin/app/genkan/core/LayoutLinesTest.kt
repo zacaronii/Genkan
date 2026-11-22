@@ -91,6 +91,18 @@ class LayoutLinesTest {
     }
 
     @Test
+    fun `a message with U+FFFD or a control character is nothing shown`() {
+        assertEquals(listOf("本物の行"), texts(read("本物の行", waiting = true)).also { read(null) })
+        // Noise (a movie's data in the text memory) makes no line, and clears what was there.
+        read("前の行", waiting = false)
+        assertEquals(listOf("前の行"), texts(read("O\u001fﾔK\uFFFD", waiting = false)))
+        assertEquals(emptyList<String>(), texts(read("O\u001fﾔK\uFFFD", waiting = true)))
+        // Row breaks are fine.
+        assertEquals(listOf("一行目二行目"), texts(read("一行目\n二行目", waiting = true)))
+        assertTrue(LayoutLines.shown("一行目\n二行目"))
+    }
+
+    @Test
     fun `a line with neither flag nor count settles`() {
         val step = read("静かな行")
         assertTrue(step.settle)

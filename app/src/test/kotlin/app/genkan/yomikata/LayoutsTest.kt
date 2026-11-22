@@ -136,6 +136,67 @@ class LayoutsTest {
         assertEquals("general", notes(cart, "AXXJ")) // no executable hash to name
     }
 
+    /** Yomikata's `understood`: a layout with a key or named value this reader doesn't know is not there. */
+    @Test
+    fun `a layout with anything unknown is passed over`() {
+        val known = JSONObject("""{"poll": "frame", "message": {"address": "0x0", "charset": "utf16le", "max_bytes": 8,
+            "rows": {"count": 2, "stride": 4, "lengths": {"address": "0x10", "counts": "characters"}},
+            "when": {"address": "0x20", "equals": 2, "mask": 3}}, "waiting": {"address": "0x30", "mask": 3}}""")
+        assertTrue(Layouts.understood(known))
+        val paged = JSONObject(known.toString()).also {
+            it.getJSONObject("message").remove("rows")
+            it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40", "type": "u32"}}"""))
+        }
+        assertTrue(Layouts.understood(paged))
+        fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
+        val unknown = listOf(
+            changed { it.put("typing_speed", JSONObject()) },
+            changed { it.getJSONObject("message").put("fade", 1) },
+            changed { it.getJSONObject("message").getJSONObject("rows").put("gap", 2) },
+            changed { it.getJSONObject("message").getJSONObject("rows").getJSONObject("lengths").put("counts", "glyphs") },
+            changed { it.getJSONObject("message").put("charset", "big5") },
+            changed { it.getJSONObject("waiting").put("type", "u64") },
+            // A mask is a whole number, not below zero.
+            *listOf("-1", "1.5", "\"3\"").map { mask -> changed { it.getJSONObject("waiting").put("mask", JSONObject("""{"m": $mask}""").get("m")) } }.toTypedArray(),
+            // `counts` belongs to lengths, not to a flag.
+            changed { it.getJSONObject("waiting").put("counts", "characters") },
+            // Pages and rows never go together, and pages has exactly a break and a cursor.
+            changed { it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40"}}""")) },
+            changed {
+                it.getJSONObject("message").remove("rows")
+                it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40"}, "skip": 1}"""))
+            },
+            // A break of whole hex bytes only.
+            *listOf("\"\"", "\"0\"", "12").map { brk ->
+                changed {
+                    it.getJSONObject("message").remove("rows")
+                    it.getJSONObject("message").put("pages", JSONObject("""{"break": $brk, "cursor": {"address": "0x40"}}"""))
+                }
+            }.toTypedArray(),
+            // Codes: whole hex leads of 1-4 bytes, integer lengths from the lead's up to 16, never with a table.
+            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 17}""", """{"0102030405": 6}""").map { codes ->
+                changed { it.getJSONObject("message").put("codes", JSONObject(codes)) }
+            }.toTypedArray(),
+            changed { it.getJSONObject("message").put("charset", "table").put("codes", JSONObject("""{"03": 2}""")) },
+        )
+        for (layout in unknown) {
+            assertEquals(layout.toString(), false, Layouts.understood(layout))
+            assertEquals(null, Layouts.pick(listOf(layout), null))
+        }
+        // The next layout the reader knows is picked instead.
+        assertEquals(known, Layouts.pick(listOf(unknown[0], known), null))
+    }
+
+    @Test
+    fun `a window waiting or choosing with nothing in it waits on nothing and asks nothing`() {
+        assertEquals(false, LayoutRead(message = "", waiting = true).waitingOnLine)
+        assertEquals(true, LayoutRead(message = "「はい」", waiting = true).waitingOnLine)
+        assertEquals(false, LayoutRead(choosing = true, choices = emptyList()).asking)
+        assertEquals(false, LayoutRead(choosing = true).asking)
+        assertEquals(true, LayoutRead(choosing = true, choices = listOf("はい", "いいえ")).asking)
+        assertEquals(false, LayoutRead(choosing = false, choices = listOf("はい")).asking)
+    }
+
     @Test
     fun `the layout naming a version wins, else the first naming none`() {
         val general = JSONObject("""{"poll": 20}""")
