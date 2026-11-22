@@ -142,4 +142,34 @@ class ManualTapsTest {
         runCurrent()
         assertEquals(false, s.taps.onTop.value)
     }
+
+    @Test
+    fun `a card's picture is the read page around the word's line, as wide as the page`() = runTest {
+        val s = Setup(this)
+        s.taps.tap(file, Pages, 0, 225f / 600, 220f / 800, 600)
+        runCurrent()
+        val picture = s.taps.picture(s.taps.hit.value!!)!!
+        // The page read at 600 x 800: a 600 x 337 band centred on the line (220 to 260 down).
+        assertEquals(600, picture.width)
+        assertEquals(337, picture.height)
+        // Not for a page other than the one read.
+        assertNull(s.taps.picture(s.taps.hit.value!!.copy(page = 1)))
+    }
+
+    /** Renders its pages once each: a second render (a card's picture) fails, as a closed or broken file would. */
+    private object OnceOnly : ManualPages {
+        private val rendered = mutableSetOf<Int>()
+        override val pageSizes = List(2) { IntSize(600, 800) }
+        override suspend fun render(index: Int, widthPx: Int): Bitmap? =
+            if (rendered.add(index)) Bitmap.createBitmap(widthPx, widthPx * 4 / 3, Bitmap.Config.ARGB_8888) else null
+        override fun close() {}
+    }
+
+    @Test
+    fun `no picture when the page won't render again`() = runTest {
+        val s = Setup(this)
+        s.taps.tap(file, OnceOnly, 0, 225f / 600, 220f / 800, 600)
+        runCurrent()
+        assertNull(s.taps.picture(s.taps.hit.value!!))
+    }
 }

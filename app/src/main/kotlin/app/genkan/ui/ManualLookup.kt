@@ -1,5 +1,6 @@
 package app.genkan.ui
 
+import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -59,6 +60,11 @@ class ManualTaps(
 
     private var job: Job? = null
 
+    /** The page the looked-up word was read on, rendered at the width it was read: for a card's picture. */
+    private var read: ReadPage? = null
+
+    private class ReadPage(val pages: ManualPages, val page: Int, val widthPx: Int)
+
     /**
      * A tap on [page] of [file] at ([x], [y]), fractions of the page, rendered [widthPx] wide to
      * read it; [tapY] is how far down the manual it was on screen, for the panel's side.
@@ -80,6 +86,7 @@ class ManualTaps(
             if (lookUp(hit.text, hit.offset)) {
                 _onTop.value = panelOnTop(tapY)
                 _hit.value = ManualHit(page, hit)
+                read = ReadPage(pages, page, widthPx)
             }
         }
     }
@@ -97,6 +104,22 @@ class ManualTaps(
         if (_status.value == message) _status.value = null
     }
 
+    /**
+     * A card's picture for the word at [hit]: its page, rendered again at the width it was read,
+     * cropped to a 16:9 band around its line. Null when the page isn't the one read (or won't render).
+     */
+    suspend fun picture(hit: ManualHit): Bitmap? {
+        val source = read?.takeIf { it.page == hit.page } ?: return null
+        val line = hit.hit.line ?: return null
+        val page = runCatching { source.pages.render(source.page, source.widthPx) }.getOrNull() ?: return null
+        return try {
+            val rows = manualCrop(line.top, line.bottom, page.width, page.height)
+            Bitmap.createBitmap(page, 0, rows.first, page.width, rows.last - rows.first)
+        } finally {
+            page.recycle()
+        }
+    }
+
     /** The word's lookup is gone (closed, or another one started). */
     fun clearHit() {
         _hit.value = null
@@ -107,6 +130,7 @@ class ManualTaps(
         job?.cancel()
         _status.value = null
         _hit.value = null
+        read = null
     }
 
     companion object {
@@ -127,6 +151,18 @@ fun manualMark(hit: ManualHit?, lookup: Lookup?): ManualMark? {
     val line = hit.hit.line ?: return null
     val end = if (lookup.result != null && lookup.end > lookup.start) lookup.end else lookup.start + 1
     return ManualMark(hit.page, line.span(lookup.start, end))
+}
+
+/**
+ * The rows of a [width] by [height] page a card's picture takes, around a line from [top] to
+ * [bottom] (fractions of the page): a band as tall as 9/16 of the width (the shape of a game's
+ * screen on a card), centred on the line and kept on the page, or the whole page when it's shorter.
+ */
+fun manualCrop(top: Float, bottom: Float, width: Int, height: Int): IntRange {
+    val band = (width * 9 / 16).coerceAtMost(height)
+    val centre = ((top + bottom) / 2f * height).toInt()
+    val first = (centre - band / 2).coerceIn(0, height - band)
+    return first..(first + band)
 }
 
 /** Share of the manual the lookup's panel takes: under half, so the tapped line stays clear of it either way. */

@@ -90,7 +90,8 @@ class LowerActivity : ComponentActivity() {
                         // A tap on a word in the manual looks it up, counted for the game shown.
                         manualView = { file, close ->
                             val game by details.details.collectAsStateWithLifecycle()
-                            LookupManual(file, reader, onClose = close, gameKey = game?.focus?.game?.id?.let { "game:$it" })
+                            val shown = game?.focus?.game
+                            LookupManual(file, reader, onClose = close, gameKey = shown?.id?.let { "game:$it" }, gameTitle = shown?.name)
                         },
                     )
                     CompanionMode.READER -> Box(Modifier.fillMaxSize()) {
