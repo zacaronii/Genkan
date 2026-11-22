@@ -67,6 +67,7 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val view by viewModel.view.collectAsStateWithLifecycle()
+    val insert by viewModel.insert.collectAsStateWithLifecycle()
     LibraryContent(
         view = view,
         platforms = platforms,
@@ -82,6 +83,8 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
         onColumns = { viewModel.columns = it },
         onSelectGame = viewModel::selectGame,
         onToggleView = viewModel::toggleView,
+        insert = insert,
+        onSkipInsert = { viewModel.skipInsert() },
     )
 }
 
@@ -90,6 +93,8 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
  * tests do), as the shelf or the grid by [view]. [onColumns] reports how many covers fit in a
  * grid row, for gamepad navigation. [artModel] turns a game's other artwork (large cover, spine,
  * logo, disc) into something Coil loads. [staticMedia] is for screenshots; see [GameShelf].
+ * [insert] draws the insert animation over it while a game starts; [staticInsertProgress] fixes
+ * the animation's progress, for screenshots.
  */
 @Composable
 fun LibraryContent(
@@ -108,6 +113,37 @@ fun LibraryContent(
     onSelectGame: (Int) -> Unit,
     onToggleView: () -> Unit,
     staticMedia: Boolean? = null,
+    insert: InsertState? = null,
+    onSkipInsert: () -> Unit = {},
+    staticInsertProgress: Float? = null,
+) {
+    Box(Modifier.fillMaxSize()) {
+        // While the insert animation has the disc or cartridge, the shelf's own goes back in its case.
+        LibraryBody(
+            view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
+            onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia,
+        )
+        if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
+    }
+}
+
+@Composable
+private fun LibraryBody(
+    view: LibraryView,
+    platforms: List<PlatformEntity>,
+    games: List<GameEntity>,
+    focus: LibraryFocus,
+    sync: SyncStatus,
+    downloads: Map<Long, DownloadEntity>,
+    notice: String?,
+    coverModel: (GameEntity) -> Any?,
+    artModel: (String?) -> Any?,
+    emulatorFor: (String) -> String?,
+    onSelectPlatform: (Int) -> Unit,
+    onColumns: (Int) -> Unit,
+    onSelectGame: (Int) -> Unit,
+    onToggleView: () -> Unit,
+    staticMedia: Boolean?,
 ) {
     if (view == LibraryView.SHELF) {
         ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia)

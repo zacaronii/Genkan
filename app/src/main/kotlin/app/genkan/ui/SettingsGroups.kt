@@ -19,7 +19,7 @@ data class SettingsGroup(
 enum class SettingsInfo { ROMM_ACCOUNT, YOMIKATA_SAMPLES, SECOND_SCREEN, COMPANION }
 
 /** The on/off settings a switch row can show. */
-enum class SwitchKey { HOME, BUILT_IN_PLAYER, PSP_TEXT, AZAHAR_TEXT }
+enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT }
 
 /** A row of a group, the only things the gamepad lands on. */
 sealed interface SettingsRow {
@@ -66,6 +66,7 @@ object SettingsGroups {
             title = "Playing",
             rows = listOf(
                 SettingsRow.Switch("Built-in player", SwitchKey.BUILT_IN_PLAYER, SetupAction.BUILT_IN_PLAYER),
+                SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
                 SettingsRow.Button("Emulator saves through Shizuku", SetupAction.SHIZUKU),
                 SettingsRow.Button("Usage access for play time", SetupAction.USAGE_ACCESS),
             ),

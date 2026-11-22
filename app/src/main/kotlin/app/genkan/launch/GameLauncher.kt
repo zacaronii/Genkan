@@ -35,6 +35,19 @@ sealed class LaunchResult {
     data class Failed(val message: String) : LaunchResult()
 }
 
+/**
+ * A game got ready to start: its files found, the emulator chosen, firmware fetched. Getting
+ * ready and starting are apart so the library can do the first while the insert animation plays
+ * and the second when it ends (see [app.genkan.library.InsertTimeline]).
+ */
+sealed class LaunchPlan {
+    /** Ready; [start] starts it. [builtIn] is whether it runs in Genkan's own player. */
+    class Ready(val builtIn: Boolean, val start: suspend () -> LaunchResult) : LaunchPlan()
+
+    /** It can't start ([result] says why: no emulator, missing files). */
+    data class Unavailable(val result: LaunchResult) : LaunchPlan()
+}
+
 /** Starts a downloaded game in the first installed emulator for its platform, on the top screen. */
 @Singleton
 class GameLauncher @Inject constructor(
@@ -64,36 +77,53 @@ class GameLauncher @Inject constructor(
     private suspend fun builtInFor(platformSlug: String): CoreDef? =
         CoreCatalog.forPlatform(platformSlug)?.takeIf { playerSettings.isEnabled() }
 
-    suspend fun launch(game: GameEntity, download: DownloadEntity): LaunchResult = withContext(Dispatchers.IO) {
+    /**
+     * Gets [game] ready and starts it straight away, with no animation. The debug receiver uses
+     * it; the library goes through [prepare] so the insert animation can play in between.
+     */
+    suspend fun launch(game: GameEntity, download: DownloadEntity): LaunchResult = when (val plan = prepare(game, download)) {
+        is LaunchPlan.Ready -> plan.start()
+        is LaunchPlan.Unavailable -> plan.result
+    }
+
+    /**
+     * Gets [game] ready to start without starting it: finds its files, picks the emulator, fetches
+     * firmware, and closes a different game still open in the built-in player.
+     */
+    suspend fun prepare(game: GameEntity, download: DownloadEntity): LaunchPlan = withContext(Dispatchers.IO) {
         val installed = File(download.path)
         val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) else installed
-        if (rom == null || !rom.exists()) return@withContext LaunchResult.Failed("The game's files are missing; download it again")
-        builtInFor(game.platformSlug)?.let { core -> return@withContext launchBuiltIn(game, rom, core) }
+        if (rom == null || !rom.exists()) return@withContext LaunchPlan.Unavailable(LaunchResult.Failed("The game's files are missing; download it again"))
+        builtInFor(game.platformSlug)?.let { core -> return@withContext prepareBuiltIn(game, rom, core) }
 
         val (emulator, version) = installedEmulatorFor(game.platformSlug)
-            ?: return@withContext LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug))
+            ?: return@withContext LaunchPlan.Unavailable(LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug)))
 
         withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(emulator, game.platformId) }
         val command = builder.build(emulator, rom, game.platformSlug, version)
-            ?: return@withContext LaunchResult.Failed("${emulator.displayName} has no core set for ${game.platformSlug}")
-        Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${rom.name}")
-        try {
-            command.grantReads(context)
-            if (command.method == LaunchMethod.INTENT || !launchViaShell(command)) {
-                withContext(Dispatchers.Main) { context.startActivity(command.toIntent(), topScreenOptions()) }
+            ?: return@withContext LaunchPlan.Unavailable(LaunchResult.Failed("${emulator.displayName} has no core set for ${game.platformSlug}"))
+        LaunchPlan.Ready(builtIn = false) {
+            withContext(Dispatchers.IO) {
+                Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${rom.name}")
+                try {
+                    command.grantReads(context)
+                    if (command.method == LaunchMethod.INTENT || !launchViaShell(command)) {
+                        withContext(Dispatchers.Main) { context.startActivity(command.toIntent(), topScreenOptions()) }
+                    }
+                    LaunchResult.Launched(emulator)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Launch failed", e)
+                    LaunchResult.Failed(e.message ?: "Launch failed")
+                }
             }
-            LaunchResult.Launched(emulator)
-        } catch (e: Exception) {
-            Log.w(TAG, "Launch failed", e)
-            LaunchResult.Failed(e.message ?: "Launch failed")
         }
     }
 
     /**
-     * Starts [rom] in the built-in player. A different game still open there is saved and closed
-     * first: its process can hold only one core.
+     * Gets [rom] ready for the built-in player. A different game still open there is saved and
+     * closed first: its process can hold only one core.
      */
-    private suspend fun launchBuiltIn(game: GameEntity, rom: File, core: CoreDef): LaunchResult {
+    private suspend fun prepareBuiltIn(game: GameEntity, rom: File, core: CoreDef): LaunchPlan {
         val running = player.game.value
         if (running != null && running.romId != game.id) {
             Log.i(TAG, "Closing rom ${running.romId} in the built-in player first")
@@ -101,18 +131,20 @@ class GameLauncher @Inject constructor(
             withTimeoutOrNull(QUIT_TIMEOUT_MS) { player.game.first { it == null } }
         }
         withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(core, game.platformId) }
-        Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
         val intent = Intent(context, CoreActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(CoreActivity.EXTRA_ROM, rom.absolutePath)
             .putExtra(CoreActivity.EXTRA_ROM_ID, game.id)
             .putExtra(CoreActivity.EXTRA_PLATFORM, game.platformSlug)
-        return try {
-            withContext(Dispatchers.Main) { context.startActivity(intent, topScreenOptions()) }
-            LaunchResult.Launched(builtInEmulator(core))
-        } catch (e: Exception) {
-            Log.w(TAG, "Launch failed", e)
-            LaunchResult.Failed(e.message ?: "Launch failed")
+        return LaunchPlan.Ready(builtIn = true) {
+            Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
+            try {
+                withContext(Dispatchers.Main) { context.startActivity(intent, topScreenOptions()) }
+                LaunchResult.Launched(builtInEmulator(core))
+            } catch (e: Exception) {
+                Log.w(TAG, "Launch failed", e)
+                LaunchResult.Failed(e.message ?: "Launch failed")
+            }
         }
     }
 

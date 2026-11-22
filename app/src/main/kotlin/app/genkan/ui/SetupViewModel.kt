@@ -5,6 +5,7 @@ import app.genkan.dictionary.Dictionaries
 import app.genkan.home.DualScreenState
 import app.genkan.input.PadKey
 import app.genkan.library.LibrarySync
+import app.genkan.library.LibraryViewSettings
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
 import app.genkan.azahar.AzaharText
@@ -38,6 +39,7 @@ enum class SetupAction {
     PSP_DEBUGGER,
     AZAHAR_RPC,
     BUILT_IN_PLAYER,
+    INSERT_ANIMATION,
     WORDS,
     YOMIKATA,
     SIGN_OUT,
@@ -54,6 +56,7 @@ class SetupViewModel @Inject constructor(
     val ppssppText: PpssppText,
     val azaharText: AzaharText,
     val playerSettings: PlayerSettings,
+    val librarySettings: LibraryViewSettings,
 ) : ViewModel() {
 
 
@@ -76,6 +79,7 @@ class SetupViewModel @Inject constructor(
     val state: StateFlow<SetupState> = combine(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
+        librarySettings.insertAnimation,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -88,6 +92,7 @@ class SetupViewModel @Inject constructor(
             builtInPlayer = v[7] as Boolean,
             textSamples = v[8] as Boolean,
             dictionaries = v[9] as List<DictionaryEntity>,
+            insertAnimation = v[10] as Boolean,
         )
     }.stateIn(
         viewModelScope,

@@ -21,6 +21,8 @@ a Yomitan dictionary popup. See
   through them (holding speeds up), and the focused game's disc or cartridge slides out when
   it rests. Up goes to the platforms, L1/R1 switch platform from anywhere, Y re-syncs, Start
   opens settings. Select switches to the cover grid and back, and the choice is remembered.
+  Starting a game plays a short insert animation (the disc or cartridge goes into the machine)
+  while it gets ready; any button skips it, and Settings → Playing switches it off.
 - **Downloads:** A downloads the focused game (A again cancels), X twice deletes it. Games
   go to `ROMs/<platform>/` on internal storage, so the first download asks for
   *All files access*. Downloads resume after a crash or a dropped connection.
