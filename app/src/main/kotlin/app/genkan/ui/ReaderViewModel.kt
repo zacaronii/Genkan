@@ -44,10 +44,10 @@ import javax.inject.Inject
 /** A word in a backlog line to underline: where it is, and how Anki has it. */
 data class LineMark(val start: Int, val end: Int, val state: WordMarkState)
 
-/** A word looked up in the backlog: where it starts, and what the dictionaries found there. */
 /** The lookup's line id for answer [index] of a choice on screen: below every backlog id and the overlay's. */
 fun answerLine(index: Int): Long = -100L - index
 
+/** A word looked up in the backlog: where it starts, and what the dictionaries found there. */
 data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, val lineText: String = "") {
     /** The characters the longest match covers, for the highlight. */
     val end: Int get() = start + (result?.matchedLength ?: 0)
