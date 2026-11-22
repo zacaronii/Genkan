@@ -46,8 +46,11 @@ class ChosenAnswer {
 
 /**
  * A layout's reads as backlog lines: [LayoutLines]' lines, and after a choice the answer taken
- * ([ChosenAnswer]), always after its question. A choice can close (the player answered quickly)
- * while its question's line hasn't gone yet, the page still up: the question goes first then.
+ * ([ChosenAnswer]), right after its question. On the read the choice closes on, the answer goes
+ * after the question when that read sends it, and otherwise before anything else the read sends
+ * (the next line, or part of it): those are newer than the choice. A choice can also close (a
+ * quick answer) while its question is still the current line, unsent, the page up for a frame or
+ * two: the question goes first then.
  */
 class LayoutBacklog {
     val lines = LayoutLines()
@@ -56,11 +59,12 @@ class LayoutBacklog {
     fun read(read: LayoutRead): LayoutLines.Step {
         val step = lines.read(read)
         val taken = chosen.read(read) ?: return step
-        val out = step.lines.toMutableList()
-        // The question, when it is still the current line and hasn't all gone.
-        taken.question?.let { lines.sendIfCurrent(it) }?.let { out += it }
-        out += LayoutLines.Line(ChosenAnswer.line(taken.answer), speaker = null)
-        return step.copy(lines = out)
+        val answer = LayoutLines.Line(ChosenAnswer.line(taken.answer), speaker = null)
+        val asked = step.lines.indexOfLast { it.text == taken.question }
+        if (asked >= 0) return step.copy(lines = step.lines.toMutableList().apply { add(asked + 1, answer) })
+        // The question went earlier, or is still the current line and goes now.
+        val question = taken.question?.let { lines.sendIfCurrent(it) }
+        return step.copy(lines = listOfNotNull(question, answer) + step.lines)
     }
 
     fun settled(): LayoutLines.Line? = lines.settled()

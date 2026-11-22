@@ -89,4 +89,37 @@ class ChosenAnswerTest {
             ),
         )
     }
+
+    @Test
+    fun `the next line complete on the closing read comes after the answer, the question gone already`() {
+        assertEquals(
+            listOf("Where to?", "→ Stay home", "You set off."),
+            backlog(
+                LayoutRead(message = "Where to?\nGo to the station\nStay home", choosing = true, choices = answers, choiceCursor = 1, waiting = true),
+                // Instant text, or the read interval jumping the typing: the next line is whole at once.
+                LayoutRead(message = "You set off.", choosing = false, waiting = true),
+            ),
+        )
+    }
+
+    @Test
+    fun `the next line complete on the closing read comes after the answer, the question still unsettled`() {
+        assertEquals(
+            listOf("Where to?", "→ Stay home", "You set off."),
+            backlog(
+                asking(1),
+                LayoutRead(message = "You set off.", choosing = false, waiting = true),
+            ),
+        )
+    }
+
+    @Test
+    fun `part of the next line sent on the closing read comes after the answer`() {
+        val lines = backlog(
+            LayoutRead(message = "Where to?\nGo to the station\nStay home", choosing = true, choices = answers, choiceCursor = 0, waiting = true),
+            // Waiting for a press partway through the next message: that much goes on this read.
+            LayoutRead(message = "You set off. Then", choosing = false, waiting = true, shown = 12, onScreen = "You set off."),
+        )
+        assertEquals(listOf("Where to?", "→ Go to the station", "You set off."), lines)
+    }
 }
