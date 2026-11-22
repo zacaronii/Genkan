@@ -133,4 +133,30 @@ class LayoutLinesTest {
     fun `an answer row is the answer, or it with a short mark before it`() {
         assertEquals("問い\n長い前置きの右へ行く", LayoutLines.withoutAnswers("問い\n：右へ行く\n長い前置きの右へ行く\n右へ行く", listOf("右へ行く")))
     }
+
+    @Test
+    fun `answers typed out before the choice is up don't go either`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        lines.read(LayoutRead(message = "：右へ", waiting = false, choosing = false, choices = emptyList()))
+        lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = false, choices = emptyList()))
+        val up = lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        assertEquals(emptyList<String>(), texts(up))
+        assertNull(lines.settled())
+        // With a question first: the question goes, alone.
+        lines.reset()
+        lines.read(LayoutRead(message = "どうする？\n：右へ行く", waiting = false, choosing = false, choices = emptyList()))
+        lines.read(LayoutRead(message = "どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        assertEquals("どうする？", lines.settled()?.text)
+    }
+
+    @Test
+    fun `the choice's page left up a moment after the answer doesn't go`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        // A taken: the game waits a frame with the page still there, then clears it.
+        assertEquals(emptyList<String>(), texts(lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = true, choosing = false, choices = emptyList()))))
+        assertEquals(emptyList<String>(), texts(lines.read(LayoutRead(message = "", waiting = false, choosing = false, choices = emptyList()))))
+        // The next page is a line again.
+        assertEquals(listOf("はい"), texts(lines.read(LayoutRead(message = "はい", waiting = true, choosing = false, choices = emptyList()))))
+    }
 }

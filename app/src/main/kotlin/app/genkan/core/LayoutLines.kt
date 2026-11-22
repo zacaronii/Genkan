@@ -22,6 +22,9 @@ class LayoutLines {
 
     private var current: Line? = null
     private var shown: Long? = null
+    /** The last choice's page (rows joined) and answers, until the message moves on from it. */
+    private var choice: Pair<String, List<String>>? = null
+
     /** What of the current line has gone, or null. */
     private var sentText: String? = null
 
@@ -53,14 +56,32 @@ class LayoutLines {
         // A message with a character no script has (U+FFFD, a control other than a row break)
         // is memory that isn't the message: nothing is shown then. While a choice is up its
         // answers are shown as a list of their own, not as a line: only the question goes.
-        val message = if (read.asking) read.message?.let { withoutAnswers(it, read.choices.orEmpty()) } else read.message
+        // A game that leaves the page up for a frame or two after an answer is taken (choosing
+        // false, the answers still in the message) is still showing the choice.
+        val page = read.message?.replace("\n", "")
+        if (read.asking) {
+            choice = page?.let { it to read.choices.orEmpty() }
+        } else if (choice != null && !page.isNullOrEmpty() && !choice!!.first.startsWith(page)) {
+            choice = null
+        }
+        val answers = if (read.asking) read.choices.orEmpty() else choice?.takeIf { page != null && it.first.startsWith(page) }?.second
+        val message = if (answers != null) read.message?.let { withoutAnswers(it, answers) } else read.message
         val text = message?.takeIf { shown(it) }?.replace("\n", "")?.takeIf { it.isNotBlank() }
         val speaker = read.speakerName?.takeIf { it.isNotBlank() } ?: read.speakerNumber?.let { "#$it" }
         val out = mutableListOf<Line>()
+        // The page typed out before the game said it's a choice: what of it has typed is this
+        // page's answers (and question), so only the question stays the current line.
+        current?.takeIf { read.asking && page != null && page.startsWith(it.text) }?.let { typed ->
+            if (text == null) {
+                clearLine()
+                return Step(out, settle = false)
+            }
+            current = typed.copy(text = text)
+        }
         val before = current
         if (text == null) {
             send(out)
-            reset()
+            clearLine()
             return Step(out, settle = false)
         }
         val previousShown = shown
@@ -91,6 +112,12 @@ class LayoutLines {
 
     /** A new game, or the watch stopped. */
     fun reset() {
+        clearLine()
+        choice = null
+    }
+
+    /** No current line (the message cleared), the last choice kept. */
+    private fun clearLine() {
         current = null
         shown = null
         sentText = null

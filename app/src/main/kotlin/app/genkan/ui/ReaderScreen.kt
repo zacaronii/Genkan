@@ -175,7 +175,7 @@ fun ReaderScreen(
             } else {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
-                        Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
+                        Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup, follow = choice != null)
                     }
                     // A choice on screen: its answers under the backlog, until one is taken.
                     choice?.let { ChoiceList(it.answers, it.cursor) }
@@ -244,13 +244,15 @@ private fun Backlog(
     marks: Map<Long, List<LineMark>>,
     onTap: (ReaderLineEntity, Int) -> Unit,
     onBackground: () -> Unit,
+    /** Changes when the space for the backlog does (a choice's list comes or goes): the newest line is brought back into view. */
+    follow: Any? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
     val lookupLine = lookup?.lineId
     // Follow new lines as they arrive, unless a word is being looked up. Keyed on the newest
     // line, not the count: the backlog holds a fixed number, so a full one stays the same size.
-    LaunchedEffect(lines.lastOrNull()?.id) {
+    LaunchedEffect(lines.lastOrNull()?.id, follow) {
         if (lines.isNotEmpty() && lookupLine == null) listState.animateScrollToItem(lines.lastIndex)
     }
     // Keep the looked-up line in view above the panel.
