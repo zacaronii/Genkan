@@ -139,6 +139,10 @@ class GameDetailsViewModel @Inject constructor(
                 _notice.value = null
             }
         }
+        // A manual open when a game starts stays closed after it, rather than coming back at page 1.
+        viewModelScope.launch {
+            mode.collect { if (it == CompanionMode.READER) _manual.value = null }
+        }
     }
 
     fun showReader() {
@@ -190,14 +194,15 @@ class GameDetailsViewModel @Inject constructor(
     }
 
     /**
-     * Closes the manual viewer. [problem], when given, says why (the file wouldn't open); the
-     * cached file is then deleted, so the next tap fetches it again.
+     * Closes the viewer showing [file]. [problem], when given, says why (the file wouldn't open);
+     * the cached file is then deleted, so the next tap fetches it again. Nothing happens when
+     * another manual has been opened since: a failure that reports late is about a viewer that
+     * is already gone.
      */
-    fun closeManual(problem: String? = null) {
-        val file = _manual.value
-        _manual.value = null
+    fun closeManual(file: File, problem: String? = null) {
+        if (!_manual.compareAndSet(file, null)) return
         if (problem == null) return
-        file?.let { viewModelScope.launch(Dispatchers.IO) { it.delete() } }
+        viewModelScope.launch(Dispatchers.IO) { file.delete() }
         show(problem)
     }
 
