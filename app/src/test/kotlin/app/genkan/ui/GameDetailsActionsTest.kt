@@ -1,7 +1,12 @@
 package app.genkan.ui
 
 import android.app.Application
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -9,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.genkan.core.ScreenLook
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,5 +61,40 @@ class GameDetailsActionsTest {
         compose.onNodeWithText("Delete download").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Tap again to delete").performClick()
         assertEquals(1, deletes)
+    }
+
+    private fun fiveButtons() = FakeData.fullDetails.copy(look = GameLook(null, ScreenLook.SHARP))
+
+    /** Where [label]'s button really is, top to bottom in pixels: not clipped to the column, as `boundsInRoot` is. */
+    private fun span(label: String): ClosedFloatingPointRange<Float> {
+        val node = compose.onNodeWithText(label).fetchSemanticsNode()
+        return node.positionInRoot.y..(node.positionInRoot.y + node.size.height)
+    }
+
+    /** The column of art and buttons: the scrollable that holds Play. */
+    private fun column() = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Play")))
+
+    @Test
+    fun `at rest the first three buttons are whole on screen, the rest below`() {
+        compose.setContent { GameDetailsContent(details = fiveButtons(), onShowReader = {}) }
+        val bottom = column().fetchSemanticsNode().boundsInRoot.bottom
+        for (label in listOf("Play", "Open manual", "Add to favourites")) {
+            assertTrue("$label ends at ${span(label).endInclusive}, the column at $bottom", span(label).endInclusive <= bottom)
+        }
+        assertTrue("Delete starts at ${span("Delete download").start}, the column ends at $bottom", span("Delete download").start >= bottom)
+    }
+
+    @Test
+    fun `a button given focus is brought into view`() {
+        compose.setContent {
+            // The pad's way of reaching it: keyboard input mode, so the buttons take focus.
+            @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+            androidx.compose.ui.platform.LocalInputModeManager.current.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
+            GameDetailsContent(details = fiveButtons(), onShowReader = {})
+        }
+        compose.onNodeWithText("Delete download").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        val bottom = column().fetchSemanticsNode().boundsInRoot.bottom
+        assertTrue("Delete ends at ${span("Delete download").endInclusive}, the column at $bottom", span("Delete download").endInclusive <= bottom + 0.5f)
     }
 }
