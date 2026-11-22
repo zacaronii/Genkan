@@ -51,7 +51,21 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         context.libraryStore.edit { it[INSERT_ANIMATION] = on }
     }
 
+    /** The sort and filter for consoles' games (not "Continue playing" or "Favourites"). */
+    val order: Flow<LibraryOrder> = context.libraryStore.data.map {
+        LibraryOrder(LibrarySort.parse(it[SORT]), it[DOWNLOADED_ONLY] == true)
+    }
+
+    suspend fun setOrder(order: LibraryOrder) {
+        context.libraryStore.edit {
+            it[SORT] = order.sort.name
+            it[DOWNLOADED_ONLY] = order.downloadedOnly
+        }
+    }
+
     private companion object {
+        val SORT = stringPreferencesKey("sort")
+        val DOWNLOADED_ONLY = booleanPreferencesKey("downloaded_only")
         val VIEW = stringPreferencesKey("view")
         val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
     }

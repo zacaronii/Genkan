@@ -25,6 +25,8 @@ data class PlaySessionEntity(
 
 data class PlayTotals(val plays: Int, val totalMs: Long, val lastPlayed: Long?)
 
+data class GameLastPlayed(val romId: Long, val lastPlayed: Long)
+
 @Dao
 interface PlaySessionDao {
 
@@ -62,6 +64,10 @@ interface PlaySessionDao {
            ORDER BY played.lastPlayed DESC LIMIT :limit""",
     )
     fun recentlyPlayed(minMs: Long, limit: Int): Flow<List<GameEntity>>
+
+    /** Each game's latest finished play, for sorting by last played. */
+    @Query("SELECT romId, MAX(startedAt) AS lastPlayed FROM play_sessions WHERE endedAt IS NOT NULL GROUP BY romId")
+    fun lastPlayedByGame(): Flow<List<GameLastPlayed>>
 
     @Query("DELETE FROM play_sessions WHERE id = :id")
     suspend fun delete(id: Long)
