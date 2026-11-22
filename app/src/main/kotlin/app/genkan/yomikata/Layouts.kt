@@ -140,12 +140,12 @@ object Layouts {
         if (spec.has("length") && !numberOk(spec.optJSONObject("length"), LENGTH_KEYS)) return false
         if (spec.has("when") && !numberOk(spec.optJSONObject("when"), NUMBER_KEYS)) return false
         if (spec.has("codes")) {
-            // Each lead 1-4 whole hex bytes; each length an integer from the lead's own up to 16.
+            // Each lead 1-4 whole hex bytes; each length an integer from the lead's own up to 32.
             val codes = spec.optJSONObject("codes") ?: return false
             if (codes.length() == 0) return false
             for (lead in codes.keys()) {
                 val n = codes.opt(lead)
-                if (!LEAD.matches(lead) || n !is Int || n < lead.length / 2 || n > 16) return false
+                if (!LEAD.matches(lead) || n !is Int || n < lead.length / 2 || n > 32) return false
             }
         }
         if (spec.has("script")) {
@@ -462,15 +462,19 @@ object Layouts {
             val size = maxOf(0L, minOf(spec.getInt("max_bytes").toLong(), at)).toInt()
             // Without open, the script is one text from its start.
             val mark = script.optString("open").takeIf { script.has("open") }?.let(::bytes)
-            val ends = HashSet<String>()
-            val breaks = HashSet<String>()
+            // Codes as ints (memory byte order), as the table packs them: a script is walked code by
+            // code, and a string per code made a big one cost tens of milliseconds a read.
+            if (unit !in 1..4) throw LayoutError("a script's unit is 1 to 4 bytes")
+            val ends = HashSet<Int>()
+            val breaks = HashSet<Int>()
             for ((code, what) in controls) {
-                if (what == "end") ends += code
-                if (what == "page" || what == "clear") breaks += code
+                if (code.length != unit * 2) continue
+                if (what == "end") ends += code.toLong(16).toInt()
+                if (what == "page" || what == "clear") breaks += code.toLong(16).toInt()
             }
             val rows = script.optString("texts") == "rows"
             // At or before the script's start there is nothing to read.
-            val isEnd = { c: String -> t.isEnd(c) || c in ends }
+            val isEnd = { c: Int -> t.isEndCode(c, unit) || c in ends }
             val texts = when {
                 size <= 0 -> emptyList()
                 mark != null -> scriptPage(read(start + at - size, size + mark.size), size, mark, isEnd, breaks, rows, script.optInt("rest"))
@@ -495,8 +499,8 @@ object Layouts {
             read: ByteArray,
             readSize: Int,
             mark: ByteArray,
-            isEnd: (String) -> Boolean,
-            breaks: Set<String>,
+            isEnd: (Int) -> Boolean,
+            breaks: Set<Int>,
             rows: Boolean,
             /** How many codes past an end code the game may rest while its text stays up (0: none). */
             rest: Int = 0,
@@ -506,7 +510,7 @@ object Layouts {
             // The nearest end code behind the position, k codes back: the position is read as just past it.
             for (k in 0..(if (rest > 0) rest else -1)) {
                 val at = size - (k + 1) * unit
-                if (at >= 0 && isEnd(hexOf(both, at, unit))) {
+                if (at >= 0 && isEnd(CharTable.packedCode(both, at, unit))) {
                     size -= k * unit
                     both = both.copyOf(size + mark.size)
                     break
@@ -514,9 +518,10 @@ object Layouts {
             }
             val data = both.copyOf(size)
             val ahead = both.copyOfRange(size, both.size)
-            fun code(i: Int): String = if (i >= 0 && i + unit <= data.size) hexOf(data, i, unit) else ""
+            // -1: no whole code there.
+            fun code(i: Int): Int = if (i >= 0 && i + unit <= data.size) CharTable.packedCode(data, i, unit) else -1
             fun markAt(p: Int) = p >= mark.size && mark.indices.all { data[p - mark.size + it] == mark[it] }
-            fun ends(i: Int) = code(i).let { it.isNotEmpty() && isEnd(it) }
+            fun ends(i: Int) = code(i).let { it >= 0 && isEnd(it) }
             // A mark ending at q carries the page on.
             fun joins(q: Int) = ends(q - unit) && code(q - 2 * unit) !in breaks
             var p = data.size
@@ -543,9 +548,9 @@ object Layouts {
          * screen; with a [mark], two texts of the page join where an end code meets it (each a
          * piece of its own with [rows]).
          */
-        private fun pagesFrom(data: ByteArray, start: Int, mark: ByteArray?, isEnd: (String) -> Boolean, breaks: Set<String>, rows: Boolean): List<ByteArray> {
-            fun code(i: Int): String = if (i >= 0 && i + unit <= data.size) hexOf(data, i, unit) else ""
-            fun ends(i: Int) = code(i).let { it.isNotEmpty() && isEnd(it) }
+        private fun pagesFrom(data: ByteArray, start: Int, mark: ByteArray?, isEnd: (Int) -> Boolean, breaks: Set<Int>, rows: Boolean): List<ByteArray> {
+            fun code(i: Int): Int = if (i >= 0 && i + unit <= data.size) CharTable.packedCode(data, i, unit) else -1
+            fun ends(i: Int) = code(i).let { it >= 0 && isEnd(it) }
             // Where the end codes at the position begin: a page code with only those after it ended a
             // page that is still up.
             var tail = data.size
@@ -573,7 +578,6 @@ object Layouts {
             return pieces.map { it.toByteArray() }
         }
 
-        private fun hexOf(data: ByteArray, i: Int, n: Int) = (i until i + n).joinToString("") { "%02X".format(data[it].toInt() and 0xFF) }
 
         private fun read(address: Long, size: Int): ByteArray =
             memory.read(address, size).also { if (it.size < size) throw LayoutError("0x%08X+%d is outside memory".format(address, size)) }
@@ -624,9 +628,7 @@ object Layouts {
         private var codes: List<Pair<ByteArray, Int>> = emptyList()
 
         /** Bytes in the code starting at [i], or 0 when none starts there: the longest lead wins. */
-        private fun codeLength(data: ByteArray, i: Int): Int =
-            codes.filter { (lead, _) -> i + lead.size <= data.size && lead.indices.all { data[i + it] == lead[it] } }
-                .maxByOrNull { it.first.size }?.second ?: 0
+        private fun codeLength(data: ByteArray, i: Int): Int = if (codes.isEmpty()) 0 else CharTable.codeLength(data, i, codes)
 
         /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */
         private fun charLength(data: ByteArray, i: Int, charset: String, width: Int): Int {

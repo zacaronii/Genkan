@@ -91,6 +91,37 @@ class LayoutsTest {
         Layouts.read(JSONObject("{\"message\": $spec}"), memory).message
 
     @Test
+    fun `a 36 KB paged table text with its cursor on the last page reads that page`() {
+        // A game that keeps a whole scene's script and a cursor into it (Persona 2's 36 KB): the
+        // walk to the cursor goes code by code, so a slow path here was a big cost every read.
+        val table = CharTable.parse(listOf("0100=あ\n0200=い\n0300=う\n/FF00\n"))
+        val page = byteArrayOf(1, 0, 2, 0, 1, 0)
+        val last = byteArrayOf(3, 0, 3, 0, 2, 0)
+        val breakCode = byteArrayOf(0x11, 0x03)
+        // A 4-byte code (lead 0512, two argument bytes) inside each page, skipped whole.
+        val code = byteArrayOf(0x05, 0x12, 0x11, 0x03)
+        val buffer = java.io.ByteArrayOutputStream()
+        while (buffer.size() < 36 * 1024 - 32) { buffer.write(page); buffer.write(code); buffer.write(breakCode) }
+        val lastAt = buffer.size()
+        buffer.write(last); buffer.write(breakCode)
+        val text = buffer.toByteArray().copyOf(36 * 1024)
+        val cursorAt = 0x10000L + lastAt + 2
+        val memory = LayoutMemory { address, size ->
+            when {
+                address >= 0x10000 && address + size <= 0x10000 + text.size -> text.copyOfRange((address - 0x10000).toInt(), (address - 0x10000).toInt() + size)
+                address == 0x100L && size == 4 -> java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(cursorAt.toInt()).array()
+                else -> throw LayoutError("outside")
+            }
+        }
+        val layout = JSONObject(
+            """{"message": {"address": "0x10000", "charset": "table", "max_bytes": ${36 * 1024},
+            "pages": {"break": "1103", "cursor": {"address": "0x100", "type": "u32"}}, "codes": {"0512": 4}}}""",
+        )
+        // The code's argument bytes (1103) are skipped with it, not taken for a page break.
+        assertEquals("ううい", Layouts.read(layout, memory, 2, table).message)
+    }
+
+    @Test
     fun `a huge length is clamped, not turned negative`() {
         val memory = bytesAt(0x100, 0x41, 0x42, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF)
         val spec = """{"address": "0x100", "charset": "utf8", "max_bytes": 2, "length": {"address": "0x104", "type": "u32"}}"""
@@ -163,6 +194,8 @@ class LayoutsTest {
             it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
         }
         assertTrue(Layouts.understood(scripted))
+        // A code's whole length may be up to 32 bytes (a control with many argument words).
+        assertTrue(Layouts.understood(JSONObject(scripted.toString()).also { it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 32}""")) }))
         // A script's `rest` is a whole number of codes from 1 to 16.
         fun rested(rest: Any) = JSONObject(scripted.toString()).also { it.getJSONObject("message").getJSONObject("script").put("rest", rest) }
         assertTrue(Layouts.understood(rested(1)) && Layouts.understood(rested(16)))
@@ -211,7 +244,7 @@ class LayoutsTest {
                 }
             }.toTypedArray(),
             // Codes: whole hex leads of 1-4 bytes, integer lengths from the lead's up to 16, never with a table.
-            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 17}""", """{"0102030405": 6}""").map { codes ->
+            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 33}""", """{"0102030405": 6}""").map { codes ->
                 changed { it.getJSONObject("message").put("codes", JSONObject(codes)) }
             }.toTypedArray(),
             // A script only with a table, without rows; open whole hex bytes; offset a number.
