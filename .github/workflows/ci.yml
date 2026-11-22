@@ -66,6 +66,17 @@ jobs:
       - name: Build, test and lint
         run: ./gradlew assembleDebug lintDebug :app:verifyRoborazziDebug
 
+      # Every unit test's report on a failure: what a test reported (an uncaught exception's
+      # cause included) is only in its XML.
+      - name: Upload test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/test-results/testDebugUnitTest/*.xml
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload screenshot comparisons
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
