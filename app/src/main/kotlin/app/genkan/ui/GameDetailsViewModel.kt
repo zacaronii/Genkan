@@ -20,6 +20,8 @@ import app.genkan.saves.SaveStatus
 import app.genkan.saves.SaveSync
 import app.genkan.stats.ReadingDao
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.words.GameLookupDao
+import app.genkan.words.GameLookupTotals
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +74,8 @@ data class GameDetails(
     val art: GameArt = GameArt(),
     /** Whether the game is on the "Favourites" shelf. */
     val favourite: Boolean = false,
+    /** The words looked up while reading it. */
+    val lookups: GameLookupTotals = GameLookupTotals(0, 0),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -84,6 +88,7 @@ class GameDetailsViewModel @Inject constructor(
     readingDao: ReadingDao,
     private val downloadQueue: DownloadQueue,
     private val favouriteDao: FavouriteDao,
+    private val gameLookups: GameLookupDao,
     saveSync: SaveSync,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -117,11 +122,12 @@ class GameDetailsViewModel @Inject constructor(
             val play = if (LocalShelves.isLocal(game)) flowOf(null) else playSessions.totals(game.id)
             combine(
                 play,
-                readingDao.gameTotals("game:${game.id}"),
+                // Reading and lookups are both kept per game key.
+                combine(readingDao.gameTotals("game:${game.id}"), gameLookups.totals("game:${game.id}")) { r, l -> r to l },
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
                 favouriteDao.ids().map { game.id in it },
-            ) { p, r, d, s, f -> GameDetails(focus, p, r, d, s, art, f) }
+            ) { p, r, d, s, f -> GameDetails(focus, p, r.first, d, s, art, f, r.second) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 

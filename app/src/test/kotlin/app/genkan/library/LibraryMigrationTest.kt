@@ -85,6 +85,29 @@ class LibraryMigrationTest {
         }
     }
 
+    /** 17 to 18 adds the per-game lookups table: favourites and games stay, and it starts empty. */
+    @Test
+    fun game_lookups_arrive_empty_from_17_to_18() {
+        val file = context.getDatabasePath(DB).apply { parentFile?.mkdirs(); delete() }
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            createFromSchema(db, 17)
+            db.execSQL(
+                "INSERT INTO games (id, platformId, platformSlug, name, sortTitle, fsName, fsSizeBytes, coverPath, " +
+                    "hasMultipleFiles) VALUES (1, 2, 'psx', 'Example Quest', 'example quest', NULL, 10, NULL, 0)",
+            )
+            db.execSQL("INSERT INTO favourites (romId, addedAt) VALUES (1, 7)")
+        }
+        val library = Room.databaseBuilder(context, LibraryDatabase::class.java, DB).allowMainThreadQueries().build()
+        try {
+            val db = library.openHelper.readableDatabase
+            db.query("SELECT COUNT(*) FROM games").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+            db.query("SELECT romId FROM favourites").use { assertTrue(it.moveToFirst()); assertEquals(1L, it.getLong(0)) }
+            db.query("SELECT COUNT(*) FROM game_lookups").use { assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0)) }
+        } finally {
+            library.close()
+        }
+    }
+
     /** The tables, indices and Room's own bookkeeping of [version], as its exported schema has them. */
     private fun createFromSchema(db: SQLiteDatabase, version: Int) {
         val schema = JSONObject(File(SCHEMAS, "$version.json").readText()).getJSONObject("database")

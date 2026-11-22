@@ -327,6 +327,7 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
     val rest = listOfNotNull(
         GameDetailsFormat.rommLine(game),
         GameDetailsFormat.readingLine(details.reading),
+        GameDetailsFormat.lookupLine(details.lookups),
         GameDetailsFormat.saveLine(details.save),
     )
     val line = @Composable { text: String -> Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface) }

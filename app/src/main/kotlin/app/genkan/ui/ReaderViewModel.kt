@@ -25,6 +25,8 @@ import app.genkan.reader.ReaderLineEntity
 import app.genkan.reader.ReaderSession
 import app.genkan.reader.ThreadSample
 import app.genkan.dictionary.ScannedWord
+import app.genkan.reader.NowPlaying
+import app.genkan.words.GameLookupDao
 import app.genkan.words.LookupCounts
 import app.genkan.words.PopupPrefsSource
 import app.genkan.words.WordMarkState
@@ -66,6 +68,7 @@ class ReaderViewModel @Inject constructor(
     val builtIn: BuiltInText,
     private val words: WordStatuses,
     private val counts: LookupCounts,
+    private val gameLookups: GameLookupDao,
     private val wordMarks: WordMarks,
     private val popupPrefs: PopupPrefsSource,
     val overlay: GameOverlay,
@@ -194,6 +197,13 @@ class ReaderViewModel @Inject constructor(
         val first = result.hits.firstOrNull()
         val prefs = popupPrefs.prefs.value
         val count = if (first != null && prefs.counts) counts.record(first.expression, first.reading) else 0
+        // And for the game being read, whatever the popup shows, for the game's details.
+        val game = session.game.value.key
+        if (first != null && game != NowPlaying.NONE.key) {
+            WordStatuses.key(first.expression).takeIf { it.isNotEmpty() }?.let { term ->
+                gameLookups.record(game, term, WordStatuses.key(first.reading), System.currentTimeMillis())
+            }
+        }
         val summary = if (prefs.summary) {
             org.json.JSONObject().put("count", prefs.summaryCount).put("dictionary", prefs.summaryDictionary ?: org.json.JSONObject.NULL).toString()
         } else {

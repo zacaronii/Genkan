@@ -15,6 +15,7 @@ import app.genkan.library.FavouriteDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
 import app.genkan.words.AnkiWordDao
+import app.genkan.words.GameLookupDao
 import app.genkan.words.LookupCountDao
 import app.genkan.words.WordStatusDao
 import app.genkan.play.PlaySessionDao
@@ -78,6 +79,9 @@ object AppModule {
 
     @Provides
     fun lookupCountDao(db: LibraryDatabase): LookupCountDao = db.lookupCounts()
+
+    @Provides
+    fun gameLookupDao(db: LibraryDatabase): GameLookupDao = db.gameLookups()
 
     @Provides
     fun ankiWordDao(db: LibraryDatabase): AnkiWordDao = db.ankiWords()
