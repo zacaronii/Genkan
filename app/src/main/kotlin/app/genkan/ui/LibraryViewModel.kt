@@ -336,7 +336,12 @@ class LibraryViewModel @Inject constructor(
         }
         // The left stick's click flips "Downloaded only", the panel's filter, without opening it.
         if (key == PadKey.L3) {
-            if (repeatCount == 0) setOrder(order.value.copy(downloadedOnly = !order.value.downloadedOnly))
+            if (repeatCount == 0) {
+                val on = !order.value.downloadedOnly
+                setOrder(order.value.copy(downloadedOnly = on))
+                // A click is easy to make by accident while pushing the stick: say what happened.
+                show(if (on) "Downloaded only · L3: all games" else "All games")
+            }
             return true
         }
         if (key == PadKey.SELECT) {

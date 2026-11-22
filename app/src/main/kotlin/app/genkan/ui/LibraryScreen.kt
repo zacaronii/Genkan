@@ -203,7 +203,6 @@ private fun LibraryBody(
                 title = shelf?.name?.let { if (downloadedOnly && shelf.id > 0) "$it  ·  downloaded only" else it } ?: "Library",
                 sync = sync,
                 subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
-                downloadedOnly = downloadedOnly,
                 onToggleView = onToggleView,
             )
             Box(Modifier.weight(1f)) {
@@ -507,7 +506,7 @@ private fun shelfStatus(game: GameEntity, console: String, download: DownloadEnt
 }
 
 @Composable
-private fun Header(title: String, sync: SyncStatus, subtitle: String?, downloadedOnly: Boolean, onToggleView: () -> Unit) {
+private fun Header(title: String, sync: SyncStatus, subtitle: String?, onToggleView: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {

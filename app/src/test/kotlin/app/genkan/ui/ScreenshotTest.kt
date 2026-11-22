@@ -94,7 +94,7 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun shelfDownloadedOnly() = shoot("shelf_downloaded_only", TOP_PIXELS) {
         library(
-            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames.take(3), gameIndex = 1, staticMedia = true,
+            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames.subList(2, 5), gameIndex = 1, staticMedia = true,
             order = LibraryOrder(downloadedOnly = true), pane = LibraryPane.PLATFORMS,
         )
     }
