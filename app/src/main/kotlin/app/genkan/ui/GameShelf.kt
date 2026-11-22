@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -201,6 +202,10 @@ internal fun GameShelf(
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
 
+    // The full-box prototype's switch (debug builds; off otherwise).
+    val fullBox by FullBoxPrototype.on.collectAsState()
+    val fullBoxAngle by FullBoxPrototype.angle.collectAsState()
+
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
     if (trace) SideEffect { ShelfTrace.shelfComposed(focused) }
@@ -327,6 +332,17 @@ internal fun GameShelf(
                         // Decided per game: "Continue playing" mixes PC games with consoles'.
                         if (LocalShelves.isLocal(game)) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
+                        } else if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
+                            // Debug builds' full-box prototype: the focused game as a box from its scans.
+                            FullBox(
+                                front = artModel(game.box2dPath),
+                                spine = artModel(game.box2dSidePath),
+                                back = artModel(game.box2dBackPath),
+                                maxWidth = maxCaseWidth,
+                                maxHeight = maxCaseHeight,
+                                angle = fullBoxAngle,
+                                modifier = transform.then(select),
+                            )
                         } else {
                             ShelfCase(
                                 game = game,
