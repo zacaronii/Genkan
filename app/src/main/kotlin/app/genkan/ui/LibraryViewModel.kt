@@ -340,6 +340,16 @@ class LibraryViewModel @Inject constructor(
         if (key == PadKey.Y) {
             sync(); return true
         }
+        // The left stick's click flips "Downloaded only", the panel's filter, without opening it.
+        if (key == PadKey.L3) {
+            if (repeatCount == 0) {
+                val on = !order.value.downloadedOnly
+                setOrder(order.value.copy(downloadedOnly = on))
+                // A click is easy to make by accident while pushing the stick: say what happened.
+                show(if (on) "Downloaded only · L3: all games" else "All games")
+            }
+            return true
+        }
         if (key == PadKey.SELECT) {
             // Select closes a lingering emulator when one is offered; otherwise it switches view.
             if (lingering != null) closeLingering() else if (repeatCount == 0) toggleView()

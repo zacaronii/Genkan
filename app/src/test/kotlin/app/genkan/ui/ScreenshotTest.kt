@@ -89,6 +89,16 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = false)
     }
 
+    /** "Downloaded only" on, flipped with L3 from the console strip: the header says "3 of 8". */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfDownloadedOnly() = shoot("shelf_downloaded_only", TOP_PIXELS) {
+        library(
+            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames.subList(2, 5), gameIndex = 1, staticMedia = true,
+            order = LibraryOrder(downloadedOnly = true), pane = LibraryPane.PLATFORMS,
+        )
+    }
+
     /** "Continue playing" with a PC game played last: its plain tile first, the consoles' cases after it. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -205,13 +215,14 @@ class ScreenshotTest {
         insertProgress: Float? = null,
         order: LibraryOrder = LibraryOrder(),
         orderPanel: Int? = null,
+        pane: LibraryPane = LibraryPane.GAMES,
         platforms: List<PlatformEntity> = FakeData.platforms,
     ) {
         LibraryContent(
             view = view,
             platforms = platforms,
             games = games,
-            focus = LibraryFocus(pane = LibraryPane.GAMES, platformIndex = platformIndex, gameIndex = gameIndex),
+            focus = LibraryFocus(pane = pane, platformIndex = platformIndex, gameIndex = gameIndex),
             sync = SyncStatus.Done(games = 64),
             downloads = FakeData.downloads,
             notice = null,
