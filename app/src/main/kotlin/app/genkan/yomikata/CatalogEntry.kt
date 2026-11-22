@@ -161,6 +161,38 @@ class CharTable private constructor(
     /** Whether [code] ends a string or a line. */
     fun isBreak(code: String): Boolean = code.uppercase().let { it in ends || it in newlines }
 
+    /**
+     * The table's codes of one width as ints ([packed]): a layout is read every few frames, and
+     * a string per code made reading a big text cost tens of milliseconds.
+     */
+    private class Packed(val chars: HashMap<Int, String>, val ends: HashSet<Int>, val newlines: HashSet<Int>)
+
+    private val packedByUnit = java.util.concurrent.ConcurrentHashMap<Int, Packed>()
+
+    private fun packed(unit: Int): Packed = packedByUnit.getOrPut(unit) {
+        val width = unit * 2
+        fun ints(keys: Collection<String>) = keys.filter { it.length == width }.mapTo(HashSet()) { it.toLong(16).toInt() }
+        Packed(
+            chars.entries.filter { it.key.length == width }.associateTo(HashMap()) { it.key.toLong(16).toInt() to it.value },
+            ints(ends),
+            ints(newlines),
+        )
+    }
+
+    /** Whether the code [packed] from [unit] bytes is one the tables mark as an end. */
+    fun isEndCode(code: Int, unit: Int): Boolean = unit <= 4 && code in packed(unit).ends
+
+    /** The last controls map given to [decode], packed: the same map comes on every read. */
+    @Volatile
+    private var packedControls: Triple<Map<String, String>, Int, Map<Int, String>>? = null
+
+    private fun packedControls(controls: Map<String, String>, unit: Int): Map<Int, String> {
+        packedControls?.let { (map, u, ints) -> if (map === controls && u == unit) return ints }
+        val ints = controls.entries.filter { it.key.length == unit * 2 }.associate { it.key.toLong(16).toInt() to it.value }
+        packedControls = Triple(controls, unit, ints)
+        return ints
+    }
+
     private val reverse: Map<Char, String> by lazy {
         buildMap { chars.entries.sortedBy { it.key }.forEach { (code, text) -> if (text.length == 1) putIfAbsent(text[0], code) } }
     }
@@ -178,15 +210,14 @@ class CharTable private constructor(
         unit: Int,
         controls: Map<String, String> = emptyMap(),
         codes: List<Pair<ByteArray, Int>> = emptyList(),
-    ): String = buildString {
+    ): String = if (unit in 1..4) decodePacked(bytes, unit, controls, codes) else buildString {
         var i = 0
         while (i + unit <= bytes.size) {
             // A text's own codes (controls with arguments) are looked for first: the longest lead,
             // its whole length, decoded to nothing.
-            val lead = codes.filter { (lead, _) -> i + lead.size <= bytes.size && lead.indices.all { bytes[i + it] == lead[it] } }
-                .maxByOrNull { it.first.size }
-            if (lead != null) {
-                i += lead.second
+            val lead = codeLength(bytes, i, codes)
+            if (lead > 0) {
+                i += lead
                 continue
             }
             val code = hex(bytes, i, unit)
@@ -201,8 +232,55 @@ class CharTable private constructor(
         }
     }
 
+    /** [decode] for codes of up to 4 bytes, compared as ints: the same text, no string per code. */
+    private fun decodePacked(bytes: ByteArray, unit: Int, controls: Map<String, String>, codes: List<Pair<ByteArray, Int>>): String {
+        val table = packed(unit)
+        val ctl = packedControls(controls, unit)
+        val out = StringBuilder()
+        var i = 0
+        while (i + unit <= bytes.size) {
+            val lead = codeLength(bytes, i, codes)
+            if (lead > 0) {
+                i += lead
+                continue
+            }
+            val code = packedCode(bytes, i, unit)
+            val control = ctl[code]
+            when {
+                code in table.ends || control == "end" -> out.append("\n\n")
+                code in table.newlines || control == "newline" -> out.append('\n')
+                control == "page" || control == "clear" -> out.append("\n\n")
+                control != null -> Unit
+                else -> out.append(table.chars[code] ?: "�")
+            }
+            i += unit
+        }
+        return out.toString()
+    }
+
     companion object {
         private val LINE = Regex("^([0-9A-Fa-f]{2,8})=(.*)$")
+
+        /** [unit] bytes at [at] as one int, in memory byte order (as the hex keys read). */
+        fun packedCode(bytes: ByteArray, at: Int, unit: Int): Int {
+            var v = 0
+            for (k in 0 until unit) v = (v shl 8) or (bytes[at + k].toInt() and 0xFF)
+            return v
+        }
+
+        /** Bytes in the code of [codes] (lead, whole length) starting at [i], the longest lead winning; 0 for none. */
+        fun codeLength(bytes: ByteArray, i: Int, codes: List<Pair<ByteArray, Int>>): Int {
+            var best = 0
+            var bestLead = -1
+            for (k in codes.indices) {
+                val (lead, length) = codes[k]
+                if (lead.size <= bestLead || i + lead.size > bytes.size) continue
+                var match = true
+                for (j in lead.indices) if (bytes[i + j] != lead[j]) { match = false; break }
+                if (match) { best = length; bestLead = lead.size }
+            }
+            return best
+        }
 
         fun parse(files: List<String>): CharTable {
             val chars = HashMap<String, String>()
