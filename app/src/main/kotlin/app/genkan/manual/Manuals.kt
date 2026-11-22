@@ -87,9 +87,9 @@ class Manuals @Inject constructor(
 
         /**
          * The cached manual's file name: the game's id, then a hash of what identifies this
-         * version of the manual, so a changed manual is fetched again. Games carry no updated
-         * time, so the hash covers the manual's path (RomM adds a timestamp to some asset paths)
-         * and the game's file size.
+         * version of the manual, so a changed manual is fetched again. The hash covers the
+         * manual's path, which carries the rom's update time (LibrarySync.art), and the game's
+         * file size.
          */
         fun fileName(game: GameEntity): String {
             val digest = MessageDigest.getInstance("SHA-1").digest("${game.manualPath}|${game.fsSizeBytes}".toByteArray())

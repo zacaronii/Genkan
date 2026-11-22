@@ -14,10 +14,13 @@ class ArtworkWarmerTest {
         physical: String? = "P$id",
         spine: String? = null,
         logo: String? = null,
+        front: String? = null,
+        back: String? = null,
     ) = GameEntity(
         id = id, platformId = platformId, platformSlug = "psx", name = "Game $id", sortTitle = "game $id",
         fsName = null, fsSizeBytes = 0, coverPath = small, hasMultipleFiles = false,
         coverLargePath = large, physicalPath = physical, box2dSidePath = spine, logoPath = logo,
+        box2dPath = front, box2dBackPath = back,
     )
 
     private val shelf = (0L until 40L).map { game(it) }
@@ -79,5 +82,37 @@ class ArtworkWarmerTest {
         assertTrue(ArtworkWarmer.warmPaths(listOf(game(-5, platformId = -1)), 0, 0).isEmpty())
         assertTrue(ArtworkWarmer.warmPaths(emptyList(), 0, 0).isEmpty())
         assertTrue(ArtworkWarmer.warmPaths(listOf(game(0)), 4, 0).isEmpty())
+    }
+
+    /** A shelf whose games have every face of their box: front, spine and back. */
+    private val boxes = (0L until 40L).map { game(it, spine = "D$it", front = "F$it", back = "B$it") }
+
+    @Test
+    fun `with the full box off, no box fronts or backs`() {
+        val paths = ArtworkWarmer.warmPaths(boxes, 20, direction = 0)
+        assertTrue(paths.none { it.startsWith("F") || it.startsWith("B") })
+    }
+
+    @Test
+    fun `with the full box on, a front with every spine, at rest and moving`() {
+        val still = ArtworkWarmer.warmPaths(boxes, 20, direction = 0, fullBox = true)
+        assertEquals(still.filter { it.startsWith("D") }.map { it.drop(1) }, still.filter { it.startsWith("F") }.map { it.drop(1) })
+        val moving = ArtworkWarmer.warmPaths(boxes, 20, direction = 1, fullBox = true)
+        assertEquals(moving.filter { it.startsWith("D") }.map { it.drop(1) }, moving.filter { it.startsWith("F") }.map { it.drop(1) })
+        assertTrue(moving.none { it.startsWith("B") })
+    }
+
+    @Test
+    fun `the back only for the focused game, and only when the box shows it`() {
+        assertTrue(ArtworkWarmer.warmPaths(boxes, 20, direction = 0, fullBox = true).none { it.startsWith("B") })
+        val turned = ArtworkWarmer.warmPaths(boxes, 20, direction = 0, fullBox = true, showsBack = true)
+        assertEquals(listOf("B20"), turned.filter { it.startsWith("B") })
+    }
+
+    @Test
+    fun `no front for a game the full box can't draw`() {
+        // No spine: it keeps its case, so its front isn't wanted.
+        val games = (0L until 10L).map { game(it, front = "F$it") }
+        assertTrue(ArtworkWarmer.warmPaths(games, 5, direction = 0, fullBox = true).none { it.startsWith("F") })
     }
 }

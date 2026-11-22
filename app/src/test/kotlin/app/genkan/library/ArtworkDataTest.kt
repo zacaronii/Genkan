@@ -146,4 +146,41 @@ class ArtworkDataTest {
         assertEquals(Instant.parse("2026-03-04T05:06:07Z").toEpochMilli(), LibrarySync.parseTimestamp("2026-03-04T05:06:07"))
         assertNull(LibrarySync.parseTimestamp("not a date"))
     }
+
+    /** The same game after RomM changed it (re-matched, say): the fixture with an update time. */
+    private fun updated(at: String): RomMRom =
+        Moshi.Builder().build().adapter(RomMRom::class.java).fromJson(fixture.replaceFirst("{", "{\"updated_at\": \"$at\","))!!
+
+    @Test
+    fun `screenscraper art, screenshots and the manual carry the rom's update time`() {
+        val changed = LibrarySync.toEntity(updated("2026-11-22T23:39:35+00:00"))
+        val base = "/assets/romm/resources/roms/7/4242"
+        assertEquals("$base/box2d/box2d.png?ts=20261122233935", changed.box2dPath)
+        assertEquals("$base/box2d_side/box2d_side.png?ts=20261122233935", changed.box2dSidePath)
+        assertEquals("$base/box2d_back/box2d_back.png?ts=20261122233935", changed.box2dBackPath)
+        assertEquals("$base/physical/physical.png?ts=20261122233935", changed.physicalPath)
+        assertEquals("$base/logo/logo.png?ts=20261122233935", changed.logoPath)
+        assertEquals("$base/fanart/fanart.jpg?ts=20261122233935", changed.fanartPath)
+        assertEquals("$base/screenshots/0.jpg?ts=20261122233935", changed.screenshotPathList.first())
+        assertEquals("$base/manual/4242.pdf?ts=20261122233935", changed.manualPath)
+        // Covers keep RomM's own version.
+        assertEquals(rom.coverLarge, changed.coverLargePath)
+    }
+
+    @Test
+    fun `a game re-matched in RomM gets new art paths, so the disk cache can't serve the old files`() {
+        val before = LibrarySync.toEntity(updated("2026-11-21T22:33:37+00:00"))
+        val after = LibrarySync.toEntity(updated("2026-11-22T23:39:35+00:00"))
+        for (path in listOf<(app.genkan.library.GameEntity) -> String?>({ it.box2dPath }, { it.box2dSidePath }, { it.box2dBackPath }, { it.physicalPath })) {
+            assertTrue(path(before) != path(after))
+        }
+    }
+
+    @Test
+    fun `a version joins a query already there, and nothing is added without one`() {
+        assertEquals("/a.png?x=1&ts=20261122233935", LibrarySync.versioned("/a.png?x=1", "2026-11-22T23:39:35+00:00"))
+        assertEquals("/a.png", LibrarySync.versioned("/a.png", null))
+        assertEquals("/a.png", LibrarySync.versioned("/a.png", ""))
+        assertNull(LibrarySync.versioned(null, "2026-11-22T23:39:35+00:00"))
+    }
 }
