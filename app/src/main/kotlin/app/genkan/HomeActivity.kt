@@ -265,8 +265,8 @@ class HomeActivity : ComponentActivity() {
             }
             // A form: the D-pad moves Compose focus between its fields.
             Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK -> when (pad) {
-                // B closes the keyboard first, and only then the page.
-                PadKey.B -> if (!hideKeyboard()) appViewModel.closePage()
+                // B closes the keyboard first, or the screen look list, and only then the page.
+                PadKey.B -> if (!hideKeyboard() && !(screen == Screen.SCREEN_LOOK && screenLookViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
                 else -> return super.dispatchKeyEvent(event)
             }

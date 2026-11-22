@@ -156,6 +156,7 @@ class GameDetailsViewModel @Inject constructor(
         // A message about one game means nothing once another is focused.
         viewModelScope.launch {
             focusedGame.focus.map { it?.game?.id }.drop(1).collect {
+                _pickingLook.value = false
                 manualJob?.cancel()
                 _manual.value = null
                 noticeJob?.cancel()
@@ -261,11 +262,23 @@ class GameDetailsViewModel @Inject constructor(
             }
         }
 
-    /** The game's look steps once: its console's, then each look, then its console's again. */
-    fun stepLook() {
-        val details = details.value ?: return
-        val look = details.look ?: return
-        viewModelScope.launch { screenLooks.setGame(details.focus.game.id, ScreenLook.nextOverride(look.own)) }
+    private val _pickingLook = MutableStateFlow(false)
+    /** Whether the list of looks is open for the focused game. */
+    val pickingLook: StateFlow<Boolean> = _pickingLook.asStateFlow()
+
+    fun openLookPicker() {
+        if (details.value?.look != null) _pickingLook.value = true
+    }
+
+    fun closeLookPicker() {
+        _pickingLook.value = false
+    }
+
+    /** The game's own look ([look]), or its console's (null); the list closes. */
+    fun pickLook(look: ScreenLook?) {
+        val game = details.value?.focus?.game ?: return
+        _pickingLook.value = false
+        viewModelScope.launch { screenLooks.setGame(game.id, look) }
     }
 
     private fun artFor(game: GameEntity): GameArt {

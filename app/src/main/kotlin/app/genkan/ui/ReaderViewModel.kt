@@ -92,9 +92,21 @@ class ReaderViewModel @Inject constructor(
     val look: StateFlow<Pair<ScreenLook, Boolean>?> =
         player.game.map { game -> game?.let { it.look to (it.look == it.kept) } }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Draws the game with the next look, for this play only, to compare. */
-    fun stepLook() {
-        look.value?.let { (now, _) -> player.setLook(now.next()) }
+    private val _pickingLook = MutableStateFlow(false)
+    /** Whether the list of looks is open over the reader, to try them while playing. */
+    val pickingLook: StateFlow<Boolean> = _pickingLook.asStateFlow()
+
+    fun openLookPicker() {
+        if (look.value != null) _pickingLook.value = true
+    }
+
+    fun closeLookPicker() {
+        _pickingLook.value = false
+    }
+
+    /** Draws the game with [picked] at once, for this play only; the list stays open to compare. */
+    fun tryLook(picked: ScreenLook) {
+        player.setLook(picked)
     }
 
     /** Makes the look on screen the game's own, as its details' Look button would. */

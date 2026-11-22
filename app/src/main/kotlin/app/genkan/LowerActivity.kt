@@ -29,6 +29,7 @@ import app.genkan.ui.CompanionMode
 import app.genkan.ui.GameDetailsScreen
 import app.genkan.ui.GameDetailsViewModel
 import app.genkan.ui.PlayManualLayer
+import app.genkan.ui.ReaderLookPicker
 import app.genkan.ui.ReaderScreen
 import app.genkan.ui.ReaderViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -92,6 +93,8 @@ class LowerActivity : ComponentActivity() {
                         )
                         // The playing game's manual, over the reader.
                         PlayManualLayer(reader.manual)
+                        // The looks to try while playing, over the reader.
+                        ReaderLookPicker(reader)
                     }
                 }
             }

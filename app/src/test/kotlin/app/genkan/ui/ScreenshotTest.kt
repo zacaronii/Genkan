@@ -349,13 +349,32 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun settingsLibrary() = shootSettings(0, SettingsFocus(pane = SettingsPane.GROUPS, group = 0))
 
+    /** The list of looks for the PlayStation, from the screen look page: the pad on the current one. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun screenLookPicker() = shoot("screen_look_picker", TOP_PIXELS) {
+        ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
+    }
+
+    /** The list of looks for one game, on the bottom screen: "Console's" first and in use. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameLookPicker() = shoot("game_look_picker", BOTTOM_PIXELS) {
+        LookPicker(
+            title = "The Clockmaker's Apprentice: look",
+            selected = null,
+            console = app.genkan.core.ScreenLook.SHARP,
+            onPick = {},
+            onClose = {},
+        )
+    }
+
     /** The screen look page: the defaults, with the GBA and PSP chosen. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
     fun screenLook() = shoot("screen_look", TOP_PIXELS) {
         ScreenLookContent(
             consoles = mapOf("gba" to app.genkan.core.ScreenLook.SHARP, "psp" to app.genkan.core.ScreenLook.CUT),
-            onStep = {},
         )
     }
 
