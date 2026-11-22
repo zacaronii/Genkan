@@ -11,9 +11,10 @@ import android.view.View
 import app.genkan.ocr.ScreenText
 
 /**
- * Drawn over the game in the player's process: a box round each line OCR read, where it sits.
- * A tap on a box goes to [onTap] (the line and the character tapped); any other touch passes
- * through to the game. Never takes focus, so the pad stays with the game.
+ * Drawn over the game in the player's process: a box round each line OCR read, where it sits,
+ * and an [OverlayPanel] (a choice's answers) in the top right. A tap on a box or a panel row goes
+ * to [onTap] (the line and the character tapped); any other touch passes through to the game.
+ * Never takes focus, so the pad stays with the game.
  */
 class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit) : View(context) {
     private var screen = ScreenText.EMPTY
@@ -27,6 +28,17 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
         color = Color.argb(170, 255, 255, 255)
     }
 
+    private var panel: OverlayPanel? = null
+    private var panelGeometry: PanelGeometry? = null
+    private val panelBox = RectF()
+    private val panelFill = Paint().apply { color = Color.argb(200, 20, 20, 24) }
+    private val panelHighlight = Paint().apply { color = Color.argb(150, 232, 176, 76) }
+    private val panelText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = PANEL_TEXT_SP * resources.displayMetrics.scaledDensity
+    }
+    private val panelPad = 10 * density
+
     init {
         isFocusable = false
         isFocusableInTouchMode = false
@@ -37,6 +49,23 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
         invalidate()
     }
 
+    /** Shows [next] in the top right, or no panel. */
+    fun showPanel(next: OverlayPanel?) {
+        panel = next
+        panelGeometry = null
+        invalidate()
+    }
+
+    /** How many of [text]'s characters from [from] fit in [width], as drawn. */
+    private fun fit(text: String, from: Int, width: Float): Int = panelText.breakText(text, from, text.length, true, width, null)
+
+    private fun geometry(panel: OverlayPanel): PanelGeometry =
+        panelGeometry ?: PanelGeometry.place(
+            panel.items, width.toFloat(), height.toFloat(),
+            lineHeight = panelText.textSize * 1.6f, margin = 16 * density, pad = panelPad,
+            measure = panelText::measureText, fit = ::fit,
+        ).also { panelGeometry = it }
+
     override fun onDraw(canvas: Canvas) {
         val pad = 3 * density
         val corner = 6 * density
@@ -45,6 +74,23 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
             canvas.drawRoundRect(box, corner, corner, fill)
             canvas.drawRoundRect(box, corner, corner, stroke)
         }
+        val panel = panel ?: return
+        val g = geometry(panel)
+        panelBox.set(g.left, g.top, g.left + g.width, g.bottom)
+        canvas.drawRoundRect(panelBox, corner, corner, panelFill)
+        panel.items.forEachIndexed { row, item ->
+            val lines = g.rows[row]
+            val top = g.top + lines.firstLine * g.lineHeight
+            if (row == panel.highlighted) {
+                panelBox.set(g.left, top, g.left + g.width, top + lines.starts.size * g.lineHeight)
+                canvas.drawRoundRect(panelBox, corner, corner, panelHighlight)
+            }
+            lines.starts.forEachIndexed { i, start ->
+                val end = lines.starts.getOrNull(i + 1) ?: item.length
+                val baseline = top + i * g.lineHeight + (g.lineHeight - panelText.descent() - panelText.ascent()) / 2
+                canvas.drawText(item, start, end, g.left + panelPad, baseline, panelText)
+            }
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -52,7 +98,7 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
         if (width == 0 || height == 0) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                pressed = screen.hit(event.x / width, event.y / height)
+                pressed = panelHit(event.x, event.y) ?: screen.hit(event.x / width, event.y / height)
                 return pressed != null
             }
             MotionEvent.ACTION_UP -> {
@@ -62,5 +108,24 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
             MotionEvent.ACTION_CANCEL -> pressed = null
         }
         return true
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        panelGeometry = null
+    }
+
+    /** The panel row at ([x], [y]) and the character under it, or null off the panel. */
+    private fun panelHit(x: Float, y: Float): ScreenText.Hit? {
+        val panel = panel ?: return null
+        val g = geometry(panel)
+        val (row, line) = g.lineAt(x, y) ?: return null
+        val text = panel.items[row]
+        return ScreenText.Hit(text, g.offsetAt(text, row, line, x, ::fit))
+    }
+
+    private companion object {
+        /** The panel's text size, in sp: readable over the game at arm's length. */
+        const val PANEL_TEXT_SP = 18f
     }
 }
