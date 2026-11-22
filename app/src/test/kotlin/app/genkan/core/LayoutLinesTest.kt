@@ -116,4 +116,114 @@ class LayoutLinesTest {
         val step = read("こんにちは", waiting = true)
         assertEquals("苗木", step.lines.single().speaker)
     }
+
+    @Test
+    fun `while a choice is up, only the question goes, not the answers`() {
+        val asking = LayoutRead(message = "どうする？\n：右へ行く\n：左へ行く", waiting = true, choosing = true, choices = listOf("右へ行く", "左へ行く"))
+        assertEquals(listOf("どうする？"), texts(lines.read(asking)))
+        // Answers alone (no question): nothing goes.
+        lines.reset()
+        assertEquals(emptyList<String>(), texts(lines.read(asking.copy(message = "：右へ行く\n：左へ行く"))))
+        // Not choosing: the rows are the message, as before.
+        lines.reset()
+        assertEquals(listOf("：右へ行く：左へ行く"), texts(lines.read(asking.copy(message = "：右へ行く\n：左へ行く", choosing = false))))
+    }
+
+    @Test
+    fun `an answer row is the answer, or it with a short mark before it`() {
+        assertEquals("問い\n長い前置きの右へ行く", LayoutLines.withoutAnswers("問い\n：右へ行く\n長い前置きの右へ行く\n右へ行く", listOf("右へ行く")))
+    }
+
+    @Test
+    fun `answers typed out before the choice is up don't go either`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        lines.read(LayoutRead(message = "：右へ", waiting = false, choosing = false, choices = emptyList()))
+        lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = false, choices = emptyList()))
+        val up = lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        assertEquals(emptyList<String>(), texts(up))
+        assertNull(lines.settled())
+        // With a question first: the question goes, alone.
+        lines.reset()
+        lines.read(LayoutRead(message = "どうする？\n：右へ行く", waiting = false, choosing = false, choices = emptyList()))
+        lines.read(LayoutRead(message = "どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        assertEquals("どうする？", lines.settled()?.text)
+    }
+
+    @Test
+    fun `the choice's page left up a moment after the answer doesn't go`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = false, choosing = true, choices = answers))
+        // A taken: the game waits a frame with the page still there, then clears it.
+        assertEquals(emptyList<String>(), texts(lines.read(LayoutRead(message = "：右へ行く\n：左へ行く", waiting = true, choosing = false, choices = emptyList()))))
+        assertEquals(emptyList<String>(), texts(lines.read(LayoutRead(message = "", waiting = false, choosing = false, choices = emptyList()))))
+        // The next page is a line again.
+        assertEquals(listOf("はい"), texts(lines.read(LayoutRead(message = "はい", waiting = true, choosing = false, choices = emptyList()))))
+    }
+
+    @Test
+    fun `a question typed out with its answers goes once, the answers never`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        val sent = mutableListOf<String>()
+        fun step(message: String, waiting: Boolean, choosing: Boolean) {
+            sent += texts(lines.read(LayoutRead(message = message, waiting = waiting, choosing = choosing, choices = if (choosing) answers else emptyList())))
+        }
+        // Typing: the question, then the answers, all before the game says it's a choice.
+        for (typed in listOf("どう", "どうする？", "どうする？\n：右へ", "どうする？\n：右へ行く\n：左へ行く")) step(typed, waiting = false, choosing = false)
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true)
+        lines.settled()?.let { sent += it.text }
+        // The cursor moves (nothing changes in the message), then A: a frame waiting, then cleared.
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true)
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = true, choosing = false)
+        step("", waiting = false, choosing = false)
+        lines.settled()?.let { sent += it.text }
+        assertEquals(listOf("どうする？"), sent)
+    }
+
+    @Test
+    fun `a question handed from the typing layout to the choice layout goes once`() {
+        // As Gakkou de Atta Kowai Hanashi S does: the typing layout (1) types the question and waits,
+        // one empty read as it hands over, then the choice layout (0) reads the same question with its answers.
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "知ってる？", waiting = false, layout = 1))
+        step(LayoutRead(message = "知ってる？", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "知ってる？", choosing = false, choices = listOf("はい"), choiceCount = 1, layout = 0))
+        step(LayoutRead(message = "知ってる？", choosing = true, choices = listOf("はい", "いいえ"), choiceCount = 2, layout = 0))
+        lines.settled()?.let { sent += it.text }
+        assertEquals(listOf("知ってる？"), sent)
+    }
+
+    @Test
+    fun `the same line twice from the same layout is two lines`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        assertEquals(listOf("はい", "はい"), sent)
+    }
+
+    @Test
+    fun `another layout repeating a line after other text is a new line`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        step(LayoutRead(message = "いいえ", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "いいえ", waiting = true, layout = 0))
+        // Handed over (only an empty read since "いいえ" went): once. "はい" again from layout 0 after it: a new line.
+        step(LayoutRead(message = "はい", waiting = true, layout = 0))
+        assertEquals(listOf("はい", "いいえ", "はい"), sent)
+    }
+
+    @Test
+    fun `without the watch's layout index nothing is skipped`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true))
+        step(LayoutRead(message = "", waiting = false))
+        step(LayoutRead(message = "はい", waiting = true))
+        assertEquals(listOf("はい", "はい"), sent)
+    }
 }

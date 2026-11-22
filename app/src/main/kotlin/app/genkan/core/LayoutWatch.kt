@@ -80,7 +80,8 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
             // held before (a movie's data): it waits for the next.
             val layout = Layouts.liveOf(w.layouts, memory) ?: return
             if (!gate.admit(Layouts.live(layout, memory))) return
-            val read = Layouts.read(layout, memory, w.unit, w.table, w.controls, w.cleanup, w.withSet)
+            // Which of the version's layouts read it: the backlog tells a layout handing over from a repeat.
+            val read = Layouts.read(layout, memory, w.unit, w.table, w.controls, w.cleanup, w.withSet).copy(layout = w.layouts.indexOf(layout))
             // Compared as values; turned into JSON only when it changed.
             if (read == last) return
             last = read
