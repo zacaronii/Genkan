@@ -58,17 +58,37 @@ data class LayoutRead(
 object Layouts {
 
     /** The layout for this version: one that lists [exeSha1], else the first that lists none. */
-    fun pick(layouts: List<JSONObject>, exeSha1: String?): JSONObject? {
-        var general: JSONObject? = null
-        for (layout in layouts) {
-            // A layout with a key this reader doesn't know is passed over, not half-read.
-            if (!understood(layout)) continue
-            val versions = layout.optJSONArray("versions").strings()
-            if (exeSha1 != null && exeSha1 in versions) return layout
-            if (versions.isEmpty() && general == null) general = layout
-        }
-        return general
+    fun pick(layouts: List<JSONObject>, exeSha1: String?): JSONObject? = layoutsFor(layouts, exeSha1).firstOrNull()
+
+    /**
+     * A version's layouts, in the entry's order: those naming [exeSha1], else those naming no
+     * versions (docs/format.md, "Which layout"). Usually one; a game that loads a program per
+     * chapter has one per program, and [liveOf] picks among them on every read.
+     */
+    fun layoutsFor(layouts: List<JSONObject>, exeSha1: String?): List<JSONObject> {
+        // A layout with a key this reader doesn't know is passed over, not half-read.
+        val known = layouts.filter(::understood)
+        return known.filter { exeSha1 != null && exeSha1 in it.optJSONArray("versions").strings() }
+            .ifEmpty { known.filter { it.optJSONArray("versions").strings().isEmpty() } }
     }
+
+    /** One layout, or a JSON array of a version's layouts, as a list. */
+    fun parseLayouts(json: String): List<JSONObject> {
+        val text = json.trim()
+        if (text.isEmpty()) return emptyList()
+        return if (text.startsWith("[")) JSONArray(text).let { a -> List(a.length()) { a.getJSONObject(it) } } else listOf(JSONObject(text))
+    }
+
+    /** [layoutsFor] for a release, as [pick] does with an entry. */
+    fun layoutsFor(entry: CatalogEntry, releaseId: String?): List<JSONObject> = layoutsFor(entry.layouts, versionFor(entry, releaseId))
+
+    /**
+     * Which of a version's [layouts] to read now: the first whose own `when` is true, or that has
+     * none; one whose `when` can't be read is passed over. With none true, the first: reading it
+     * gives what a false `when` gives.
+     */
+    fun liveOf(layouts: List<JSONObject>, memory: LayoutMemory): JSONObject? =
+        layouts.firstOrNull { live(it, memory) != false } ?: layouts.firstOrNull()
 
     /**
      * The layout's own `when` as it reads now: null when the layout has none, false when it is
@@ -108,9 +128,9 @@ object Layouts {
 
     private fun JSONObject.keySet(): Set<String> = keys().asSequence().toSet()
 
-    private fun numberOk(spec: JSONObject?, keys: Set<String>): Boolean =
+    private fun numberOk(spec: JSONObject?, keys: Set<String>, counts: Set<String> = setOf("bytes", "characters")): Boolean =
         spec != null && spec.keySet().all { it in keys } && spec.optString("type", "u8") in SIZES &&
-            spec.optString("counts", "bytes") in setOf("bytes", "characters") &&
+            spec.optString("counts", "bytes") in counts &&
             (!spec.has("mask") || spec.opt("mask").let { (it is Int && it >= 0) || (it is Long && it >= 0) })
 
     private fun textOk(spec: JSONObject): Boolean {
@@ -135,7 +155,8 @@ object Layouts {
             if (!script.keySet().containsAll(setOf("open", "offset")) || !setOf("open", "offset", "texts").containsAll(script.keySet())) return false
             if (script.has("texts") && script.opt("texts") != "rows") return false
             if ((script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
-            if (!numberOk(script.optJSONObject("offset"), WHERE + "type")) return false
+            // The offset counts bytes, or codes of the entry's unit.
+            if (!numberOk(script.optJSONObject("offset"), LENGTH_KEYS, setOf("bytes", "codes"))) return false
         }
         if (spec.has("pages")) {
             // Pages and rows never go together; the break is whole hex bytes.
@@ -420,7 +441,8 @@ object Layouts {
         private fun scriptText(spec: JSONObject, script: JSONObject): String {
             val t = table ?: throw LayoutError("no table to decode with")
             val start = resolve(spec)
-            val at = int(script.getJSONObject("offset"))
+            val offset = script.getJSONObject("offset")
+            val at = int(offset) * if (offset.optString("counts") == "codes") unit else 1
             val size = maxOf(0L, minOf(spec.getInt("max_bytes").toLong(), at)).toInt()
             val mark = bytes(script.getString("open"))
             val ends = HashSet<String>()
@@ -468,7 +490,11 @@ object Layouts {
                 p = q - unit
             }
             if (start < 0) return emptyList()
-            val pieces = mutableListOf(java.io.ByteArrayOutputStream())
+            // Where the end codes at the position begin: a page code with only those after it ended a
+            // page that is still up.
+            var tail = data.size
+            while (tail - unit >= start && ends(tail - unit)) tail -= unit
+            var pieces = mutableListOf(java.io.ByteArrayOutputStream())
             var i = start
             while (i + unit <= data.size) {
                 val n = codeLength(data, i)
@@ -476,6 +502,12 @@ object Layouts {
                     // Where two texts of the page join: with rows, the next text is a row of its own.
                     i += unit + mark.size
                     if (rows) pieces += java.io.ByteArrayOutputStream()
+                    continue
+                }
+                if (n == 0 && code(i) in breaks && i + unit < tail) {
+                    // A new page: what came before it is off the screen, and the code goes with it.
+                    pieces = mutableListOf(java.io.ByteArrayOutputStream())
+                    i += unit
                     continue
                 }
                 val take = if (n > 0) n else unit

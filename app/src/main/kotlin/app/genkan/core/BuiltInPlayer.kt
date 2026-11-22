@@ -72,7 +72,8 @@ class BuiltInPlayer @Inject constructor() {
      * controls and cleanup; whether the player took it.
      */
     fun watchLayout(
-        layout: org.json.JSONObject?,
+        /** A version's layouts (usually one), in the entry's order; null or empty: stop. */
+        layouts: List<org.json.JSONObject>?,
         entry: CatalogEntry?,
         tableText: String = "",
         /** The files of the layout's own table sets, by path. */
@@ -83,7 +84,8 @@ class BuiltInPlayer @Inject constructor() {
             .put("controls", org.json.JSONObject((entry?.controls ?: emptyMap()) as Map<*, *>))
             .put("cleanup", entry?.cleanupJson ?: org.json.JSONArray())
             .put("set_tables", org.json.JSONObject(setTables as Map<*, *>))
-        _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, entryJson.toString()) == true
+        val layoutJson = layouts?.takeIf { it.isNotEmpty() }?.let { org.json.JSONArray(it).toString() }.orEmpty()
+        _game.value?.session?.watchLayout(layoutJson, tableText, entryJson.toString()) == true
     } catch (e: RemoteException) {
         false
     }

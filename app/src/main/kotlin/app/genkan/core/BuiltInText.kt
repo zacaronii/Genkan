@@ -101,8 +101,10 @@ class BuiltInText @Inject constructor(
                 ids[game.key] = id
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
                 // Genkan can't hash the executable: the release id's only listed version stands in.
-                val layout = Layouts.pick(entry, id) ?: return
-                val watching = player.watchLayout(layout, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(listOf(layout))))
+                // A version may have several layouts (one per chapter's program); the watch reads
+                // whichever's `when` is true.
+                val layouts = Layouts.layoutsFor(entry, id).ifEmpty { return }
+                val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
                 setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
                 return
@@ -111,12 +113,15 @@ class BuiltInText @Inject constructor(
         }
     }
 
-    /** Debug builds: watch [layoutJson] as if the game's entry had it (its table, if any, still applies). */
+    /**
+     * Debug builds: watch [layoutJson] (one layout, or a JSON array of a version's layouts) as if
+     * the game's entry had it (its table, if any, still applies).
+     */
     suspend fun debugWatch(layoutJson: String) {
         val game = session.game.value
         val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
-        val layout = org.json.JSONObject(layoutJson)
-        setLayoutActive(player.watchLayout(layout, entry, entry?.let(catalog::tableText).orEmpty(), catalog.files(Layouts.setTablePaths(listOf(layout)))))
+        val layouts = Layouts.parseLayouts(layoutJson)
+        setLayoutActive(player.watchLayout(layouts, entry, entry?.let(catalog::tableText).orEmpty(), catalog.files(Layouts.setTablePaths(layouts))))
     }
 
     /**

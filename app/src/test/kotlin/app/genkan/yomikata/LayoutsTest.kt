@@ -60,7 +60,10 @@ class LayoutsTest {
             val withSet = { set: List<String> -> CharTable.parse(entryFiles + set.map { tables!!.getString(it) }) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
             val cleanup = CleanupStep.parse(entry.optJSONArray("cleanup"))
-            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls, cleanup, withSet)
+            // One layout, or a version's several: the first whose own `when` is true is read.
+            val layout = vector.optJSONObject("layout")
+                ?: vector.getJSONArray("layouts").let { a -> Layouts.liveOf(List(a.length()) { a.getJSONObject(it) }, memory(vector))!! }
+            val read = Layouts.read(layout, memory(vector), entry.optInt("unit", 2), table, controls, cleanup, withSet)
             val expected = vector.getJSONObject("expected")
             val actual = asReference(read)
             val name = vector.getString("name")
@@ -155,7 +158,7 @@ class LayoutsTest {
         val scripted = JSONObject(known.toString()).also {
             it.getJSONObject("message").put("charset", "table").remove("rows")
             it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 4}"""))
-            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32"}, "texts": "rows"}"""))
+            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32", "counts": "codes"}, "texts": "rows"}"""))
             it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
         }
         assertTrue(Layouts.understood(scripted))
@@ -196,7 +199,7 @@ class LayoutsTest {
             },
             changed {
                 it.getJSONObject("message").put("charset", "table").remove("rows")
-                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "counts": "bytes"}}"""))
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "counts": "characters"}}"""))
             },
             // texts, when given, is "rows".
             changed {
@@ -224,6 +227,18 @@ class LayoutsTest {
         assertEquals(false, LayoutRead(choosing = true).asking)
         assertEquals(true, LayoutRead(choosing = true, choices = listOf("はい", "いいえ")).asking)
         assertEquals(false, LayoutRead(choosing = false, choices = listOf("はい")).asking)
+    }
+
+    @Test
+    fun `a version's layouts come in the entry's order, those naming it before the general ones`() {
+        val a = JSONObject("""{"message": {"address": "0x0", "charset": "utf8", "max_bytes": 4}}""")
+        val b = JSONObject("""{"message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val mine = JSONObject("""{"versions": ["aa"], "message": {"address": "0x20", "charset": "utf8", "max_bytes": 4}}""")
+        val unknown = JSONObject("""{"message": {"address": "0x30", "charset": "utf8", "max_bytes": 4}, "typing_speed": {}}""")
+        assertEquals(listOf(a, b), Layouts.layoutsFor(listOf(a, unknown, mine, b), null))
+        assertEquals(listOf(mine), Layouts.layoutsFor(listOf(a, mine, b), "aa"))
+        assertEquals(listOf(a, b), Layouts.parseLayouts(org.json.JSONArray(listOf(a, b)).toString()))
+        assertEquals(listOf(a), Layouts.parseLayouts(a.toString()))
     }
 
     @Test
