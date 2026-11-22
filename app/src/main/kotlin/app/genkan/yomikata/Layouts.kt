@@ -59,6 +59,22 @@ object Layouts {
     }
 
     /**
+     * The layout's own `when` as it reads now: null when the layout has none, false when it is
+     * false or can't be read (nothing of the layout is to be taken then).
+     */
+    fun live(layout: JSONObject, memory: LayoutMemory): Boolean? {
+        val spec = layout.optJSONObject("when") ?: return null
+        val order = if (layout.optString("endian", "little") == "big") ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
+        return try {
+            Reader(memory, order, 2, null, emptyMap(), emptyList()).flag(spec)
+        } catch (e: LayoutError) {
+            false
+        } catch (e: org.json.JSONException) {
+            false
+        }
+    }
+
+    /**
      * Whether this reader knows every key and named value (charset, int type, `counts`) in
      * [layout]. A newer key can change what the others mean (a text without its `when` would show
      * what is no longer on screen), so a layout this reader doesn't fully know is treated as not

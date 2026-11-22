@@ -28,6 +28,7 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
     @Volatile private var watched: Watched? = null
     private var frame = 0L
     private var last: LayoutRead? = null
+    private val gate = WhenGate()
 
     /**
      * Starts reading [layoutJson] (empty: stops), with what the entry adds ([entryJson]: unit,
@@ -47,6 +48,7 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
             val table = tableText.takeIf { it.isNotBlank() }?.let { CharTable.parse(listOf(it)) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
             last = null
+            gate.reset()
             watched = Watched(layout, table, entry.optInt("unit", 2), controls, CleanupStep.parse(entry.optJSONArray("cleanup")), every)
             Log.i(TAG, "Watching a layout every $every frame(s)")
             true
@@ -62,6 +64,9 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
         val w = watched ?: return
         if (frame++ % w.every != 0L) return
         try {
+            // The read right after the layout's `when` turns true can still hold what the memory
+            // held before (a movie's data): it waits for the next.
+            if (!gate.admit(Layouts.live(w.layout, memory))) return
             val read = Layouts.read(w.layout, memory, w.unit, w.table, w.controls, w.cleanup)
             // Compared as values; turned into JSON only when it changed.
             if (read == last) return
@@ -88,5 +93,25 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
     private companion object {
         const val TAG = "LayoutWatch"
         const val FRAMES_PER_SECOND = 60
+    }
+}
+
+/**
+ * A layout's `when` as it changes from read to read: nothing is taken from the first read after
+ * it turns from false to true, only from the second running on. The game can switch its mode a
+ * frame before it clears the memory the layout reads (Memories Off 2nd, coming out of a movie).
+ */
+class WhenGate {
+    private var wasLive: Boolean? = null
+
+    /** Whether a read is taken, given the layout's `when` now ([live]; null: it has none). */
+    fun admit(live: Boolean?): Boolean {
+        val before = wasLive
+        wasLive = live
+        return !(live == true && before == false)
+    }
+
+    fun reset() {
+        wasLive = null
     }
 }

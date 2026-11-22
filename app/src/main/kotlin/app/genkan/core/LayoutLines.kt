@@ -50,7 +50,9 @@ class LayoutLines {
     }
 
     fun read(read: LayoutRead): Step {
-        val text = read.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
+        // A message with a character no script has (U+FFFD, a control other than a row break)
+        // is memory that isn't the message: nothing is shown then.
+        val text = read.message?.takeIf { shown(it) }?.replace("\n", "")?.takeIf { it.isNotBlank() }
         val speaker = read.speakerName?.takeIf { it.isNotBlank() } ?: read.speakerNumber?.let { "#$it" }
         val out = mutableListOf<Line>()
         val before = current
@@ -90,5 +92,10 @@ class LayoutLines {
         current = null
         shown = null
         sentText = null
+    }
+
+    companion object {
+        /** Whether [message] can be what the game shows: no U+FFFD, no control but newlines. */
+        fun shown(message: String): Boolean = message.none { it == '\uFFFD' || (it.isISOControl() && it != '\n') }
     }
 }
