@@ -77,7 +77,6 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
         /** The look named [name], or Default for none or one this build doesn't know. */
         fun of(name: String?): ScreenLook = entries.firstOrNull { it.name == name } ?: DEFAULT
 
-
         /**
          * A console's look until one is chosen: pixels kept square where the picture is scaled
          * 4.5x to 5.6x (PS1, DS), an LCD grid for the Game Boys (6.75x to 7.5x), and the PSP as

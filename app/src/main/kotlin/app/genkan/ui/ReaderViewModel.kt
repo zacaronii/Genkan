@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
@@ -95,6 +96,11 @@ class ReaderViewModel @Inject constructor(
     private val _pickingLook = MutableStateFlow(false)
     /** Whether the list of looks is open over the reader, to try them while playing. */
     val pickingLook: StateFlow<Boolean> = _pickingLook.asStateFlow()
+
+    init {
+        // The list is for the game it was opened over: it closes when that game ends or another starts.
+        viewModelScope.launch { player.game.map { it?.romId }.distinctUntilChanged().collect { _pickingLook.value = false } }
+    }
 
     fun openLookPicker() {
         if (look.value != null) _pickingLook.value = true

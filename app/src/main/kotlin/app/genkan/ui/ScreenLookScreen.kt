@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -72,6 +73,8 @@ class ScreenLookViewModel @Inject constructor(private val looks: ScreenLooks) : 
 fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
     val consoles by viewModel.consoles.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
+    // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
+    DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
     ScreenLookContent(consoles, picking, onOpen = viewModel::open, onPick = viewModel::pick, onClose = { viewModel.closePicker() })
 }
 
