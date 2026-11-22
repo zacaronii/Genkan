@@ -98,10 +98,11 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
 
 /**
  * Opens [file] with [PdfManualPages] for [ManualViewer], and closes it again when the viewer
- * goes. A file that won't open closes the viewer with a notice.
+ * goes. A file that won't open closes the viewer with a notice. [onClose] is always told which
+ * file it's about, so a failure that reports after another manual opened names the old one.
  */
 @Composable
-private fun ManualFile(file: File, onClose: (problem: String?) -> Unit) {
+private fun ManualFile(file: File, onClose: (file: File, problem: String?) -> Unit) {
     val close by rememberUpdatedState(onClose)
     var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
     LaunchedEffect(file) {
@@ -109,7 +110,7 @@ private fun ManualFile(file: File, onClose: (problem: String?) -> Unit) {
             // Not cut short: an open that finishes as the viewer goes is closed just below.
             withContext(NonCancellable) { PdfManualPages.open(file) }
         } catch (e: Exception) {
-            close("Couldn't open the manual: ${e.message}")
+            close(file, "Couldn't open the manual: ${e.message}")
             return@LaunchedEffect
         }
         if (isActive) pages = opened else opened.close()
@@ -121,7 +122,7 @@ private fun ManualFile(file: File, onClose: (problem: String?) -> Unit) {
         null -> Box(Modifier.fillMaxSize().background(Color(0xFF2A2A30)), contentAlignment = Alignment.Center) {
             Text("Opening the manual…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
         }
-        else -> ManualViewer(open, onClose = { close(null) })
+        else -> ManualViewer(open, onClose = { close(file, null) })
     }
 }
 
