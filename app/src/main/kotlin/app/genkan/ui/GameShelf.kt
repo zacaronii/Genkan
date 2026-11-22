@@ -124,6 +124,17 @@ internal object ShelfDefaults {
  */
 internal object ShelfGeometry {
 
+    /**
+     * The proportions the shelf's slots are sized for: those of the focused case's console (a
+     * plain tile's, 1, for an app or PC game). On a shelf of one console that is every case's, so
+     * the gaps stay as they were; on one of several the gap around the focus fits the case in it,
+     * whichever case comes first.
+     */
+    fun slotAspect(games: List<GameEntity>, focused: Int): Float {
+        val game = games.getOrNull(focused) ?: games.firstOrNull() ?: return 1f
+        return if (LocalShelves.isLocal(game)) 1f else GameCase.specFor(game.platformSlug).aspect
+    }
+
     /** Horizontal offset of the case's centre from the shelf's middle, in case widths. */
     fun offset(d: Float): Float {
         val ad = abs(d)
@@ -186,7 +197,6 @@ internal fun GameShelf(
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
-    val spec = GameCase.specFor(games.first().platformSlug)
     val local = LocalShelves.isLocal(games.first())
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
@@ -208,6 +218,16 @@ internal fun GameShelf(
         settled.intValue++
     }
     val positionNow = remember(position) { { position.value } }
+
+    // The slots are sized for the focused case's console, so on a shelf of several ("Continue
+    // playing") the gap fits the case in view; it moves with the focus. One console's shelf keeps
+    // one size, and nothing animates. Read only in placement, so a change costs a layout pass.
+    val slotAspect = ShelfGeometry.slotAspect(games, focused)
+    val slot = remember(shelfId) { Animatable(slotAspect) }
+    LaunchedEffect(shelfId, slotAspect) {
+        slot.animateTo(slotAspect, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+    }
+    val slotNow = remember(slot) { { slot.value } }
     val onCoverAspect = remember(coverAspects, position) {
         { id: Long, aspect: Float ->
             val old = coverAspects.put(id, aspect)
@@ -253,9 +273,6 @@ internal fun GameShelf(
         val density = LocalDensity.current
         val maxCaseHeight = maxHeight * ShelfDefaults.CASE_HEIGHT
         val maxCaseWidth = maxWidth * ShelfDefaults.CASE_WIDTH
-        val nominalWidth = with(density) {
-            GameCase.fit(if (local) 1f else spec.aspect, maxCaseWidth.toPx(), maxCaseHeight.toPx()).first
-        }
         // The cases stand on a shelf edge a little above the bottom, leaving room for their shadows.
         val floorFromBottom = 22.dp
         val stepPx = with(density) { ShelfDefaults.STEP_FORWARD.toPx() }
@@ -327,6 +344,7 @@ internal fun GameShelf(
                 // Read here, the position re-places the cases each frame without recomposing them.
                 val p = positionNow()
                 val centre = constraints.maxWidth / 2f
+                val nominalWidth = GameCase.fit(slotNow(), maxCaseWidth.toPx(), maxCaseHeight.toPx()).first
                 val floor = constraints.maxHeight - floorFromBottom.roundToPx()
                 placeables.forEachIndexed { i, placeable ->
                     val d = range.first + i - p

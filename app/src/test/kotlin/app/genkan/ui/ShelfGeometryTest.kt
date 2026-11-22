@@ -1,5 +1,8 @@
 package app.genkan.ui
 
+import app.genkan.launch.LocalShelves
+import app.genkan.library.GameCase
+import app.genkan.library.GameEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,5 +58,36 @@ class ShelfGeometryTest {
         assertEquals(0f, ShelfGeometry.alpha(-6f, reach), 0f)
         // At rest the same cases are fully drawn.
         assertEquals(1f, ShelfGeometry.alpha(reach - 1f), 0f)
+    }
+
+    private fun game(id: Long, slug: String, platformId: Long = 2) =
+        GameEntity(id, platformId, slug, "Game $id", "game $id", null, 0, null, false)
+    private val jewel = GameCase.specFor("psx").aspect
+    private val psp = GameCase.specFor("psp").aspect
+
+    @Test
+    fun `on a shelf of several consoles the slots fit the focused case, jewel case first`() {
+        val shelf = listOf(game(1, "psx"), game(2, "psp"), game(3, "psx"))
+        assertEquals(jewel, ShelfGeometry.slotAspect(shelf, 0), 0f)
+        // The narrow PSP case in focus: its gaps are a PSP case's, not the jewel case's.
+        assertEquals(psp, ShelfGeometry.slotAspect(shelf, 1), 0f)
+    }
+
+    @Test
+    fun `on a shelf of several consoles the slots fit the focused case, narrow case first`() {
+        val shelf = listOf(game(1, "psp"), game(2, "psx"), game(3, "psp"))
+        assertEquals(psp, ShelfGeometry.slotAspect(shelf, 0), 0f)
+        // The wide jewel case in focus gets a jewel case's room, so its neighbours don't cover it.
+        assertEquals(jewel, ShelfGeometry.slotAspect(shelf, 1), 0f)
+    }
+
+    @Test
+    fun `a shelf of one console keeps one slot size`() {
+        val shelf = (1L..5L).map { game(it, "ps2") }
+        val sizes = shelf.indices.map { ShelfGeometry.slotAspect(shelf, it) }.toSet()
+        assertEquals(setOf(GameCase.specFor("ps2").aspect), sizes)
+        // Apps and PC games are plain square tiles.
+        val apps = listOf(game(1, LocalShelves.APPS_SLUG, LocalShelves.APPS_ID))
+        assertEquals(1f, ShelfGeometry.slotAspect(apps, 0), 0f)
     }
 }
