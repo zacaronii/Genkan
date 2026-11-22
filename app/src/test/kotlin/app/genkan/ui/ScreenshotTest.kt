@@ -1,5 +1,6 @@
 package app.genkan.ui
 
+import app.genkan.launch.applyTo
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -308,6 +309,36 @@ class ScreenshotTest {
      * A game RomM knows little about, never downloaded or played: most lines are left out, and
      * with no cut-out or fan art the cover stands in, blurred behind as well.
      */
+    /** A PC game's details once Steam's store has answered: its Japanese name, summary, genres and screenshots. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsPc() = shoot("game_details_pc", BOTTOM_PIXELS) {
+        val game = app.genkan.library.GameEntity(
+            -1_004_242, app.genkan.launch.LocalShelves.PC_ID, app.genkan.launch.LocalShelves.PC_SLUG,
+            "Clock Tower", "clock tower", "4242", 0, null, false,
+        )
+        val steam = app.genkan.launch.SteamDetails(
+            name = "時計塔の弟子",
+            summary = "止まった時計をもう一度動かすため、見習いの少年が町の塔をひとつずつ巡る。全七章の物語。",
+            genres = listOf("アドベンチャー", "インディー"),
+            releaseYear = 2019,
+            developers = listOf("Example Soft"),
+            publishers = listOf("Sample Publishing"),
+            background = "fake-fanart:4242",
+            screenshots = listOf("fake-screenshot:4242-1", "fake-screenshot:4242-2", "fake-screenshot:4242-3"),
+        )
+        GameDetailsContent(
+            details = GameDetails(
+                focus = FocusedGame.Focus(steam.applyTo(game), "PC (GameNative)", "fake-cover:${game.id}"),
+                play = null,
+                reading = ReadingGameTotals(activeMs = 0, characters = 0),
+                download = null,
+                art = GameArt(fanart = steam.background, screenshots = steam.screenshots),
+            ),
+            onShowReader = {},
+        )
+    }
+
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsSparse() = shoot("game_details_sparse", BOTTOM_PIXELS) {
