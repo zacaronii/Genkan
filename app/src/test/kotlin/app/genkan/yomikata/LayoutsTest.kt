@@ -164,6 +164,18 @@ class LayoutsTest {
                 it.getJSONObject("message").remove("rows")
                 it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40"}, "skip": 1}"""))
             },
+            // A break of whole hex bytes only.
+            *listOf("\"\"", "\"0\"", "12").map { brk ->
+                changed {
+                    it.getJSONObject("message").remove("rows")
+                    it.getJSONObject("message").put("pages", JSONObject("""{"break": $brk, "cursor": {"address": "0x40"}}"""))
+                }
+            }.toTypedArray(),
+            // Codes: whole hex leads of 1-4 bytes, integer lengths from the lead's up to 16, never with a table.
+            *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 17}""", """{"0102030405": 6}""").map { codes ->
+                changed { it.getJSONObject("message").put("codes", JSONObject(codes)) }
+            }.toTypedArray(),
+            changed { it.getJSONObject("message").put("charset", "table").put("codes", JSONObject("""{"03": 2}""")) },
         )
         for (layout in unknown) {
             assertEquals(layout.toString(), false, Layouts.understood(layout))

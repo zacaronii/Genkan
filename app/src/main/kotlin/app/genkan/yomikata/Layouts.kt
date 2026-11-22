@@ -103,10 +103,20 @@ object Layouts {
         if (!spec.keySet().all { it in TEXT_KEYS } || spec.optString("charset") !in CODECS.keys + "table") return false
         if (spec.has("length") && !numberOk(spec.optJSONObject("length"), LENGTH_KEYS)) return false
         if (spec.has("when") && !numberOk(spec.optJSONObject("when"), NUMBER_KEYS)) return false
+        if (spec.has("codes")) {
+            // Each lead 1-4 whole hex bytes; each length an integer from the lead's own up to 16.
+            val codes = spec.optJSONObject("codes") ?: return false
+            if (spec.optString("charset") == "table" || codes.length() == 0) return false
+            for (lead in codes.keys()) {
+                val n = codes.opt(lead)
+                if (!LEAD.matches(lead) || n !is Int || n < lead.length / 2 || n > 16) return false
+            }
+        }
         if (spec.has("pages")) {
-            // Pages and rows never go together.
+            // Pages and rows never go together; the break is whole hex bytes.
             val pages = spec.optJSONObject("pages") ?: return false
             if (spec.has("rows") || pages.keySet() != setOf("break", "cursor")) return false
+            if ((pages.opt("break") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
             if (!numberOk(pages.optJSONObject("cursor"), WHERE + "type")) return false
         }
         if (!spec.has("rows")) return true
@@ -118,7 +128,9 @@ object Layouts {
     private val WHERE = setOf("address", "base", "offsets")
     private val NUMBER_KEYS = WHERE + setOf("type", "equals")
     private val LENGTH_KEYS = WHERE + setOf("type", "counts")
-    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "when", "cleanup")
+    private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "codes", "when", "cleanup")
+    private val LEAD = Regex("([0-9A-Fa-f]{2}){1,4}")
+    private val HEX_BYTES = Regex("([0-9A-Fa-f]{2})+")
     private val FIELDS = mapOf(
         "message" to "text", "choices" to "text", "speaker" to "either", "shown" to "number", "waiting" to "number",
         "choosing" to "number", "choice_count" to "number", "choice_cursor" to "number",
@@ -301,6 +313,8 @@ object Layouts {
             // What the memory holds isn't on screen now: nothing else of the text is read.
             spec.optJSONObject("when")?.let { if (!flag(it)) return "" }
             val charset = spec.getString("charset")
+            // The game's own codes in the text (a colour, a style): each lead's whole length.
+            codes = spec.optJSONObject("codes")?.let { c -> c.keys().asSequence().map { bytes(it) to c.getInt(it) }.toList() }.orEmpty()
             val width = if (charset == "table") unit else 1
             val terminator = spec.optString("terminator").takeIf { spec.has("terminator") }?.let(::bytes)
             val start = resolve(spec)
@@ -384,8 +398,18 @@ object Layouts {
             return full.lastOrNull()?.let { (a, b) -> data.copyOfRange(a, minOf(b, data.size)) } ?: ByteArray(0)
         }
 
+        /** The current text's codes (lead bytes, whole length): one character each, decoded to nothing. */
+        private var codes: List<Pair<ByteArray, Int>> = emptyList()
+
+        /** Bytes in the code starting at [i], or 0 when none starts there: the longest lead wins. */
+        private fun codeLength(data: ByteArray, i: Int): Int =
+            codes.filter { (lead, _) -> i + lead.size <= data.size && lead.indices.all { data[i + it] == lead[it] } }
+                .maxByOrNull { it.first.size }?.second ?: 0
+
         /** Bytes in the character at [i]: the boundaries terminators and decoding both use. */
         private fun charLength(data: ByteArray, i: Int, charset: String, width: Int): Int {
+            // A code and its arguments are one character.
+            codeLength(data, i).takeIf { it > 0 }?.let { return it }
             val b = data[i].toInt() and 0xFF
             return when (charset) {
                 "shift_jis" -> if (b in 0x81..0x9F || b in 0xE0..0xFC) 2 else 1
@@ -426,6 +450,12 @@ object Layouts {
             val out = StringBuilder()
             var i = 0
             while (i < data.size) {
+                // A code is nothing in the text.
+                val code = codeLength(data, i)
+                if (code > 0) {
+                    i += code
+                    continue
+                }
                 val n = minOf(charLength(data, i, charset, width), data.size - i)
                 val b = data[i].toInt() and 0xFF
                 // A single byte from 0x80 up is U+FFFD, except Shift-JIS's half-width kana (A1-DF).
