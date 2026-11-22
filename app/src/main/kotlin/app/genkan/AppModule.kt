@@ -9,9 +9,13 @@ import app.genkan.reader.ReaderDao
 import app.genkan.stats.ReadingDao
 import app.genkan.saves.SaveFileDao
 import app.genkan.download.DownloadDao
+import app.genkan.download.DownloadService
+import app.genkan.download.DownloadStarter
+import app.genkan.library.FavouriteDao
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryDatabase
 import app.genkan.words.AnkiWordDao
+import app.genkan.words.GameLookupDao
 import app.genkan.words.LookupCountDao
 import app.genkan.words.WordStatusDao
 import app.genkan.play.PlaySessionDao
@@ -44,7 +48,13 @@ object AppModule {
     fun downloadDao(db: LibraryDatabase): DownloadDao = db.downloads()
 
     @Provides
+    fun downloadStarter(@ApplicationContext context: Context): DownloadStarter = DownloadStarter { DownloadService.start(context) }
+
+    @Provides
     fun playSessionDao(db: LibraryDatabase): PlaySessionDao = db.playSessions()
+
+    @Provides
+    fun favouriteDao(db: LibraryDatabase): FavouriteDao = db.favourites()
 
     @Provides
     fun dictionaryDao(db: LibraryDatabase): DictionaryDao = db.dictionaries()
@@ -69,6 +79,9 @@ object AppModule {
 
     @Provides
     fun lookupCountDao(db: LibraryDatabase): LookupCountDao = db.lookupCounts()
+
+    @Provides
+    fun gameLookupDao(db: LibraryDatabase): GameLookupDao = db.gameLookups()
 
     @Provides
     fun ankiWordDao(db: LibraryDatabase): AnkiWordDao = db.ankiWords()

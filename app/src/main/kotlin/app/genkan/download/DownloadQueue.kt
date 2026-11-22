@@ -1,6 +1,6 @@
 package app.genkan.download
 
-import android.content.Context
+import android.app.ServiceStartNotAllowedException
 import android.os.Environment
 import android.util.Log
 import app.genkan.library.GameEntity
@@ -9,7 +9,6 @@ import app.genkan.romm.RomMRetryInterceptor
 import app.genkan.romm.RomMSession
 import app.genkan.romm.RomMUnauthorizedException
 import app.genkan.romm.describeFailure
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +28,18 @@ import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Starts [DownloadService]. Android refuses a foreground service while Genkan has nothing in
+ * front, and says so by throwing [ServiceStartNotAllowedException].
+ */
+fun interface DownloadStarter {
+    fun start()
+}
+
 /** The single download queue. Rows live in Room so the queue survives the process. */
 @Singleton
 class DownloadQueue @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val starter: DownloadStarter,
     private val dao: DownloadDao,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -55,7 +62,7 @@ class DownloadQueue @Inject constructor(
         if (existing?.state == DownloadState.INSTALLED) return@launch
         if (existing?.state == DownloadState.RUNNING) {
             // RUNNING with nothing running here is a download a process death cut off.
-            if (current == null) DownloadService.start(context)
+            if (current == null) startService()
             return@launch
         }
         val fsName = game.fsName ?: game.name
@@ -70,14 +77,29 @@ class DownloadQueue @Inject constructor(
                 queuedAt = System.currentTimeMillis(),
             )
         )
-        DownloadService.start(context)
+        startService()
     }
 
-    /** Picks up downloads a process death left queued or half done, from their .part files. */
+    /**
+     * Picks up downloads left queued or half done: by a process death (from their .part files),
+     * or by a start Android refused while Genkan wasn't in front. Called as Genkan starts and
+     * whenever the launcher comes to the front.
+     */
     fun resume() = scope.launch {
         if (current != null || dao.next() == null) return@launch
-        // Android may refuse a foreground service while Genkan is in the background; A on the game resumes it then.
-        runCatching { DownloadService.start(context) }.onFailure { Log.i(TAG, "Downloads wait for Genkan: ${it.message}") }
+        startService()
+    }
+
+    /**
+     * Starts the service that runs the queue. When Android refuses (Genkan has nothing in front),
+     * the rows stay QUEUED and [resume] starts it the next time Genkan comes to the front.
+     */
+    private fun startService() {
+        try {
+            starter.start()
+        } catch (e: ServiceStartNotAllowedException) {
+            Log.i(TAG, "Downloads wait for Genkan to come to the front: ${e.message}")
+        }
     }
 
     /** Stops a queued or running download and throws away what it had written. */

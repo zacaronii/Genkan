@@ -3,10 +3,14 @@ package app.genkan.ui
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.genkan.core.CoreCatalog
+import app.genkan.core.PlayerSettings
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LocalShelves
+import app.genkan.library.FavouriteDao
+import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
 import app.genkan.play.PlaySessionDao
@@ -18,6 +22,11 @@ import app.genkan.saves.SaveStatus
 import app.genkan.saves.SaveSync
 import app.genkan.stats.ReadingDao
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.words.GameLookupDao
+import app.genkan.yomikata.TextSource
+import app.genkan.yomikata.YomikataCatalog
+import app.genkan.yomikata.YomikataIds
+import app.genkan.words.GameLookupTotals
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +77,12 @@ data class GameDetails(
     val download: DownloadEntity?,
     val save: SaveStatus? = null,
     val art: GameArt = GameArt(),
+    /** Whether the game is on the "Favourites" shelf. */
+    val favourite: Boolean = false,
+    /** The words looked up while reading it. */
+    val lookups: GameLookupTotals = GameLookupTotals(0, 0),
+    /** How this build would read its text, once it has run and the catalog knows it. */
+    val textSource: TextSource? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -79,6 +94,11 @@ class GameDetailsViewModel @Inject constructor(
     playSessions: PlaySessionDao,
     readingDao: ReadingDao,
     private val downloadQueue: DownloadQueue,
+    private val favouriteDao: FavouriteDao,
+    private val gameLookups: GameLookupDao,
+    private val yomikataIds: YomikataIds,
+    private val catalog: YomikataCatalog,
+    private val playerSettings: PlayerSettings,
     saveSync: SaveSync,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -112,10 +132,13 @@ class GameDetailsViewModel @Inject constructor(
             val play = if (LocalShelves.isLocal(game)) flowOf(null) else playSessions.totals(game.id)
             combine(
                 play,
-                readingDao.gameTotals("game:${game.id}"),
+                // Reading and lookups are both kept per game key.
+                combine(readingDao.gameTotals("game:${game.id}"), gameLookups.totals("game:${game.id}")) { r, l -> r to l },
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
-            ) { p, r, d, s -> GameDetails(focus, p, r, d, s, art) }
+                // Favourite, and how its text would be read (the cached catalog only, off the main thread).
+                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game)) { f, t -> f to t },
+            ) { p, r, d, s, f -> GameDetails(focus, p, r.first, d, s, art, f.first, r.second, f.second) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -157,6 +180,17 @@ class GameDetailsViewModel @Inject constructor(
     /** Play, download or cancel, exactly as A on the top screen would. */
     fun play() {
         details.value?.focus?.game?.let { focusedGame.requestPlay(it.id) }
+    }
+
+    /** Marks the focused game as a favourite, or unmarks it. */
+    fun toggleFavourite() {
+        val details = details.value ?: return
+        val game = details.focus.game
+        if (!Favourites.canMark(game)) return
+        viewModelScope.launch {
+            val marked = favouriteDao.toggle(game.id, System.currentTimeMillis())
+            show(if (marked) "Added to favourites" else "Removed from favourites")
+        }
     }
 
     /** Deletes the focused game's download; the screen asks for a second tap first. */
@@ -216,6 +250,17 @@ class GameDetailsViewModel @Inject constructor(
             _notice.value = null
         }
     }
+
+    private fun textSourceOf(game: GameEntity) =
+        if (LocalShelves.isLocal(game)) {
+            flowOf(null)
+        } else {
+            // The built-in player when it's on and has a core for the console, else the emulator app.
+            combine(yomikataIds.idFor(game.id), playerSettings.enabled) { id, on -> id to (on && CoreCatalog.forPlatform(game.platformSlug) != null) }
+                .map { (id, builtIn) ->
+                    withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn) }
+                }
+        }
 
     private fun artFor(game: GameEntity): GameArt {
         val baseUrl = session.currentAccount()?.baseUrl

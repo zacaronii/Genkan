@@ -4,7 +4,7 @@ import android.view.KeyEvent
 
 /** The buttons Genkan's screens react to, whatever the controller or keyboard sends. */
 enum class PadKey {
-    UP, DOWN, LEFT, RIGHT, A, B, X, Y, L1, R1, START, SELECT;
+    UP, DOWN, LEFT, RIGHT, A, B, X, Y, L1, R1, L2, R2, START, SELECT;
 
     companion object {
         fun from(keyCode: Int): PadKey? = when (keyCode) {
@@ -18,6 +18,8 @@ enum class PadKey {
             KeyEvent.KEYCODE_BUTTON_Y -> Y
             KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_PAGE_UP -> L1
             KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_PAGE_DOWN -> R1
+            KeyEvent.KEYCODE_BUTTON_L2 -> L2
+            KeyEvent.KEYCODE_BUTTON_R2 -> R2
             KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_MENU -> START
             KeyEvent.KEYCODE_BUTTON_SELECT -> SELECT
             else -> null

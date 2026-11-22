@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,24 +37,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.library.ContinuePlaying
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
+import app.genkan.library.LibraryOrder
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
+import app.genkan.library.OrderPanel
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import coil3.compose.AsyncImage
@@ -61,17 +70,26 @@ private val GridSpacing = 16.dp
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel) {
     val platforms by viewModel.platforms.collectAsStateWithLifecycle()
-    val games by viewModel.games.collectAsStateWithLifecycle()
+    val shelf by viewModel.shelf.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
+    val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
+    val order by viewModel.order.collectAsStateWithLifecycle()
+    val orderPanel by viewModel.orderPanel.collectAsStateWithLifecycle()
     LibraryContent(
+        favourites = favourites,
+        order = order,
+        orderPanel = orderPanel,
+        onToggleOrderPanel = viewModel::toggleOrderPanel,
+        onOrder = viewModel::setOrder,
         view = view,
         platforms = platforms,
-        games = games,
+        games = shelf.games,
+        gamesFor = shelf.platformId,
         focus = focus,
         sync = sync,
         downloads = downloads,
@@ -116,13 +134,24 @@ fun LibraryContent(
     insert: InsertState? = null,
     onSkipInsert: () -> Unit = {},
     staticInsertProgress: Float? = null,
+    /** The games marked as favourites, for what R2 says. */
+    favourites: Set<Long> = emptySet(),
+    /** The consoles' sort and filter, and the panel's focused row while it is open. */
+    order: LibraryOrder = LibraryOrder(),
+    orderPanel: Int? = null,
+    onToggleOrderPanel: () -> Unit = {},
+    onOrder: (LibraryOrder) -> Unit = {},
+    /** The shelf [games] are of: a switch to another shelf keeps the last one's games for a moment. */
+    gamesFor: Long? = platforms.getOrNull(focus.platformIndex)?.id,
 ) {
     Box(Modifier.fillMaxSize()) {
         // While the insert animation has the disc or cartridge, the shelf's own goes back in its case.
         LibraryBody(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
-            onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia,
+            onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
+            order.downloadedOnly, gamesFor,
         )
+        if (orderPanel != null) OrderPanelCard(order, orderPanel, onOrder, onToggleOrderPanel, Modifier.align(Alignment.TopEnd))
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
     }
 }
@@ -144,9 +173,12 @@ private fun LibraryBody(
     onSelectGame: (Int) -> Unit,
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
+    favourites: Set<Long>,
+    downloadedOnly: Boolean,
+    gamesFor: Long?,
 ) {
     if (view == LibraryView.SHELF) {
-        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia)
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly, gamesFor)
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -159,7 +191,7 @@ private fun LibraryBody(
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         PlatformRail(
-            names = platforms.map { if (it.id < 0) it.name else "${it.name}  ${it.romCount}" },
+            names = platforms.map { p -> consoleLabel(p, shownCount(p, downloadedOnly, gamesFor, games.size)) },
             selected = focus.platformIndex,
             railFocused = focus.pane == LibraryPane.PLATFORMS,
             onSelect = onSelectPlatform,
@@ -172,18 +204,30 @@ private fun LibraryBody(
                 subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
                 onToggleView = onToggleView,
             )
-            if (platforms.isEmpty()) {
-                EmptyLibrary(sync)
-            } else {
-                GameGrid(
-                    games = games,
-                    downloads = downloads,
-                    focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
-                    coverModel = coverModel,
-                    onColumns = onColumns,
-                    onSelect = onSelectGame,
-                )
+            Box(Modifier.weight(1f)) {
+                if (platforms.isEmpty()) {
+                    EmptyLibrary(sync)
+                } else if (downloadedOnly && games.isEmpty() && (platforms.getOrNull(focus.platformIndex)?.id ?: 0) > 0) {
+                    NothingDownloaded()
+                } else {
+                    GameGrid(
+                        games = games,
+                        downloads = downloads,
+                        focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
+                        coverModel = coverModel,
+                        onColumns = onColumns,
+                        onSelect = onSelectGame,
+                    )
+                }
             }
+            val gridGame = games.getOrNull(focus.gameIndex)
+            HintRow(
+                Hints.library(
+                    gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor,
+                    favourite = gridGame?.id in favourites,
+                ),
+                Modifier.padding(top = 12.dp),
+            )
         }
     }
 }
@@ -234,6 +278,9 @@ private fun ShelfLibrary(
     onSelectGame: (Int) -> Unit,
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
+    favourites: Set<Long>,
+    downloadedOnly: Boolean,
+    gamesFor: Long?,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -245,6 +292,7 @@ private fun ShelfLibrary(
         ConsoleStrip(
             platforms = platforms,
             selected = focus.platformIndex,
+            shown = platforms.getOrNull(focus.platformIndex)?.let { shownCount(it, downloadedOnly, gamesFor, games.size) },
             stripFocused = focus.pane == LibraryPane.PLATFORMS,
             sync = sync,
             onSelect = onSelectPlatform,
@@ -253,7 +301,9 @@ private fun ShelfLibrary(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 platforms.isEmpty() -> EmptyLibrary(sync)
-                games.isEmpty() -> Unit
+                // Under "downloaded only", a console with nothing shown has nothing downloaded;
+                // otherwise an empty list (before the first query returns) draws nothing.
+                games.isEmpty() -> if (downloadedOnly) platforms.getOrNull(focus.platformIndex)?.takeIf { it.id > 0 }?.let { NothingDownloaded() }
                 else -> GameShelf(
                     games = games,
                     focusedIndex = focus.gameIndex,
@@ -263,17 +313,20 @@ private fun ShelfLibrary(
                     artModel = artModel,
                     onSelect = onSelectGame,
                     staticMedia = staticMedia,
+                    shelfId = platforms.getOrNull(focus.platformIndex)?.id ?: 0L,
                 )
             }
         }
         val game = games.getOrNull(focus.gameIndex)
         HintBar(
             game = game,
-            console = platforms.getOrNull(focus.platformIndex)?.name.orEmpty(),
+            console = game?.let { ContinuePlaying.consoleOf(it, platforms, platforms.getOrNull(focus.platformIndex)) }
+                ?: platforms.getOrNull(focus.platformIndex)?.name.orEmpty(),
             download = game?.let { downloads[it.id] },
             notice = notice,
             onShelf = focus.pane == LibraryPane.GAMES,
             emulatorFor = emulatorFor,
+            favourite = game?.id in favourites,
         )
     }
 }
@@ -286,6 +339,8 @@ private fun ShelfLibrary(
 private fun ConsoleStrip(
     platforms: List<PlatformEntity>,
     selected: Int,
+    /** How many of the selected console's games are on the shelf, when a filter leaves out some (else null). */
+    shown: Int?,
     stripFocused: Boolean,
     sync: SyncStatus,
     onSelect: (Int) -> Unit,
@@ -293,7 +348,7 @@ private fun ConsoleStrip(
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-        ButtonGlyph("L1")
+        ButtonGlyph(PadButton.L1)
         Row(
             Modifier.weight(1f).padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
@@ -305,7 +360,7 @@ private fun ConsoleStrip(
             platforms.getOrNull(selected)?.let { current ->
                 val shape = RoundedCornerShape(8.dp)
                 Text(
-                    if (current.id < 0) current.name else "${current.name}  ${current.romCount}",
+                    consoleLabel(current, shown),
                     style = MaterialTheme.typography.titleLarge,
                     color = colors.primary,
                     maxLines = 1,
@@ -319,22 +374,38 @@ private fun ConsoleStrip(
                 NeighbourConsole(next.name, Modifier.weight(1f, fill = false)) { onSelect(selected + 1) }
             }
         }
-        ButtonGlyph("R1")
-        Text(
-            // Y's hint is under the shelf; up here only what the sync is doing, and Start.
-            when (sync) {
-                SyncStatus.Idle -> ""
-                is SyncStatus.Running -> "Syncing ${sync.platform}…"
-                is SyncStatus.Done -> "Start: settings"
-                is SyncStatus.Failed -> "Sync failed"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp),
-        )
+        ButtonGlyph(PadButton.R1)
+        // What the pad does anywhere in the library; the focused game's own hints are under the shelf.
+        // While a sync runs, its state stands in for them; after one failed, it comes first and Y retries.
+        if (sync is SyncStatus.Running || sync is SyncStatus.Failed) {
+            Text(
+                if (sync is SyncStatus.Running) "Syncing ${sync.platform}…" else "Sync failed",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+        if (sync !is SyncStatus.Running) {
+            HintRow(Hints.libraryAnywhere(failed = sync is SyncStatus.Failed), Modifier.padding(start = 16.dp))
+        }
         ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
     }
 }
+
+/**
+ * How many of [platform]'s games the shelf shows, for its label: with "Downloaded only", the size
+ * of the shelf's list once that list is of [platform] ([gamesFor]); null (RomM's count) otherwise,
+ * so a shelf just switched to never shows the last one's number, or a 0 that only means loading.
+ */
+internal fun shownCount(platform: PlatformEntity, downloadedOnly: Boolean, gamesFor: Long?, shownGames: Int): Int? =
+    shownGames.takeIf { downloadedOnly && gamesFor == platform.id }
+
+/**
+ * A console's name and how many games it has: RomM's count, or [shown] (what's on the shelf)
+ * while "Downloaded only" leaves some out. Shelves of Genkan's own (no RomM id) have no count.
+ */
+internal fun consoleLabel(platform: PlatformEntity, shown: Int? = null): String =
+    if (platform.id < 0) platform.name else "${platform.name}  ${shown ?: platform.romCount}"
 
 @Composable
 private fun NeighbourConsole(name: String, modifier: Modifier, onClick: () -> Unit) {
@@ -361,24 +432,8 @@ private fun ViewToggle(target: LibraryView, onToggle: () -> Unit, modifier: Modi
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        ButtonGlyph("Select")
+        ButtonGlyph(PadButton.SELECT)
         Text(if (target == LibraryView.GRID) "Grid" else "Shelf", style = MaterialTheme.typography.labelMedium, color = colors.onSurface)
-    }
-}
-
-/** A controller button's name in a small pill, as the hints show them. */
-@Composable
-private fun ButtonGlyph(label: String) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .height(20.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.onSurface.copy(alpha = 0.14f))
-            .padding(horizontal = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.onSurface)
     }
 }
 
@@ -391,6 +446,7 @@ private fun HintBar(
     notice: String?,
     onShelf: Boolean,
     emulatorFor: (String) -> String?,
+    favourite: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -403,38 +459,22 @@ private fun HintBar(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                notice ?: game?.let { shelfStatus(it, console, download) } ?: console,
+                notice ?: game?.let { shelfStatus(it, console, download, emulatorFor) } ?: console,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (notice != null) colors.primary else colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(
-            Modifier.padding(start = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (game != null) {
-                // On the console strip, A goes down to the cases; on a case it acts on the game.
-                Hint("A", if (onShelf) primaryHint(game, download, emulatorFor) else "Choose")
-                if (onShelf && download?.state == DownloadState.INSTALLED) Hint("X", "Delete")
-            }
-            Hint("Y", "Sync")
-        }
+        HintRow(Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite), Modifier.padding(start = 16.dp))
     }
 }
 
-@Composable
-private fun Hint(button: String, action: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ButtonGlyph(button)
-        Text(action, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-/** The line under the title: the console, the year, the size and whether the game is here. */
-private fun shelfStatus(game: GameEntity, console: String, download: DownloadEntity?): String {
+/**
+ * The line under the title: the console, the year, the size and whether the game is here (and
+ * playable: with no emulator for its console, A has nothing to offer, so this line says why).
+ */
+private fun shelfStatus(game: GameEntity, console: String, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
     if (LocalShelves.isLocal(game)) return console
     val state = when (download?.state) {
         null -> "not downloaded"
@@ -443,24 +483,10 @@ private fun shelfStatus(game: GameEntity, console: String, download: DownloadEnt
             val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
             "downloading $percent%"
         }
-        DownloadState.INSTALLED -> "on this device"
+        DownloadState.INSTALLED -> if (emulatorFor(game.platformSlug) != null) "on this device" else "on this device, no emulator installed"
         DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
     }
     return listOfNotNull(console, game.releaseYear?.toString(), formatSize(game.fsSizeBytes), state).joinToString("  ·  ")
-}
-
-/** What A does for [game], the same choice gameLine spells out in the grid. */
-private fun primaryHint(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
-    when (game.platformSlug) {
-        LocalShelves.PC_SLUG -> return "Play in GameNative"
-        LocalShelves.APPS_SLUG -> return "Open"
-    }
-    return when (download?.state) {
-        null -> "Download"
-        DownloadState.QUEUED, DownloadState.RUNNING -> "Cancel"
-        DownloadState.INSTALLED -> emulatorFor(game.platformSlug)?.let { "Play in $it" } ?: "No emulator"
-        DownloadState.FAILED -> "Retry"
-    }
 }
 
 @Composable
@@ -478,7 +504,14 @@ private fun Header(title: String, sync: SyncStatus, subtitle: String?, onToggleV
             )
         }
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(syncLabel(sync), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            // What the pad does anywhere in the library, as on the shelf's console strip; the
+            // focused game's own hints are under the grid. While a sync runs, its state stands in.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                syncLabel(sync).takeIf { it.isNotEmpty() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                }
+                if (sync !is SyncStatus.Running) HintRow(Hints.libraryAnywhere(failed = sync is SyncStatus.Failed))
+            }
             ViewToggle(LibraryView.SHELF, onToggleView)
         }
     }
@@ -522,7 +555,15 @@ private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, f
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     Column(
-        Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        Modifier
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            // For accessibility (and device tests): the card is its game, the focused one selected.
+            // Cleared and set: the card's title and badges under it would otherwise merge in, and
+            // Compose then hands the description to a node of its own beside the clickable one.
+            .clearAndSetSemantics {
+                contentDescription = game.name
+                selected = focused
+            },
     ) {
         Box(
             Modifier
@@ -544,7 +585,8 @@ private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, f
                 val isIcon = game.platformSlug == LocalShelves.APPS_SLUG
                 AsyncImage(
                     model = cover,
-                    contentDescription = game.name,
+                    // The card is titled (its semantics): its cover is decoration.
+                    contentDescription = null,
                     contentScale = if (isIcon) ContentScale.Fit else ContentScale.Crop,
                     modifier = if (isIcon) Modifier.fillMaxSize().padding(28.dp) else Modifier.fillMaxSize(),
                 )
@@ -587,25 +629,118 @@ private fun DownloadBadge(download: DownloadEntity?, modifier: Modifier) {
 }
 
 private fun gameLine(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
-    when (game.platformSlug) {
-        LocalShelves.PC_SLUG -> return "${game.name}  ·  A: play in GameNative"
-        LocalShelves.APPS_SLUG -> return "${game.name}  ·  A: open"
-    }
+    if (LocalShelves.isLocal(game)) return game.name
     val size = formatSize(game.fsSizeBytes)
-    return when (download?.state) {
-        null -> "${game.name}  ·  $size  ·  A: download"
-        DownloadState.QUEUED -> "${game.name}  ·  queued  ·  A: cancel"
+    val state = when (download?.state) {
+        null -> size
+        DownloadState.QUEUED -> "queued"
         DownloadState.RUNNING -> {
             val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
-            "${game.name}  ·  downloading $percent% of $size  ·  A: cancel"
+            "downloading $percent% of $size"
         }
-        DownloadState.INSTALLED -> {
-            val play = emulatorFor(game.platformSlug)?.let { "A: play in $it" } ?: "no emulator installed"
-            "${game.name}  ·  $size  ·  $play  ·  X: delete"
-        }
-        DownloadState.FAILED -> "${game.name}  ·  failed: ${download.error ?: "unknown error"}  ·  A: retry"
+        DownloadState.INSTALLED -> if (emulatorFor(game.platformSlug) != null) size else "$size  ·  no emulator installed"
+        DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
+    }
+    return "${game.name}  ·  $state"
+}
+
+/** What a console shows when "downloaded only" leaves nothing of it. */
+@Composable
+private fun NothingDownloaded() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            "Nothing from this console is on the device.\nL2: sort & filter",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
+
+/**
+ * The "Sort & filter" panel over the library's top right: the sort and "downloaded only", the
+ * focused row ([row]) marked. Taps work too: a row is changed by tapping it, Close shuts it.
+ */
+@Composable
+internal fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrder) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier
+            .padding(top = 64.dp, end = 24.dp)
+            .width(360.dp)
+            .clip(shape)
+            .background(colors.surface)
+            .border(1.dp, colors.onSurface.copy(alpha = 0.12f), shape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Sort & filter", style = MaterialTheme.typography.titleMedium, color = colors.primary)
+        val rows = listOf("Sort" to order.sort.label, "Downloaded only" to if (order.downloadedOnly) "On" else "Off")
+        rows.forEachIndexed { index, (name, value) ->
+            val focused = index == row
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    // The shape drawn, not clipped to: a Sort arrow's touch area reaches past the row.
+                    .background(if (focused) colors.primary.copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .border(2.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, 1)) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                if (index == 0) {
+                    // Each arrow steps its own way (the rest of the row steps on, as A does).
+                    SortArrow("‹", Modifier.padding(horizontal = 8.dp)) { onOrder(OrderPanel.change(order, index, -1)) }
+                    Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                    SortArrow("›", Modifier.padding(start = 8.dp)) { onOrder(OrderPanel.change(order, index, 1)) }
+                } else {
+                    Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HintRow(Hints.orderPanel, Modifier.weight(1f))
+            Text(
+                "Close",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.primary,
+                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
+            )
+        }
+    }
+}
+
+/**
+ * One of the Sort row's arrows, drawn as before ([modifier]: its spacing) but taking taps over
+ * at least [ARROW_TARGET] square around it, past its glyph and the row's padding.
+ */
+@Composable
+private fun SortArrow(glyph: String, modifier: Modifier, onTap: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier.layout { measurable, constraints ->
+            // Laid out at the glyph's size, so the row doesn't move; the touch area grows past it.
+            val p = measurable.measure(constraints)
+            layout(p.width, p.height) { p.place(0, 0) }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(glyph, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+        Box(
+            Modifier
+                .matchParentSize()
+                .wrapContentSize(unbounded = true)
+                .size(ARROW_TARGET)
+                .testTag("sort-arrow-$glyph")
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
+        )
+    }
+}
+
+/** The least a Sort arrow takes taps over, either way (Material's minimum touch target). */
+private val ARROW_TARGET = 48.dp
 
 @Composable
 private fun EmptyLibrary(sync: SyncStatus) {
@@ -626,8 +761,8 @@ private fun EmptyLibrary(sync: SyncStatus) {
 private fun syncLabel(sync: SyncStatus): String = when (sync) {
     SyncStatus.Idle -> ""
     is SyncStatus.Running -> "Syncing ${sync.platform}…"
-    is SyncStatus.Done -> "Y: sync  ·  Start: settings"
-    is SyncStatus.Failed -> "Sync failed · Y to retry"
+    is SyncStatus.Done -> ""
+    is SyncStatus.Failed -> "Sync failed"
 }
 
 internal fun formatSize(bytes: Long): String = when {

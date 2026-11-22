@@ -42,11 +42,8 @@ fun DictionariesScreen(viewModel: DictionariesViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Dictionaries", style = MaterialTheme.typography.displaySmall, color = colors.primary)
-        Text(
-            "A: on/off  ·  L1/R1: move up/down (the popup's order)  ·  X twice: remove  ·  B: back",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceVariant,
-        )
+        val focused = list.getOrNull(focusIndex - 1)
+        HintRow(Hints.dictionaries(onImport = focused == null, enabled = focused?.enabled == true, removalArmed = focused != null && armed == focused.id))
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.widthIn(max = 1100.dp)) {
             item {
                 ActionRow(

@@ -57,6 +57,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.library.Favourites
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -89,6 +90,7 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
         onPlay = viewModel::play,
         onOpenManual = viewModel::openManual,
         onDelete = viewModel::deleteDownload,
+        onToggleFavourite = viewModel::toggleFavourite,
         notice = notice,
         factsScroll = scroll,
     )
@@ -139,6 +141,7 @@ fun GameDetailsContent(
     onPlay: () -> Unit = {},
     onOpenManual: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onToggleFavourite: () -> Unit = {},
     notice: String? = null,
     initialScreenshot: Int? = null,
     factsScroll: ScrollState = rememberScrollState(),
@@ -169,7 +172,7 @@ fun GameDetailsContent(
                 Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, Modifier.width(176.dp).fillMaxHeight())
+                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, Modifier.width(176.dp).fillMaxHeight())
                 Facts(current, factsScroll, onScreenshot = { viewing = it }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -214,6 +217,7 @@ private fun ArtAndActions(
     onPlay: () -> Unit,
     onOpenManual: () -> Unit,
     onDelete: () -> Unit,
+    onToggleFavourite: () -> Unit,
     modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -264,6 +268,9 @@ private fun ArtAndActions(
         Spacer(Modifier.height(4.dp))
         DetailsButton(GameDetailsFormat.primaryLabel(game, details.download), ButtonStyle.PRIMARY, onPlay)
         if (details.art.hasManual) DetailsButton("Open manual", ButtonStyle.PLAIN, onOpenManual)
+        if (Favourites.canMark(game)) {
+            DetailsButton(if (details.favourite) "Remove from favourites" else "Add to favourites", ButtonStyle.PLAIN, onToggleFavourite)
+        }
         if (installed) {
             DetailsButton(if (deleteArmed) "Tap again to delete" else "Delete download", ButtonStyle.DANGER) {
                 if (deleteArmed) {
@@ -316,10 +323,12 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
         GameDetailsFormat.playLine(details.play, game.lastPlayedMillis),
     )
     val hltb = GameDetailsFormat.hltbLine(game.hltbMainStorySec)
+    val hltbMore = GameDetailsFormat.hltbMoreLine(game.hltbMainPlusExtraSec, game.hltbCompletionistSec)
     val hltbProgress = GameDetailsFormat.hltbProgress(game.hltbMainStorySec, details.play?.totalMs ?: 0)
     val rest = listOfNotNull(
         GameDetailsFormat.rommLine(game),
         GameDetailsFormat.readingLine(details.reading),
+        GameDetailsFormat.lookupLine(details.lookups),
         GameDetailsFormat.saveLine(details.save),
     )
     val line = @Composable { text: String -> Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onSurface) }
@@ -330,13 +339,28 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
             GameDetailsFormat.detailLine(game)?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
-            if (played.isNotEmpty() || hltb != null || rest.isNotEmpty()) {
+            // How this build reads the game's text, once it has run and the catalog knows it.
+            details.textSource?.let { source ->
+                Text(
+                    source.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.primary.copy(alpha = 0.18f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
+            if (played.isNotEmpty() || hltb != null || hltbMore != null || rest.isNotEmpty()) {
                 Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     played.forEach { line(it) }
-                    hltb?.let {
+                    if (hltb != null || hltbMore != null) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            line(it)
+                            hltb?.let { line(it) }
                             hltbProgress?.let { progress -> ProgressBar(progress) }
+                            hltbMore?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            }
                         }
                     }
                     rest.forEach { line(it) }
