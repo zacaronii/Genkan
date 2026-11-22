@@ -222,7 +222,9 @@ class HomeActivity : ComponentActivity() {
         if (event.action != KeyEvent.ACTION_DOWN) return pad != null || super.dispatchKeyEvent(event)
         when (screen) {
             Screen.LIBRARY -> {
-                if (pad == PadKey.START) appViewModel.openSettings()
+                // Any button skips the insert animation, and does nothing else.
+                if (libraryViewModel.skipInsert()) Unit
+                else if (pad == PadKey.START) appViewModel.openSettings()
                 else if (pad == null || !libraryViewModel.onKey(pad, event.repeatCount)) return super.dispatchKeyEvent(event)
             }
             // B steps from a group's rows back to the group list, and only then out of settings.
@@ -288,6 +290,9 @@ class HomeActivity : ComponentActivity() {
             }
             SetupAction.BUILT_IN_PLAYER -> lifecycleScope.launch {
                 viewModel.playerSettings.setEnabled(!viewModel.playerSettings.isEnabled())
+            }
+            SetupAction.INSERT_ANIMATION -> lifecycleScope.launch {
+                viewModel.librarySettings.setInsertAnimation(!viewModel.librarySettings.insertAnimation.first())
             }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()

@@ -3,6 +3,7 @@ package app.genkan.library
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -33,7 +34,7 @@ enum class LibraryView {
 
 private val Context.libraryStore: DataStore<Preferences> by preferencesDataStore(name = "library")
 
-/** Remembers which [LibraryView] the library was last left in. */
+/** Remembers which [LibraryView] the library was last left in, and the library's other choices. */
 @Singleton
 class LibraryViewSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -43,7 +44,15 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         context.libraryStore.edit { it[VIEW] = view.name }
     }
 
+    /** Whether starting a game plays the insert animation (on unless switched off). */
+    val insertAnimation: Flow<Boolean> = context.libraryStore.data.map { it[INSERT_ANIMATION] != false }
+
+    suspend fun setInsertAnimation(on: Boolean) {
+        context.libraryStore.edit { it[INSERT_ANIMATION] = on }
+    }
+
     private companion object {
         val VIEW = stringPreferencesKey("view")
+        val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
     }
 }

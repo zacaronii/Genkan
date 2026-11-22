@@ -691,18 +691,27 @@ private fun BoxScope.PhysicalMedia(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (model != null) {
-            AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-        } else {
-            DrawnMedia(kind, logo, title, caseColor, shape.outline)
-        }
+        MediaArt(kind, model, logo, title, caseColor, shape.outline)
+    }
+}
+
+/**
+ * A disc or cartridge filling its box: the server's cut-out ([model]) when there is one, else a
+ * drawn one with the logo (or the title) on its label. Shared by the shelf and the insert animation.
+ */
+@Composable
+internal fun MediaArt(kind: MediaKind, model: Any?, logo: Any?, title: String, caseColor: Color, outline: Shape) {
+    if (model != null) {
+        AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+    } else {
+        DrawnMedia(kind, logo, title, caseColor, outline)
     }
 }
 
 /** A medium's size against its case, which way it slides out, and its outline. */
-private class MediaShape(val width: Dp, val height: Dp, val slidesRight: Boolean, val outline: Shape)
+internal class MediaShape(val width: Dp, val height: Dp, val slidesRight: Boolean, val outline: Shape)
 
-private fun mediaShape(kind: MediaKind, caseWidth: Dp, caseHeight: Dp): MediaShape {
+internal fun mediaShape(kind: MediaKind, caseWidth: Dp, caseHeight: Dp): MediaShape {
     val landscape = caseWidth > caseHeight
     return when (kind) {
         MediaKind.DISC, MediaKind.UNKNOWN -> {

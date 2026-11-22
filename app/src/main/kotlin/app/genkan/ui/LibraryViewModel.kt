@@ -22,7 +22,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import android.animation.ValueAnimator
+import android.os.SystemClock
+import app.genkan.home.LauncherPresence
+import app.genkan.launch.LaunchPlan
 import app.genkan.library.ArtworkWarmer
+import app.genkan.library.GameCase
+import app.genkan.library.InsertTimeline
+import app.genkan.library.MediaKind
+import kotlinx.coroutines.flow.first
 import app.genkan.library.FocusedGame
 import app.genkan.saves.SaveSync
 import app.genkan.azahar.AzaharText
@@ -82,6 +90,7 @@ class LibraryViewModel @Inject constructor(
     private val azaharText: AzaharText,
     private val artworkWarmer: ArtworkWarmer,
     private val viewSettings: LibraryViewSettings,
+    private val launcherPresence: LauncherPresence,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -102,6 +111,29 @@ class LibraryViewModel @Inject constructor(
 
     private val _focus = MutableStateFlow(LibraryFocus())
     val focus: StateFlow<LibraryFocus> = _focus.asStateFlow()
+
+    private val _insert = MutableStateFlow<InsertState?>(null)
+    /** The insert animation playing over the library while a game starts, or null. */
+    val insert: StateFlow<InsertState?> = _insert.asStateFlow()
+
+    /** The game being started; one at a time. */
+    private var launchJob: Job? = null
+    /** When the launch began, on the elapsed-realtime clock, and when (since then) it was skipped. */
+    private var launchStartedAt = 0L
+    private val skippedAt = MutableStateFlow<Long?>(null)
+
+    /**
+     * Skips the insert animation when one is playing. True when it was, so the key that did it is
+     * used up rather than also moving the shelf or opening settings.
+     */
+    fun skipInsert(): Boolean {
+        val state = _insert.value ?: return false
+        if (!state.skipped) {
+            skippedAt.value = SystemClock.elapsedRealtime() - launchStartedAt
+            _insert.value = state.copy(skipped = true)
+        }
+        return true
+    }
 
     /** The shelf or the grid, as last left; the shelf until the stored choice has been read. */
     val view: StateFlow<LibraryView> = viewSettings.view.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryView.DEFAULT)
@@ -189,6 +221,7 @@ class LibraryViewModel @Inject constructor(
      * the shelf. Returns false for keys the library doesn't use.
      */
     fun onKey(key: PadKey, repeatCount: Int = 0): Boolean {
+        if (skipInsert()) return true
         if (key == PadKey.Y) {
             sync(); return true
         }
@@ -254,29 +287,87 @@ class LibraryViewModel @Inject constructor(
     /** Name of the emulator A would start for [platformSlug], or null when none is installed. */
     fun emulatorFor(platformSlug: String): String? = gameLauncher.installedEmulatorFor(platformSlug)?.first?.displayName
 
+    /**
+     * Starts an installed [game]. The one path for A and the bottom screen's Play button.
+     *
+     * The insert animation plays while the game gets ready (its save pulled from RomM, the emulator
+     * chosen, firmware fetched), and the game starts as [InsertTimeline] says: when both are done
+     * for the built-in player, and a little before the animation ends for an emulator app, so its
+     * window lands as the animation finishes. The bottom screen goes to the reader as it begins.
+     */
     private fun launch(game: GameEntity) {
         val download = downloads.value[game.id] ?: return
-        viewModelScope.launch {
-            // Pull a newer save from RomM first; a slow or absent server never holds the game up.
-            show("Checking ${game.name}'s save…")
-            withTimeoutOrNull(SAVE_SYNC_TIMEOUT_MS) {
-                saveSync.sync(game.id)
-                saveSync.beforeLaunch(game.id, game.platformSlug)
-                if (game.platformSlug == "psp") ppssppText.beforeLaunch()
-                if (game.platformSlug == "3ds") azaharText.beforeLaunch()
-            }
-            when (val result = gameLauncher.launch(game, download)) {
-                is LaunchResult.Launched -> {
-                    sessionTracker.begin(game.id, result.emulator.packageName)
-                    nowPlaying.started(game.id, game.name, game.platformSlug)
-                    show("Starting ${game.name} in ${result.emulator.displayName}…")
-                }
-                is LaunchResult.NoEmulator -> show(
-                    if (result.suggestions.isEmpty()) "Genkan can't launch this platform yet"
-                    else "Install ${result.suggestions.map { it.displayName.substringBefore(" (") }.distinct().joinToString(" or ")} to play this"
+        if (launchJob?.isActive == true) return
+        launchJob = viewModelScope.launch {
+            val animationMs = InsertTimeline.animationMs(viewSettings.insertAnimation.first(), ValueAnimator.getDurationScale())
+            launchStartedAt = SystemClock.elapsedRealtime()
+            skippedAt.value = null
+            focusedGame.setLaunching(game.id)
+            if (animationMs > 0) {
+                _insert.value = InsertState(
+                    gameId = game.id,
+                    title = game.name,
+                    kind = MediaKind.forSlug(game.platformSlug),
+                    spec = GameCase.specFor(game.platformSlug),
+                    physical = artModel(game.physicalPath),
+                    logo = artModel(game.logoPath),
+                    durationMs = animationMs,
                 )
-                is LaunchResult.Failed -> show(result.message)
             }
+            var launched = false
+            try {
+                // Pull a newer save from RomM first; a slow or absent server never holds the game up.
+                show("Checking ${game.name}'s save…")
+                withTimeoutOrNull(SAVE_SYNC_TIMEOUT_MS) {
+                    saveSync.sync(game.id)
+                    saveSync.beforeLaunch(game.id, game.platformSlug)
+                    if (game.platformSlug == "psp") ppssppText.beforeLaunch()
+                    if (game.platformSlug == "3ds") azaharText.beforeLaunch()
+                }
+                val result = when (val plan = gameLauncher.prepare(game, download)) {
+                    is LaunchPlan.Unavailable -> plan.result
+                    is LaunchPlan.Ready -> {
+                        val readyAt = sinceLaunch()
+                        val timeline = InsertTimeline.forLaunch(animationMs, plan.builtIn)
+                        waitUntil { timeline.launchAt(readyAt, skippedAt.value) }
+                        plan.start().also { result ->
+                            if (result is LaunchResult.Launched) waitUntil { timeline.cutAt(readyAt, skippedAt.value) }
+                        }
+                    }
+                }
+                when (result) {
+                    is LaunchResult.Launched -> {
+                        launched = true
+                        sessionTracker.begin(game.id, result.emulator.packageName)
+                        nowPlaying.started(game.id, game.name, game.platformSlug)
+                        show("Starting ${game.name} in ${result.emulator.displayName}…")
+                    }
+                    is LaunchResult.NoEmulator -> show(
+                        if (result.suggestions.isEmpty()) "Genkan can't launch this platform yet"
+                        else "Install ${result.suggestions.map { it.displayName.substringBefore(" (") }.distinct().joinToString(" or ")} to play this"
+                    )
+                    is LaunchResult.Failed -> show(result.message)
+                }
+            } finally {
+                _insert.value = null
+                if (!launched) focusedGame.setLaunching(null)
+            }
+            // The bottom screen stays on the reader until the game has the top screen; then the
+            // usual rule (details only while the launcher is in front) takes over.
+            withTimeoutOrNull(LAUNCHING_HOLD_MS) { launcherPresence.inFront.first { !it } }
+            focusedGame.setLaunching(null)
+        }
+    }
+
+    private fun sinceLaunch(): Long = SystemClock.elapsedRealtime() - launchStartedAt
+
+    /** Suspends until [due] (ms since the launch began); a skip can bring it earlier, so it is re-read. */
+    private suspend fun waitUntil(due: () -> Long) {
+        while (true) {
+            val wait = due() - sinceLaunch()
+            if (wait <= 0) return
+            val seen = skippedAt.value
+            withTimeoutOrNull(wait) { skippedAt.first { it != seen } }
         }
     }
 
@@ -333,6 +424,8 @@ class LibraryViewModel @Inject constructor(
         /** How long the focus rests before the artwork warmer stops looking ahead. */
         const val WARM_REST_MS = 250L
         const val SAVE_SYNC_TIMEOUT_MS = 15_000L
+        /** The longest the bottom screen waits on the reader for a started game to take the top screen. */
+        const val LAUNCHING_HOLD_MS = 5_000L
     }
 
     fun sync() {

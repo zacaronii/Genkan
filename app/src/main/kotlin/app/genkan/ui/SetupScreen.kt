@@ -67,11 +67,13 @@ data class SetupState(
     val builtInPlayer: Boolean,
     val textSamples: Boolean,
     val dictionaries: List<DictionaryEntity>,
+    val insertAnimation: Boolean = true,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
         SwitchKey.HOME -> homeOn(status)
         SwitchKey.BUILT_IN_PLAYER -> builtInPlayer
+        SwitchKey.INSERT_ANIMATION -> insertAnimation
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
     }
@@ -304,6 +306,11 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
             "Select+Start quits; on a DS game, a stick click swaps its lower screen and the reader."
     } else {
         "Every game starts in its installed emulator."
+    }
+    SwitchKey.INSERT_ANIMATION -> if (state.insertAnimation) {
+        "Starting a game slides its disc or cartridge into the machine first. Any button skips it."
+    } else {
+        "Games start without the animation."
     }
     SwitchKey.PSP_TEXT -> if (state.pspDebugger) {
         "PPSSPP's debugger is reachable from your network while a game runs."

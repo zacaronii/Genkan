@@ -31,6 +31,18 @@ class FocusedGame @Inject constructor() {
         _focus.value = focus
     }
 
+    private val _launching = MutableStateFlow<Long?>(null)
+
+    /**
+     * The game being started, from the press of A (or Play) until the top screen has moved to it.
+     * The bottom screen goes to the reader then, in the same beat as the insert animation.
+     */
+    val launching: StateFlow<Long?> = _launching.asStateFlow()
+
+    fun setLaunching(gameId: Long?) {
+        _launching.value = gameId
+    }
+
     /** Asks the library to play, download or cancel the download of [gameId], as A would. */
     fun requestPlay(gameId: Long) {
         _playRequests.tryEmit(gameId)

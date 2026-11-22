@@ -93,8 +93,9 @@ class GameDetailsViewModel @Inject constructor(
         .build()
 
     val mode: StateFlow<CompanionMode> =
-        combine(launcher.inFront, focusedGame.focus, readerPinned) { inFront, focus, pinned ->
-            if (inFront && focus != null && !pinned) CompanionMode.DETAILS else CompanionMode.READER
+        combine(launcher.inFront, focusedGame.focus, readerPinned, focusedGame.launching) { inFront, focus, pinned, launching ->
+            // A game being started takes the bottom screen to the reader as the insert animation begins.
+            if (inFront && focus != null && !pinned && launching == null) CompanionMode.DETAILS else CompanionMode.READER
         }.stateIn(viewModelScope, SharingStarted.Eagerly, CompanionMode.READER)
 
     /** Whether the reader can switch back to the focused game. */

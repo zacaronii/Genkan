@@ -18,6 +18,8 @@ import app.genkan.download.DownloadState
 import app.genkan.home.DualScreenStatus
 import app.genkan.home.ScreenMode
 import app.genkan.library.FocusedGame
+import app.genkan.library.GameCase
+import app.genkan.library.MediaKind
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryPane
@@ -117,9 +119,54 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 8, staticMedia = false)
     }
 
+    /** A PlayStation game's disc (the server's cut-out) dropped onto the spindle and spinning up. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun insertDisc() = shoot("insert_disc", TOP_PIXELS) {
+        insertFrame(platformIndex = 1, FakeData.psxGames, gameIndex = 3, progress = 0.8f)
+    }
+
+    /** A DS game with no cut-out: a drawn card going down into its slot. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun insertCard() = shoot("insert_card", TOP_PIXELS) {
+        insertFrame(platformIndex = 3, FakeData.dsGames, gameIndex = 2, progress = 0.45f)
+    }
+
+    /** A PSP game: a drawn UMD in its bay, the door swinging shut. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun insertUmd() = shoot("insert_umd", TOP_PIXELS) {
+        insertFrame(platformIndex = 2, FakeData.games, gameIndex = 2, progress = 0.78f)
+    }
+
+    /** The shelf with [games]' game at [gameIndex] being started, its insert animation fixed at [progress]. */
+    @Composable
+    private fun insertFrame(platformIndex: Int, games: List<GameEntity>, gameIndex: Int, progress: Float) {
+        val game = games[gameIndex]
+        val insert = InsertState(
+            gameId = game.id,
+            title = game.name,
+            kind = MediaKind.forSlug(game.platformSlug),
+            spec = GameCase.specFor(game.platformSlug),
+            physical = game.physicalPath?.let { "fake:$it" },
+            logo = game.logoPath?.let { "fake:$it" },
+            durationMs = 1_500,
+        )
+        library(LibraryView.SHELF, platformIndex, games, gameIndex, staticMedia = true, insert = insert, insertProgress = progress)
+    }
+
     /** The library on [platforms][FakeData.platforms] index [platformIndex], showing [games]. */
     @Composable
-    private fun library(view: LibraryView, platformIndex: Int, games: List<GameEntity>, gameIndex: Int, staticMedia: Boolean? = null) {
+    private fun library(
+        view: LibraryView,
+        platformIndex: Int,
+        games: List<GameEntity>,
+        gameIndex: Int,
+        staticMedia: Boolean? = null,
+        insert: InsertState? = null,
+        insertProgress: Float? = null,
+    ) {
         LibraryContent(
             view = view,
             platforms = FakeData.platforms,
@@ -136,6 +183,8 @@ class ScreenshotTest {
             onSelectGame = {},
             onToggleView = {},
             staticMedia = staticMedia,
+            insert = insert,
+            staticInsertProgress = insertProgress,
         )
     }
 
