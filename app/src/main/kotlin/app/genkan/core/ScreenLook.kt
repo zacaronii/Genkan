@@ -16,13 +16,27 @@ import javax.inject.Singleton
 
 /**
  * How the built-in player draws a game's picture onto the screen: the player library's own
- * shaders. [label] is the short name (chip, button); [description] says what it does.
+ * shaders, and RetroArch shaders from libretro/glsl-shaders kept in the app's assets ([file],
+ * sampled linearly when [linear], as their presets say). [label] is the short name (chip,
+ * button); [description] says what it does.
  */
-enum class ScreenLook(val label: String, val description: String) {
+enum class ScreenLook(val label: String, val description: String, val file: String? = null, val linear: Boolean = false) {
     DEFAULT("Default", "Smoothed as it's scaled up: soft edges, no pixels visible."),
     SHARP("Sharp", "Square, crisp pixels; only their edges are blended."),
+    SHARP_BILINEAR("Sharp bilinear", "Whole-pixel blocks with a thin smoothed seam: crisp at any scale.", "sharp-bilinear.glsl", linear = true),
+    SHARP_BILINEAR_SIMPLE("Sharp bilinear (simple)", "As Sharp bilinear, with a slightly softer seam.", "sharp-bilinear-simple.glsl", linear = true),
     CRT("CRT", "Dark lines between the rows, like an old television."),
+    CRT_LOTTES("CRT Lottes", "Scanlines, a phosphor mask and a little glow: a fuller old-television look.", "crt-lottes.glsl"),
+    CRT_EASYMODE("CRT Easymode", "Scanlines and a mask, sharp and bright.", "crt-easymode.glsl"),
+    CRT_APERTURE("CRT Aperture", "An aperture-grille television: fine vertical stripes and glow.", "crt-aperture.glsl"),
+    ZFAST_CRT("zfast CRT", "Light scanlines and mask, made to be cheap.", "zfast_crt.glsl", linear = true),
     LCD("LCD", "A faint grid between the pixels, like a handheld's screen."),
+    LCD3X("LCD 3x", "Each pixel as a handheld's red, green and blue cells, with dark gaps.", "lcd3x.glsl"),
+    LCD1X("LCD 1x", "A light pixel grid with scanlines.", "lcd1x.glsl"),
+    LCD1X_NDS("LCD 1x (DS)", "LCD 1x with a DS screen's colours.", "lcd1x_nds.glsl"),
+    LCD1X_PSP("LCD 1x (PSP)", "LCD 1x with a PSP screen's colours.", "lcd1x_psp.glsl"),
+    ZFAST_LCD("zfast LCD", "A light pixel grid, made to be cheap.", "zfast_lcd.glsl", linear = true),
+    DOT("Dot", "Each pixel as a soft round dot, like an old handheld's matrix.", "dot.glsl"),
     CUT("CUT", "Smooths along edges so slopes and curves lose their steps; light."),
     CUT2("CUT2", "Like CUT, a little smoother, and sharpens soft edges."),
     CUT3("CUT3", "The smoothest of the three, in three passes; the most work for the GPU."),
@@ -31,18 +45,22 @@ enum class ScreenLook(val label: String, val description: String) {
     /** The next look, round to the first. */
     fun next(): ScreenLook = entries[(ordinal + 1) % entries.size]
 
-    val shader: ShaderConfig
-        get() = when (this) {
-            DEFAULT -> ShaderConfig.Default
-            SHARP -> ShaderConfig.Sharp
-            CRT -> ShaderConfig.CRT
-            LCD -> ShaderConfig.LCD
-            CUT -> ShaderConfig.CUT()
-            CUT2 -> ShaderConfig.CUT2()
-            CUT3 -> ShaderConfig.CUT3()
-        }
+    /** The shader to draw with; [read] gives an asset's text (a RetroArch shader's file). */
+    fun shader(read: (String) -> String): ShaderConfig = when (this) {
+        DEFAULT -> ShaderConfig.Default
+        SHARP -> ShaderConfig.Sharp
+        CRT -> ShaderConfig.CRT
+        LCD -> ShaderConfig.LCD
+        CUT -> ShaderConfig.CUT()
+        CUT2 -> ShaderConfig.CUT2()
+        CUT3 -> ShaderConfig.CUT3()
+        else -> RetroArchShader.adapt(read(SHADERS + file!!)).let { ShaderConfig.Custom(it.vertex, it.fragment, linear) }
+    }
 
     companion object {
+        /** Where the RetroArch shaders sit in the app's assets. */
+        const val SHADERS = "shaders/"
+
         /** The look named [name], or Default for none or one this build doesn't know. */
         fun of(name: String?): ScreenLook = entries.firstOrNull { it.name == name } ?: DEFAULT
 

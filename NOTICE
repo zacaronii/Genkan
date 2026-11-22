@@ -99,7 +99,10 @@ Pinned commit: 683652f8705a6953218444d72ed77d2c5913fffb
     grabs (GLRetroView.kt); Oboe from its published package
     (com.google.oboe:oboe, Apache-2.0) instead of a submodule. libretro-common
     (MIT) is used unmodified as a git submodule at the commit LibretroDroid
-    pins, b0c348ea5543c4d7fb0bc479258aa6988b20c0c9.
+    pins, b0c348ea5543c4d7fb0bc479258aa6988b20c0c9. Also a "custom" shader
+    type taking its sources from the app, and a fall back to the default
+    shader when one doesn't compile (ShaderConfig.kt, GLRetroView.kt,
+    LibretroDroid.java, shadermanager.{h,cpp}, video.cpp).
 
 --------------------------------------------------------------------------
 Libretro cores, prebuilt by Lemuroid's LemuroidCores
@@ -189,3 +192,24 @@ Hachidori (GPL-3.0-or-later)
 https://github.com/bee-san/hachidori, commit 5a5b5e2
   app/src/main/assets/popup/compact-summary.js: the compact definition summary ("first meanings")
   from extension/render/popup.js, lines 185-225 and 1701-2159, copied unmodified inside a wrapper.
+
+--------------------------------------------------------------------------
+RetroArch GLSL shaders, libretro/glsl-shaders
+https://github.com/libretro/glsl-shaders
+Pinned commit: a35069864b4bf30f8c8e740d57206543fb7e745e
+
+  Copied unmodified, each with its own header and licence, to
+  app/src/main/assets/shaders/ (Genkan adapts them to the player library's
+  renderer when it loads them: app/src/main/kotlin/app/genkan/core/RetroArchShader.kt):
+    crt/shaders/crt-lottes.glsl                    public domain (Timothy Lottes)
+    interpolation/shaders/sharp-bilinear.glsl      public domain (Themaister)
+    interpolation/shaders/sharp-bilinear-simple.glsl  public domain (rsn8887, after Themaister)
+    handheld/shaders/lcd3x.glsl                    public domain (Gigaherz)
+    handheld/shaders/dot.glsl                      public domain (Themaister)
+    crt/shaders/zfast_crt.glsl                     GPL-2.0-or-later (Greg Hogan)
+    handheld/shaders/zfast_lcd.glsl                GPL-2.0-or-later (Greg Hogan)
+    crt/shaders/crt-easymode.glsl                  GPL (EasyMode)
+    crt/shaders/crt-aperture.glsl                  GPL (EasyMode)
+    handheld/shaders/lcd1x.glsl                    GPL-2.0-or-later (after Gigaherz's public-domain lcd3x)
+    handheld/shaders/lcd1x_nds.glsl                GPL-2.0-or-later (after Gigaherz's public-domain lcd3x)
+    handheld/shaders/lcd1x_psp.glsl                GPL-2.0-or-later (after Gigaherz's public-domain lcd3x)

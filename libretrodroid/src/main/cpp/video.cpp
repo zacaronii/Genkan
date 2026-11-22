@@ -110,12 +110,21 @@ void Video::updateProgram() {
 
     shadersChain = {};
 
-    std::for_each(shaders.passes.begin(), shaders.passes.end(), [&](const auto& item){
+    // Genkan: a plain loop, so a pass that won't compile can leave updateProgram (see below).
+    for (const auto& item : shaders.passes) {
         auto shader = ShaderChainEntry { };
 
         shader.gProgram = createProgram(item.vertex.data(), item.fragment.data());
         if (!shader.gProgram) {
             LOGE("Could not create gl program.");
+            // Genkan: an app shader that won't compile falls back to the default one.
+            if (requestedShaderConfig.type == ShaderManager::Type::SHADER_CUSTOM) {
+                LOGE("The custom shader didn't compile; drawing with the default one.");
+                requestedShaderConfig = ShaderManager::Config { ShaderManager::Type::SHADER_DEFAULT, {} };
+                loadedShaderType = std::nullopt;
+                updateProgram();
+                return;
+            }
             throw std::runtime_error("Cannot create gl program");
         }
 
@@ -132,7 +141,7 @@ void Video::updateProgram() {
         shader.gScreenDensityHandle = glGetUniformLocation(shader.gProgram, "screenDensity");
 
         shadersChain.push_back(shader);
-    });
+    }
 
     renderer->setShaders(shaders);
 }

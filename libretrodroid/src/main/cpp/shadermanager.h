@@ -51,6 +51,8 @@ public:
         SHADER_UPSCALE_CUT = 4,
         SHADER_UPSCALE_CUT2 = 5,
         SHADER_UPSCALE_CUT3 = 6,
+        // Genkan: sources from the app, in params "vertex" and "fragment"; "linear" is "1" or "0".
+        SHADER_CUSTOM = 7,
     };
 
     struct Config {

@@ -491,6 +491,16 @@ class GLRetroView(
                     LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_DISTANCE to toParam(config.hardEdgesSearchMaxDistance),
                 )
             )
+
+            // Genkan: the app's own shader sources.
+            is ShaderConfig.Custom -> GLRetroShader(
+                LibretroDroid.SHADER_CUSTOM,
+                mapOf(
+                    LibretroDroid.SHADER_CUSTOM_PARAM_VERTEX to config.vertex,
+                    LibretroDroid.SHADER_CUSTOM_PARAM_FRAGMENT to config.fragment,
+                    LibretroDroid.SHADER_CUSTOM_PARAM_LINEAR to if (config.linear) "1" else "0",
+                )
+            )
         }
     }
 

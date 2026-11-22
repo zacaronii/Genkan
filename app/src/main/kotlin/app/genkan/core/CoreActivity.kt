@@ -111,7 +111,7 @@ class CoreActivity : ComponentActivity() {
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()?.also { lastSaved = it }
-            shader = look.shader
+            shader = look.shader(::readAsset)
             preferLowLatencyAudio = true
             rumbleEventsEnabled = false
         }
@@ -232,7 +232,7 @@ class CoreActivity : ComponentActivity() {
             val next = ScreenLook.of(name)
             runOnUiThread {
                 look = next
-                if (::retroView.isInitialized) retroView.shader = next.shader
+                if (::retroView.isInitialized) retroView.shader = next.shader(::readAsset)
             }
         }
 
@@ -426,6 +426,9 @@ class CoreActivity : ComponentActivity() {
         }
         return false
     }
+
+    /** An asset's text: a RetroArch shader's file for a [ScreenLook]. */
+    private fun readAsset(path: String): String = assets.open(path).bufferedReader().use { it.readText() }
 
     override fun onPause() {
         save()
