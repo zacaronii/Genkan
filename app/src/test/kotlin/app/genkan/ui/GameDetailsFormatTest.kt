@@ -97,6 +97,11 @@ class GameDetailsFormatTest {
         assertText("Main story about 45 min", GameDetailsFormat.hltbLine(45 * 60))
         assertNull(GameDetailsFormat.hltbLine(null))
         assertNull(GameDetailsFormat.hltbLine(0))
+        // The longer times, under it: either alone, or none.
+        assertText("Main + extras about 45 h  ·  everything about 80 h", GameDetailsFormat.hltbMoreLine(45 * 3600, 80 * 3600))
+        assertText("Main + extras about 45 h", GameDetailsFormat.hltbMoreLine(45 * 3600, null))
+        assertText("Everything about 30 min", GameDetailsFormat.hltbMoreLine(0, 30 * 60))
+        assertNull(GameDetailsFormat.hltbMoreLine(null, 0))
     }
 
     @Test

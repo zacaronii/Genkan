@@ -323,6 +323,7 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
         GameDetailsFormat.playLine(details.play, game.lastPlayedMillis),
     )
     val hltb = GameDetailsFormat.hltbLine(game.hltbMainStorySec)
+    val hltbMore = GameDetailsFormat.hltbMoreLine(game.hltbMainPlusExtraSec, game.hltbCompletionistSec)
     val hltbProgress = GameDetailsFormat.hltbProgress(game.hltbMainStorySec, details.play?.totalMs ?: 0)
     val rest = listOfNotNull(
         GameDetailsFormat.rommLine(game),
@@ -337,13 +338,16 @@ private fun Facts(details: GameDetails, scroll: ScrollState, onScreenshot: (Int)
             GameDetailsFormat.detailLine(game)?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
-            if (played.isNotEmpty() || hltb != null || rest.isNotEmpty()) {
+            if (played.isNotEmpty() || hltb != null || hltbMore != null || rest.isNotEmpty()) {
                 Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     played.forEach { line(it) }
-                    hltb?.let {
+                    if (hltb != null || hltbMore != null) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            line(it)
+                            hltb?.let { line(it) }
                             hltbProgress?.let { progress -> ProgressBar(progress) }
+                            hltbMore?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            }
                         }
                     }
                     rest.forEach { line(it) }
