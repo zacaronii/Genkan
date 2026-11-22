@@ -212,7 +212,12 @@ private fun ArtAndActions(
         }
     }
 
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    // Scrolls: with a logo, a manual and the look, the buttons run past the bottom screen's height.
+    Column(
+        modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         details.art.logo?.let { logo ->
             AsyncImage(
                 model = logo,
