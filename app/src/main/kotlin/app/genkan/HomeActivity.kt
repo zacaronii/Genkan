@@ -57,6 +57,8 @@ import kotlinx.coroutines.launch
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
+import app.genkan.ui.ScreenLookScreen
+import app.genkan.ui.ScreenLookViewModel
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -65,7 +67,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -86,6 +88,7 @@ class HomeActivity : ComponentActivity() {
     private val readingLogViewModel: ReadingLogViewModel by viewModels()
     private val yomikataSettingsViewModel: YomikataSettingsViewModel by viewModels()
     private val wordsSettingsViewModel: WordsSettingsViewModel by viewModels()
+    private val screenLookViewModel: ScreenLookViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -128,6 +131,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.READING_LOG -> ReadingLogScreen(readingLogViewModel)
                     Screen.YOMIKATA -> YomikataSettingsScreen(yomikataSettingsViewModel)
                     Screen.WORDS -> WordsSettingsScreen(wordsSettingsViewModel)
+                    Screen.SCREEN_LOOK -> ScreenLookScreen(screenLookViewModel)
                 }
             }
         }
@@ -247,7 +251,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK -> when (pad) {
                 // B closes the keyboard first, and only then the page.
                 PadKey.B -> if (!hideKeyboard()) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -287,6 +291,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.READING_LOG -> appViewModel.openPage(Screen.READING_LOG)
             SetupAction.YOMIKATA -> appViewModel.openPage(Screen.YOMIKATA)
             SetupAction.WORDS -> appViewModel.openPage(Screen.WORDS)
+            SetupAction.SCREEN_LOOK -> appViewModel.openPage(Screen.SCREEN_LOOK)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

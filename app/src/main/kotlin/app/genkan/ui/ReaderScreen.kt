@@ -93,6 +93,7 @@ fun ReaderScreen(
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val overlayOn by viewModel.overlay.enabled.collectAsStateWithLifecycle()
     val overlayAvailable by viewModel.overlay.available.collectAsStateWithLifecycle()
+    val look by viewModel.look.collectAsStateWithLifecycle()
     val choice by viewModel.builtIn.choice.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
@@ -159,6 +160,11 @@ fun ReaderScreen(
                 }
                 // Boxes over the game's text, to tap there (the built-in player's games).
                 if (overlayAvailable) Chip(if (overlayOn) "Overlay on" else "Overlay") { viewModel.overlay.toggle() }
+                // The next screen look, to compare while playing; Keep makes the one on screen the game's own.
+                look?.let { (now, kept) ->
+                    Chip("Look: ${now.label}") { viewModel.stepLook() }
+                    if (!kept) Chip("Keep ${now.label}") { viewModel.keepLook() }
+                }
                 // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
                 if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
                 if (threads.isNotEmpty() || chosen != null) {
