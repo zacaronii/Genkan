@@ -121,8 +121,11 @@ class TextSamples @Inject constructor(private val settings: PlayerSettings) {
         private const val MAX_SAMPLES = 60
         private const val CONTEXT = 256
 
-        /** The PS1 BIOS leaves the boot path in RAM: cdrom:\SLPS_010.01;1 → SLPS-01001. */
-        private val BOOT = Regex("""cdrom:\\{1,2}([A-Z]{4})_(\d{3})\.(\d{2})""", RegexOption.IGNORE_CASE)
+        /**
+         * The PS1 BIOS leaves the boot path in RAM: cdrom:\SLPS_010.01;1 → SLPS-01001. Some games'
+         * SYSTEM.CNF name it with no backslash (cdrom:SLPS_011.00, Tales of Destiny's).
+         */
+        private val BOOT = Regex("""cdrom:\\{0,2}([A-Z]{4})_(\d{3})\.(\d{2})""", RegexOption.IGNORE_CASE)
 
         internal fun ps1Serial(bytes: ByteArray): String? {
             val ascii = String(bytes, Charsets.ISO_8859_1)
