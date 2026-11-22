@@ -771,7 +771,8 @@ private fun DrawnMedia(kind: MediaKind, logo: Any?, title: String, caseColor: Co
                 drawCircle(Color(0xFF2A2B30), radius = size.minDimension * 0.08f)
             }
             // Below the hub, on the lower part of the disc window.
-            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, 0.62f)).fillMaxWidth(0.56f).fillMaxHeight(0.2f))
+            // One line: the band under the hub is narrow, and a second line runs over the frame.
+            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, 0.62f)).fillMaxWidth(0.56f).fillMaxHeight(0.2f), maxLines = 1)
         }
         MediaKind.CARD, MediaKind.CARTRIDGE, MediaKind.DISK_CARD -> {
             val shell = when (kind) {
@@ -804,16 +805,16 @@ private fun DrawnMedia(kind: MediaKind, logo: Any?, title: String, caseColor: Co
 }
 
 @Composable
-private fun MediaLabel(logo: Any?, title: String, ink: Color, modifier: Modifier) =
-    LogoOrTitle(logo, title, ink, MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), modifier)
+private fun MediaLabel(logo: Any?, title: String, ink: Color, modifier: Modifier, maxLines: Int = 4) =
+    LogoOrTitle(logo, title, ink, MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), modifier, maxLines)
 
 /** The title logo once it has loaded; the title in text before that, or without a logo. */
 @Composable
-private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.compose.ui.text.TextStyle, modifier: Modifier) {
+private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.compose.ui.text.TextStyle, modifier: Modifier, maxLines: Int = 4) {
     var logoShown by remember(logo) { mutableStateOf(false) }
     Box(modifier, contentAlignment = Alignment.Center) {
         if (!logoShown) {
-            Text(title, style = style, color = ink, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Text(title, style = style, color = ink, textAlign = TextAlign.Center, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
         }
         if (logo != null) {
             AsyncImage(
