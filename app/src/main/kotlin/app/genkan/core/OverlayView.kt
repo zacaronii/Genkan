@@ -56,19 +56,15 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
         invalidate()
     }
 
+    /** How many of [text]'s characters from [from] fit in [width], as drawn. */
+    private fun fit(text: String, from: Int, width: Float): Int = panelText.breakText(text, from, text.length, true, width, null)
+
     private fun geometry(panel: OverlayPanel): PanelGeometry =
         panelGeometry ?: PanelGeometry.place(
-            panel.items.size, width.toFloat(), height.toFloat(),
-            rowHeight = panelText.textSize * 1.8f, margin = 16 * density,
+            panel.items, width.toFloat(), height.toFloat(),
+            lineHeight = panelText.textSize * 1.6f, margin = 16 * density, pad = panelPad,
+            measure = panelText::measureText, fit = ::fit,
         ).also { panelGeometry = it }
-
-    /** The character of [row]'s text at [x], measured as drawn. */
-    private fun offsetAt(panel: OverlayPanel, geometry: PanelGeometry, row: Int, x: Float): Int {
-        val text = panel.items[row]
-        val from = x - geometry.left - panelPad
-        if (from <= 0f) return 0
-        return panelText.breakText(text, true, from, null).coerceAtMost((text.length - 1).coerceAtLeast(0))
-    }
 
     override fun onDraw(canvas: Canvas) {
         val pad = 3 * density
@@ -83,14 +79,17 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
         panelBox.set(g.left, g.top, g.left + g.width, g.bottom)
         canvas.drawRoundRect(panelBox, corner, corner, panelFill)
         panel.items.forEachIndexed { row, item ->
-            val top = g.top + row * g.rowHeight
+            val lines = g.rows[row]
+            val top = g.top + lines.firstLine * g.lineHeight
             if (row == panel.highlighted) {
-                panelBox.set(g.left, top, g.left + g.width, top + g.rowHeight)
+                panelBox.set(g.left, top, g.left + g.width, top + lines.starts.size * g.lineHeight)
                 canvas.drawRoundRect(panelBox, corner, corner, panelHighlight)
             }
-            val baseline = top + (g.rowHeight - panelText.descent() - panelText.ascent()) / 2
-            val shown = panelText.breakText(item, true, g.width - 2 * panelPad, null)
-            canvas.drawText(item, 0, shown, g.left + panelPad, baseline, panelText)
+            lines.starts.forEachIndexed { i, start ->
+                val end = lines.starts.getOrNull(i + 1) ?: item.length
+                val baseline = top + i * g.lineHeight + (g.lineHeight - panelText.descent() - panelText.ascent()) / 2
+                canvas.drawText(item, start, end, g.left + panelPad, baseline, panelText)
+            }
         }
     }
 
@@ -120,8 +119,9 @@ class OverlayView(context: Context, private val onTap: (ScreenText.Hit) -> Unit)
     private fun panelHit(x: Float, y: Float): ScreenText.Hit? {
         val panel = panel ?: return null
         val g = geometry(panel)
-        val row = g.rowAt(x, y) ?: return null
-        return ScreenText.Hit(panel.items[row], offsetAt(panel, g, row, x))
+        val (row, line) = g.lineAt(x, y) ?: return null
+        val text = panel.items[row]
+        return ScreenText.Hit(text, g.offsetAt(text, row, line, x, ::fit))
     }
 
     private companion object {

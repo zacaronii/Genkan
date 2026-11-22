@@ -34,22 +34,59 @@ class OverlayPanelTest {
         assertNull(OverlayPanel.of(null))
     }
 
+    /** Text drawn 10 px a character, so widths and breaks are easy to follow. */
+    private val measure: (String) -> Float = { it.length * 10f }
+    private val fit: (String, Int, Float) -> Int = { text, from, width -> minOf(text.length - from, (width / 10f).toInt()) }
+
+    private fun place(items: List<String>, viewHeight: Float = 600f) =
+        PanelGeometry.place(items, viewWidth = 1000f, viewHeight = viewHeight, lineHeight = 40f, margin = 20f, pad = 10f, measure = measure, fit = fit)
+
     @Test
-    fun `the panel sits in the top right and a tap finds its row`() {
-        val g = PanelGeometry.place(rows = 3, viewWidth = 1000f, viewHeight = 600f, rowHeight = 40f, margin = 20f)
+    fun `a short list keeps the narrowest width, in the top right`() {
+        val g = place(listOf("Yes", "No"))
+        assertEquals(380f, g.width)
         assertEquals(1000f - 20f - 380f, g.left)
         assertEquals(20f, g.top)
-        assertEquals(140f, g.bottom)
-        assertEquals(0, g.rowAt(800f, 25f))
-        assertEquals(2, g.rowAt(800f, 139f))
-        assertNull(g.rowAt(800f, 141f))
-        assertNull(g.rowAt(100f, 50f))
+        assertEquals(listOf(listOf(0), listOf(0)), g.rows.map { it.starts })
+        assertEquals(0 to 0, g.lineAt(800f, 25f))
+        assertEquals(1 to 0, g.lineAt(800f, 99f))
+        assertNull(g.lineAt(800f, 101f))
+        assertNull(g.lineAt(100f, 50f))
     }
 
     @Test
-    fun `rows shrink to fit a short overlay`() {
-        val g = PanelGeometry.place(rows = 10, viewWidth = 1000f, viewHeight = 240f, rowHeight = 40f, margin = 20f)
-        assertEquals(20f, g.rowHeight)
+    fun `a long row widens the panel to fit it`() {
+        val g = place(listOf("Yes", "a".repeat(45)))
+        assertEquals(470f, g.width)
+        assertEquals(listOf(0), g.rows[1].starts)
+    }
+
+    @Test
+    fun `a row longer than the widest panel wraps`() {
+        val g = place(listOf("Yes", "b".repeat(80)))
+        assertEquals(600f, g.width)
+        // 580 px inside the padding: 58 characters a line.
+        assertEquals(listOf(0, 58), g.rows[1].starts)
+        assertEquals(3, g.lines)
+        assertEquals(20f + 3 * 40f, g.bottom)
+    }
+
+    @Test
+    fun `a tap on a row's second line finds the character there`() {
+        val text = "c".repeat(80)
+        val g = place(listOf("Yes", text))
+        // The second row's second line is the panel's third: y from 100 to 140.
+        val (row, line) = g.lineAt(g.left + 10f + 55f, 120f)!!
+        assertEquals(1 to 1, row to line)
+        assertEquals(58 + 5, g.offsetAt(text, row, line, g.left + 10f + 55f, fit))
+        // Past the line's end: its last character.
+        assertEquals(79, g.offsetAt(text, row, line, g.left + 590f, fit))
+    }
+
+    @Test
+    fun `lines shrink to fit a short overlay`() {
+        val g = place(List(10) { "Row $it" }, viewHeight = 240f)
+        assertEquals(20f, g.lineHeight)
         assertEquals(220f, g.bottom)
     }
 }
