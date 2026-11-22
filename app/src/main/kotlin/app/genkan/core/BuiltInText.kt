@@ -220,7 +220,8 @@ class BuiltInText @Inject constructor(
         }
     }
 
-    private val layoutLines = LayoutLines()
+    /** A layout's lines, and the answer taken at a choice once it closes, after its question. */
+    private val layoutLines = LayoutBacklog()
     private var settleJob: kotlinx.coroutines.Job? = null
 
     /** A layout read: the lines [LayoutLines] says are complete go to the backlog; null: the player stopped reading it. */
