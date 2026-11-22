@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
+import app.genkan.ui.BottomBack
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -96,6 +97,8 @@ class HomeActivity : ComponentActivity() {
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private var askedForNotifications = false
+    /** The Back now held down went to the bottom screen, so its release does too. */
+    private var backToBottom = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -220,6 +223,13 @@ class HomeActivity : ComponentActivity() {
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (HomeKeys.isSystemHome(event)) return super.dispatchKeyEvent(event)
+        // The system's Back (the gesture, on either screen) closes what is open on the bottom
+        // screen first: that window never has focus, so its Back arrives here. The pad's B doesn't.
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && (BottomBack.active || backToBottom)) {
+            if (event.action == KeyEvent.ACTION_DOWN) backToBottom = BottomBack.handle()
+            else if (event.action == KeyEvent.ACTION_UP) backToBottom = false
+            return true
+        }
         val pad = PadKey.from(event.keyCode)
         val screen = appViewModel.screen.value
         // Forms use Compose focus, whose buttons and text fields answer DPAD_CENTER, not A.
