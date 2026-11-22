@@ -243,6 +243,15 @@ class LayoutsTest {
     }
 
     @Test
+    fun `a layout whose when can't be read is passed over`() {
+        val unread = JSONObject("""{"when": {"address": "0x9000", "equals": 1}, "message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val second = JSONObject("""{"when": {"address": "0x10", "equals": 65}, "message": {"address": "0x10", "charset": "utf8", "max_bytes": 4}}""")
+        val memory = bytesAt(0x10, 'A'.code, 'B'.code, 0, 0)
+        assertEquals(false, Layouts.live(unread, memory))
+        assertEquals(second, Layouts.liveOf(listOf(unread, second), memory))
+    }
+
+    @Test
     fun `the layout naming a version wins, else the first naming none`() {
         val general = JSONObject("""{"poll": 20}""")
         val specific = JSONObject("""{"versions": ["abc"], "poll": "frame"}""")
