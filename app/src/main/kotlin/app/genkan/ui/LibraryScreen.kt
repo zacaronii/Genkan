@@ -198,10 +198,12 @@ private fun LibraryBody(
         )
         Column(Modifier.fillMaxSize()) {
             val focusedGame = games.getOrNull(focus.gameIndex)?.takeIf { focus.pane == LibraryPane.GAMES }
+            val shelf = platforms.getOrNull(focus.platformIndex)
             Header(
-                title = platforms.getOrNull(focus.platformIndex)?.name ?: "Library",
+                title = shelf?.name?.let { if (downloadedOnly && shelf.id > 0) "$it  ·  downloaded only" else it } ?: "Library",
                 sync = sync,
                 subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
+                downloadedOnly = downloadedOnly,
                 onToggleView = onToggleView,
             )
             Box(Modifier.weight(1f)) {
@@ -222,7 +224,8 @@ private fun LibraryBody(
             }
             val gridGame = games.getOrNull(focus.gameIndex)
             HintRow(
-                Hints.library(
+                // On the console strip, where the row is short; on a game its status line needs the room.
+                listOfNotNull(Hints.downloadedFilter(downloadedOnly).takeIf { focus.pane != LibraryPane.GAMES }) + Hints.library(
                     gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor,
                     favourite = gridGame?.id in favourites,
                 ),
@@ -293,6 +296,7 @@ private fun ShelfLibrary(
             platforms = platforms,
             selected = focus.platformIndex,
             shown = platforms.getOrNull(focus.platformIndex)?.let { shownCount(it, downloadedOnly, gamesFor, games.size) },
+            downloadedOnly = downloadedOnly,
             stripFocused = focus.pane == LibraryPane.PLATFORMS,
             sync = sync,
             onSelect = onSelectPlatform,
@@ -327,6 +331,7 @@ private fun ShelfLibrary(
             onShelf = focus.pane == LibraryPane.GAMES,
             emulatorFor = emulatorFor,
             favourite = game?.id in favourites,
+            downloadedOnly = downloadedOnly,
         )
     }
 }
@@ -341,6 +346,8 @@ private fun ConsoleStrip(
     selected: Int,
     /** How many of the selected console's games are on the shelf, when a filter leaves out some (else null). */
     shown: Int?,
+    /** "Downloaded only" is on: the console's name says so. */
+    downloadedOnly: Boolean,
     stripFocused: Boolean,
     sync: SyncStatus,
     onSelect: (Int) -> Unit,
@@ -360,7 +367,7 @@ private fun ConsoleStrip(
             platforms.getOrNull(selected)?.let { current ->
                 val shape = RoundedCornerShape(8.dp)
                 Text(
-                    consoleLabel(current, shown),
+                    consoleLabel(current, shown, downloadedOnly),
                     style = MaterialTheme.typography.titleLarge,
                     color = colors.primary,
                     maxLines = 1,
@@ -402,10 +409,14 @@ internal fun shownCount(platform: PlatformEntity, downloadedOnly: Boolean, games
 
 /**
  * A console's name and how many games it has: RomM's count, or [shown] (what's on the shelf)
- * while "Downloaded only" leaves some out. Shelves of Genkan's own (no RomM id) have no count.
+ * while "Downloaded only" leaves some out, which [downloaded] says as "9 of 24". Shelves of
+ * Genkan's own (no RomM id) have no count, and the filter doesn't apply to them.
  */
-internal fun consoleLabel(platform: PlatformEntity, shown: Int? = null): String =
-    if (platform.id < 0) platform.name else "${platform.name}  ${shown ?: platform.romCount}"
+internal fun consoleLabel(platform: PlatformEntity, shown: Int? = null, downloaded: Boolean = false): String = when {
+    platform.id < 0 -> platform.name
+    downloaded && shown != null -> "${platform.name}  $shown of ${platform.romCount}"
+    else -> "${platform.name}  ${shown ?: platform.romCount}"
+}
 
 @Composable
 private fun NeighbourConsole(name: String, modifier: Modifier, onClick: () -> Unit) {
@@ -447,6 +458,7 @@ private fun HintBar(
     onShelf: Boolean,
     emulatorFor: (String) -> String?,
     favourite: Boolean,
+    downloadedOnly: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -466,7 +478,12 @@ private fun HintBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        HintRow(Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite), Modifier.padding(start = 16.dp))
+        HintRow(
+            // On the console strip, where the row is short; on a game its status line needs the room.
+            listOfNotNull(Hints.downloadedFilter(downloadedOnly).takeIf { !onShelf }) +
+                Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite),
+            Modifier.padding(start = 16.dp),
+        )
     }
 }
 
@@ -490,7 +507,7 @@ private fun shelfStatus(game: GameEntity, console: String, download: DownloadEnt
 }
 
 @Composable
-private fun Header(title: String, sync: SyncStatus, subtitle: String?, onToggleView: () -> Unit) {
+private fun Header(title: String, sync: SyncStatus, subtitle: String?, downloadedOnly: Boolean, onToggleView: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -649,7 +666,7 @@ private fun gameLine(game: GameEntity, download: DownloadEntity?, emulatorFor: (
 private fun NothingDownloaded() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
-            "Nothing from this console is on the device.\nL2: sort & filter",
+            "Nothing from this console is on the device.\nL3: all games",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

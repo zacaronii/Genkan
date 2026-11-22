@@ -39,6 +39,7 @@ enum class PadButton(val label: String, val face: Boolean = false) {
     R2("R2"),
     START("Start"),
     SELECT("Select"),
+    L3("L3"),
 }
 
 /** One hint: what [buttons] (pressed alone, or either of them) do here. */
@@ -109,6 +110,10 @@ object Hints {
                 add(ButtonHint(PadButton.A, "Choose"))
             }
         }
+
+    /** L3 flips "Downloaded only" ([downloadedOnly] now): the hint says what it would switch to. */
+    fun downloadedFilter(downloadedOnly: Boolean): ButtonHint =
+        ButtonHint(PadButton.L3, if (downloadedOnly) "All games" else "Downloaded")
 
     /**
      * What works anywhere in the library, whatever is focused. After a sync that [failed], Y

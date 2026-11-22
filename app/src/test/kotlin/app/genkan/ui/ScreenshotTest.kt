@@ -89,6 +89,16 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = false)
     }
 
+    /** "Downloaded only" on, flipped with L3 from the console strip: the header says "3 of 8". */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfDownloadedOnly() = shoot("shelf_downloaded_only", TOP_PIXELS) {
+        library(
+            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames.take(3), gameIndex = 1, staticMedia = true,
+            order = LibraryOrder(downloadedOnly = true), pane = LibraryPane.PLATFORMS,
+        )
+    }
+
     /** DS cases, narrower and rounder. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -191,12 +201,13 @@ class ScreenshotTest {
         insertProgress: Float? = null,
         order: LibraryOrder = LibraryOrder(),
         orderPanel: Int? = null,
+        pane: LibraryPane = LibraryPane.GAMES,
     ) {
         LibraryContent(
             view = view,
             platforms = FakeData.platforms,
             games = games,
-            focus = LibraryFocus(pane = LibraryPane.GAMES, platformIndex = platformIndex, gameIndex = gameIndex),
+            focus = LibraryFocus(pane = pane, platformIndex = platformIndex, gameIndex = gameIndex),
             sync = SyncStatus.Done(games = 64),
             downloads = FakeData.downloads,
             notice = null,

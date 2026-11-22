@@ -21,6 +21,15 @@ class ConsoleLabelTest {
     }
 
     @Test
+    fun `the name says when only downloaded games are shown, on RomM's consoles only`() {
+        val ps1 = console(7, "PlayStation", romCount = 24)
+        assertEquals("PlayStation  9 of 24", consoleLabel(ps1, shown = 9, downloaded = true))
+        // Its own list not there yet: RomM's count, as without the filter.
+        assertEquals("PlayStation  24", consoleLabel(ps1, shown = null, downloaded = true))
+        assertEquals("PC", consoleLabel(console(-1, "PC"), shown = 3, downloaded = true))
+    }
+
+    @Test
     fun `a shelf just switched to shows RomM's count until its own list is there`() {
         val ps1 = console(7, "PlayStation", romCount = 24)
         val ps2 = console(8, "PlayStation 2", romCount = 18)
