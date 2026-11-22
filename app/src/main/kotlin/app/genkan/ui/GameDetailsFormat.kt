@@ -7,6 +7,7 @@ import app.genkan.library.GameEntity
 import app.genkan.play.PlayTotals
 import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.words.GameLookupTotals
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -149,6 +150,14 @@ object GameDetailsFormat {
         if (reading.characters <= 0) return null
         val lines = reading.lines.takeIf { it > 0 }?.let { " (${"%,d".format(it)} lines)" }.orEmpty()
         return "Read ${"%,d".format(reading.characters)} characters$lines in ${duration(reading.activeMs)}"
+    }
+
+    /** "Looked up 120 words (153 lookups)" while reading the game; null before the first lookup. */
+    fun lookupLine(lookups: GameLookupTotals): String? {
+        if (lookups.words <= 0) return null
+        val words = if (lookups.words == 1) "1 word" else "${"%,d".format(lookups.words)} words"
+        val visits = lookups.lookups.takeIf { it > lookups.words }?.let { " (${"%,d".format(it)} lookups)" }.orEmpty()
+        return "Looked up $words$visits"
     }
 
     /** Where the save stands with RomM; [time] formats the moment it was last in step. */
