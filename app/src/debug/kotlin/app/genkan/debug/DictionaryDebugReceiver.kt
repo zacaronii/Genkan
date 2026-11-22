@@ -17,6 +17,7 @@ import app.genkan.core.BuiltInPlayer
 import app.genkan.core.BuiltInText
 import app.genkan.core.CoreActivity
 import app.genkan.core.PlayerSettings
+import app.genkan.core.ScreenLook
 import app.genkan.launch.GameLauncher
 import app.genkan.launch.topScreenOptions
 import app.genkan.ocr.OcrReader
@@ -74,6 +75,8 @@ import javax.inject.Inject
  * (writes what a card made now would carry, the frame as WebP and the last 3 s as M4A, to Download/genkan-card-media)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
+ *   adb shell am broadcast -a app.genkan.debug.LOOK -n app.genkan/.debug.DictionaryDebugReceiver --es look CRT
+ * (draws the built-in player's game with that ScreenLook for this play, as the reader's Look chip does)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
  * (looks for on-screen text in the built-in player's game memory)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
@@ -197,6 +200,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Card media: frame ${frame?.width}x${frame?.height}, audio ${voice?.size} samples, in $dir")
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
+                    "app.genkan.debug.LOOK" -> player.setLook(ScreenLook.of(intent.getStringExtra("look")))
                     // Test play without sending sessions: the real settings wait in a file until resumed.
                     "app.genkan.debug.READING_LOG_PAUSE" -> {
                         val kept = File(context.filesDir, "debug-reading-log")
