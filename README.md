@@ -232,5 +232,5 @@ default-home settings.
 
 ## License
 
-GPL-3.0-or-later. Genkan adapts code from other GPL projects; see [NOTICE](NOTICE) for
-each file's source and pinned commit.
+GPL-3.0-only: version 3 of the GNU General Public License, not later versions. Genkan adapts
+code from other GPL projects; see [NOTICE](NOTICE) for each file's source and pinned commit.
