@@ -1,0 +1,156 @@
+package app.genkan.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import app.genkan.core.ScreenLook
+
+/** One entry of the picker: a look, or "the console's" ([look] null) for a game's own. */
+data class LookChoice(val look: ScreenLook?, val label: String, val description: String)
+
+object LookPickerEntries {
+    /**
+     * The picker's entries under their headings: with [console] (a game's override), "Console's"
+     * first, then each family's looks in the order [ScreenLook] lists them.
+     */
+    fun of(console: ScreenLook? = null): List<Pair<String?, List<LookChoice>>> = buildList {
+        console?.let { add(null to listOf(LookChoice(null, "Console's (${it.label})", "Whatever its console uses: ${it.description}"))) }
+        ScreenLook.entries.groupBy { it.family }.forEach { (family, looks) ->
+            add(family.title to looks.map { LookChoice(it, it.label, it.description) })
+        }
+    }
+}
+
+/**
+ * A list of the looks to pick from, grouped by family, [selected] marked (null with [console]: the
+ * console's). Each row says what the look does. [focusSelected] gives the selected row Compose
+ * focus as it opens, for the pad (the top screen's settings); on the bottom screen it's touch.
+ * [onPick] gets the look (null: the console's); [onClose] closes it, as does Back.
+ */
+@Composable
+fun LookPicker(
+    title: String,
+    selected: ScreenLook?,
+    onPick: (ScreenLook?) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    console: ScreenLook? = null,
+    focusSelected: Boolean = false,
+    closeLabel: String = "Close",
+) {
+    val colors = MaterialTheme.colorScheme
+    val groups = remember(console) { LookPickerEntries.of(console) }
+    val focus = remember { FocusRequester() }
+    // The selected row's place in the list (headings take a row each), to start there.
+    val selectedIndex = remember(groups, selected) {
+        var index = 0
+        var found = 0
+        for ((heading, choices) in groups) {
+            if (heading != null) index++
+            choices.forEach { if (it.look == selected) found = index; index++ }
+        }
+        found
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0))
+    if (focusSelected) LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Column(
+        modifier
+            .fillMaxSize()
+            // A touch anywhere on the list is the list's: hit here, it never reaches the buttons or chips underneath.
+            .pointerInput(Unit) {}
+            .background(colors.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = colors.primary, modifier = Modifier.weight(1f))
+            Chip(closeLabel, onClose)
+        }
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+            groups.forEach { (heading, choices) ->
+                heading?.let { item(key = "h-$it") { Text(it, style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) } }
+                choices.forEach { choice ->
+                    item(key = choice.look?.name ?: "console") {
+                        val isSelected = choice.look == selected
+                        LookRow(
+                            choice,
+                            isSelected,
+                            onClick = { onPick(choice.look) },
+                            modifier = if (isSelected && focusSelected) Modifier.focusRequester(focus) else Modifier,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A look's row: its name, what it does, and a mark when it's the one in use. */
+@Composable
+private fun LookRow(choice: LookChoice, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(if (selected) colors.primary.copy(alpha = 0.18f) else colors.surface, shape)
+            .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(choice.label, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Text(choice.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        if (selected) Text("✓", style = MaterialTheme.typography.titleMedium, color = colors.primary)
+    }
+}
+
+/**
+ * The looks over the reader while a game plays in the built-in player: a pick draws the game with
+ * it at once (for this play), and the list stays open to compare until Close or Back.
+ */
+@Composable
+fun ReaderLookPicker(viewModel: ReaderViewModel) {
+    val picking by viewModel.pickingLook.collectAsStateWithLifecycle()
+    val look by viewModel.look.collectAsStateWithLifecycle()
+    val now = look?.first ?: return
+    if (!picking) return
+    BottomBackHandler(onBack = viewModel::closeLookPicker)
+    LookPicker(
+        title = "Look for this play",
+        selected = now,
+        onPick = { it?.let(viewModel::tryLook) },
+        onClose = viewModel::closeLookPicker,
+    )
+}

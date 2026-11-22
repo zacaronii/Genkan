@@ -85,10 +85,21 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
         onOpenManual = viewModel::openManual,
         onDelete = viewModel::deleteDownload,
         onToggleFavourite = viewModel::toggleFavourite,
-        onStepLook = viewModel::stepLook,
+        onLook = viewModel::openLookPicker,
         notice = notice,
         factsScroll = scroll,
     )
+    val pickingLook by viewModel.pickingLook.collectAsStateWithLifecycle()
+    details?.look?.takeIf { pickingLook }?.let { look ->
+        BottomBackHandler(onBack = viewModel::closeLookPicker)
+        LookPicker(
+            title = "${details!!.focus.game.name}: look",
+            selected = look.own,
+            console = look.console,
+            onPick = viewModel::pickLook,
+            onClose = viewModel::closeLookPicker,
+        )
+    }
     val manual by viewModel.manual.collectAsStateWithLifecycle()
     manual?.let { file -> ManualFile(file, onClose = viewModel::closeManual) }
 }
@@ -108,7 +119,7 @@ fun GameDetailsContent(
     onOpenManual: () -> Unit = {},
     onDelete: () -> Unit = {},
     onToggleFavourite: () -> Unit = {},
-    onStepLook: () -> Unit = {},
+    onLook: () -> Unit = {},
     notice: String? = null,
     initialScreenshot: Int? = null,
     factsScroll: ScrollState = rememberScrollState(),
@@ -139,7 +150,7 @@ fun GameDetailsContent(
                 Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, onStepLook, Modifier.width(176.dp).fillMaxHeight())
+                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, Modifier.width(176.dp).fillMaxHeight())
                 Facts(current, factsScroll, onScreenshot = { viewing = it }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -185,7 +196,7 @@ private fun ArtAndActions(
     onOpenManual: () -> Unit,
     onDelete: () -> Unit,
     onToggleFavourite: () -> Unit,
-    onStepLook: () -> Unit,
+    onLook: () -> Unit,
     modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -240,7 +251,7 @@ private fun ArtAndActions(
             DetailsButton(if (details.favourite) "Remove from favourites" else "Add to favourites", ButtonStyle.PLAIN, onToggleFavourite)
         }
         details.look?.let { look ->
-            DetailsButton(GameDetailsFormat.lookLabel(look), ButtonStyle.PLAIN, onStepLook)
+            DetailsButton(GameDetailsFormat.lookLabel(look), ButtonStyle.PLAIN, onLook)
         }
         if (installed) {
             DetailsButton(if (deleteArmed) "Tap again to delete" else "Delete download", ButtonStyle.DANGER) {

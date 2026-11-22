@@ -8,19 +8,6 @@ import org.junit.Test
 
 class ScreenLookTest {
     @Test
-    fun `a console steps through every look and back to Default`() {
-        val seen = generateSequence(ScreenLook.DEFAULT) { it.next() }.take(ScreenLook.entries.size + 1).toList()
-        assertEquals(ScreenLook.entries + ScreenLook.DEFAULT, seen)
-    }
-
-    @Test
-    fun `a game steps from its console's look through every look and back to its console's`() {
-        val seen = generateSequence(ScreenLook.nextOverride(null)) { ScreenLook.nextOverride(it) }.take(ScreenLook.entries.size).toList()
-        assertEquals(ScreenLook.entries, seen)
-        assertNull(ScreenLook.nextOverride(ScreenLook.entries.last()))
-    }
-
-    @Test
     fun `a game's own look wins over its console's`() {
         assertEquals(ScreenLook.CRT, ScreenLook.resolve(ScreenLook.CRT, ScreenLook.SHARP))
         assertEquals(ScreenLook.SHARP, ScreenLook.resolve(null, ScreenLook.SHARP))

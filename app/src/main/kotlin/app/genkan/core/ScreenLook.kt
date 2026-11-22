@@ -42,8 +42,21 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
     CUT3("CUT3", "The smoothest of the three, in three passes; the most work for the GPU."),
     ;
 
-    /** The next look, round to the first. */
-    fun next(): ScreenLook = entries[(ordinal + 1) % entries.size]
+    /** Kinds of look, as the picker groups them. */
+    enum class Family(val title: String) {
+        PLAIN("Plain"),
+        CRT("CRT"),
+        LCD("LCD"),
+        SMOOTHING("Smoothing"),
+    }
+
+    val family: Family
+        get() = when (this) {
+            DEFAULT, SHARP, SHARP_BILINEAR, SHARP_BILINEAR_SIMPLE -> Family.PLAIN
+            CRT, CRT_LOTTES, CRT_EASYMODE, CRT_APERTURE, ZFAST_CRT -> Family.CRT
+            LCD, LCD3X, LCD1X, LCD1X_NDS, LCD1X_PSP, ZFAST_LCD, DOT -> Family.LCD
+            CUT, CUT2, CUT3 -> Family.SMOOTHING
+        }
 
     /** The shader to draw with; [read] gives an asset's text (a RetroArch shader's file). */
     fun shader(read: (String) -> String): ShaderConfig = when (this) {
@@ -63,16 +76,6 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
 
         /** The look named [name], or Default for none or one this build doesn't know. */
         fun of(name: String?): ScreenLook = entries.firstOrNull { it.name == name } ?: DEFAULT
-
-        /**
-         * A game's own look, or "the console's" (null), stepped once: the console's, then each look,
-         * then the console's again.
-         */
-        fun nextOverride(current: ScreenLook?): ScreenLook? = when (current) {
-            null -> entries.first()
-            entries.last() -> null
-            else -> current.next()
-        }
 
         /**
          * A console's look until one is chosen: pixels kept square where the picture is scaled
