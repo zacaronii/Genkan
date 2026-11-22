@@ -125,13 +125,14 @@ private class FakePlaySessionDao : PlaySessionDao {
         val i = rows.indexOfFirst { it.id == id }
         rows[i] = rows[i].copy(endedAt = endedAt, durationMs = durationMs)
     }
-    override suspend fun pending(limit: Int) = rows.filter { it.endedAt != null && !it.uploaded }.take(limit)
+    override suspend fun pending(limit: Int) = rows.filter { it.endedAt != null && !it.uploaded && it.romId > 0 }.take(limit)
     override suspend fun markUploaded(ids: List<Long>) {
         rows.replaceAll { if (it.id in ids) it.copy(uploaded = true) else it }
     }
     override fun totals(romId: Long): Flow<PlayTotals> = flowOf(PlayTotals(0, 0, null))
     override fun recentlyPlayed(minMs: Long, limit: Int): Flow<List<GameEntity>> = flowOf(emptyList())
     override fun lastPlayedByGame(): Flow<List<GameLastPlayed>> = flowOf(emptyList())
+    override fun recentPlays(minMs: Long): Flow<List<GameLastPlayed>> = flowOf(emptyList())
     override suspend fun delete(id: Long) {
         rows.removeAll { it.id == id }
     }

@@ -1,10 +1,12 @@
 package app.genkan.library
 
+import app.genkan.play.GameLastPlayed
+
 /**
- * The "Continue playing" shelf: the RomM games played most recently, newest first, as the first
- * entry on the console strip. It is made from the play sessions Genkan already records, so it holds
- * only games Genkan started (PC games and apps leave no sessions), and it is hidden until one has
- * been played. Each game stays on its own console's shelf too.
+ * The "Continue playing" shelf: the RomM and PC games played most recently, newest first, as the
+ * first entry on the console strip. It is made from the play sessions Genkan records, so it holds
+ * only games Genkan started (apps leave no sessions), and it is hidden until one has been played.
+ * Each game stays on its own shelf too.
  *
  * A game played and then deleted from the device stays here with the "not downloaded" state, like
  * on its console's shelf: A downloads it again. One gone from RomM's library leaves the shelf with
@@ -24,6 +26,15 @@ object ContinuePlaying {
     const val MIN_PLAY_MS = 10_000L
 
     fun platform(games: Int) = PlatformEntity(ID, SLUG, null, NAME, games, null)
+
+    /**
+     * The shelf's games: [plays] (every game's latest play, newest first) as RomM's [romm] and the
+     * PC shelf's [pc] games, skipping any no longer there, at most [MAX_GAMES].
+     */
+    fun merge(plays: List<GameLastPlayed>, romm: List<GameEntity>, pc: List<GameEntity>): List<GameEntity> {
+        val byId = (romm + pc).associateBy { it.id }
+        return plays.mapNotNull { byId[it.romId] }.take(MAX_GAMES)
+    }
 
     /** The console [game] belongs to, named as on the strip; on this shelf, not the shelf's name. */
     fun consoleOf(game: GameEntity, platforms: List<PlatformEntity>, shelf: PlatformEntity?): String =

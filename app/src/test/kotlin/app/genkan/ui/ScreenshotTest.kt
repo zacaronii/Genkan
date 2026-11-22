@@ -386,7 +386,7 @@ internal object FakeData {
         PlatformEntity(2, "psx", "psx", "PlayStation", 8, null),
         PlatformEntity(3, "psp", "psp", "PlayStation Portable", 14, null),
         PlatformEntity(4, "nds", "nds", "Nintendo DS", 9, null),
-        PlatformEntity(-1, "genkan-pc", null, "PC (GameNative)", 3, null),
+        PlatformEntity(-1, "genkan-pc", null, "PC", 3, null),
         PlatformEntity(-2, "genkan-apps", null, "Apps", 5, null),
     )
 
