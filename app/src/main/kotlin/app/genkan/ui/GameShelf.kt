@@ -200,7 +200,6 @@ internal fun GameShelf(
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
-    val local = LocalShelves.isLocal(games.first())
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
@@ -325,7 +324,8 @@ internal fun GameShelf(
                                 physical = artModel(game.physicalPath),
                             )
                         }
-                        if (local) {
+                        // Decided per game: "Continue playing" mixes PC games with consoles'.
+                        if (LocalShelves.isLocal(game)) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
                         } else {
                             ShelfCase(
