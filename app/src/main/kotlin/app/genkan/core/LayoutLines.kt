@@ -28,6 +28,25 @@ class LayoutLines {
     /** What of the current line has gone, or null. */
     private var sentText: String? = null
 
+    /** The layout that read the current line, when the watch says. */
+    private var currentLayout: Int? = null
+
+    /**
+     * The last line that went whole, the layout that read it, and whether only empty reads have
+     * come since: a version's next layout taking over can read the same text again (a choice's
+     * question, read by the typing layout and then by the choice layout), which isn't a new line.
+     */
+    private var lastLine: String? = null
+    private var lastLayout: Int? = null
+    private var onlyEmptySince = false
+
+    /** The current line has gone whole. */
+    private fun wentWhole() {
+        lastLine = current?.text
+        lastLayout = currentLayout
+        onlyEmptySince = true
+    }
+
     /** The current line as it should go now, or null when all of it has gone. */
     private fun unsent(): Line? {
         val line = current ?: return null
@@ -49,6 +68,7 @@ class LayoutLines {
         unsent()?.let {
             out += it
             sentText = it.text
+            wentWhole()
         }
     }
 
@@ -91,7 +111,12 @@ class LayoutLines {
         if (newLine) {
             send(out)
             current = Line(text, speaker)
-            sentText = null
+            // Another layout of the version reading the line that just went, with only empty
+            // reads between: the same line handed over, not said again.
+            val handedOver = onlyEmptySince && text == lastLine && read.layout != null && lastLayout != null && read.layout != lastLayout
+            sentText = if (handedOver) text else null
+            onlyEmptySince = handedOver
+            currentLayout = read.layout
         } else {
             // The same line, typed further (or its speaker read late).
             current = Line(text, speaker ?: before!!.speaker)
@@ -108,12 +133,18 @@ class LayoutLines {
     }
 
     /** Nothing changed since a read asked to settle: the current line, if it hasn't all gone. */
-    fun settled(): Line? = unsent()?.also { sentText = it.text }
+    fun settled(): Line? = unsent()?.also {
+        sentText = it.text
+        wentWhole()
+    }
 
     /** A new game, or the watch stopped. */
     fun reset() {
         clearLine()
         choice = null
+        lastLine = null
+        lastLayout = null
+        onlyEmptySince = false
     }
 
     /** No current line (the message cleared), the last choice kept. */

@@ -35,6 +35,8 @@ data class LayoutRead(
     /** The message as far as it has typed out: [message] without row breaks, first [shown] characters. */
     val onScreen: String? = null,
     val errors: Map<String, String> = emptyMap(),
+    /** Which of the version's layouts gave this read (its index), when the watch says so. */
+    val layout: Int? = null,
 ) {
     /**
      * Waiting for a press on a line. Genkan's own rule, not the format's: a window can read as
@@ -330,6 +332,7 @@ object Layouts {
         read.choices?.let { put("choices", JSONArray(it)) }
         read.onScreen?.let { put("on_screen", it) }
         if (read.errors.isNotEmpty()) put("errors", JSONObject(read.errors as Map<*, *>))
+        read.layout?.let { put("layout", it) }
     }
 
     /** What [toJson] wrote, read back. */
@@ -348,6 +351,7 @@ object Layouts {
             choiceCursor = json.optLong("choice_cursor").takeIf { json.has("choice_cursor") },
             onScreen = json.optString("on_screen").takeIf { json.has("on_screen") },
             errors = errors?.let { e -> e.keys().asSequence().associateWith { e.optString(it) } }.orEmpty(),
+            layout = json.optInt("layout").takeIf { json.has("layout") },
         )
     }
 

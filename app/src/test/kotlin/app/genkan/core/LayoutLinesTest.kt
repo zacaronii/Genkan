@@ -178,4 +178,52 @@ class LayoutLinesTest {
         lines.settled()?.let { sent += it.text }
         assertEquals(listOf("どうする？"), sent)
     }
+
+    @Test
+    fun `a question handed from the typing layout to the choice layout goes once`() {
+        // As Gakkou de Atta Kowai Hanashi S does: the typing layout (1) types the question and waits,
+        // one empty read as it hands over, then the choice layout (0) reads the same question with its answers.
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "知ってる？", waiting = false, layout = 1))
+        step(LayoutRead(message = "知ってる？", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "知ってる？", choosing = false, choices = listOf("はい"), choiceCount = 1, layout = 0))
+        step(LayoutRead(message = "知ってる？", choosing = true, choices = listOf("はい", "いいえ"), choiceCount = 2, layout = 0))
+        lines.settled()?.let { sent += it.text }
+        assertEquals(listOf("知ってる？"), sent)
+    }
+
+    @Test
+    fun `the same line twice from the same layout is two lines`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        assertEquals(listOf("はい", "はい"), sent)
+    }
+
+    @Test
+    fun `another layout repeating a line after other text is a new line`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true, layout = 1))
+        step(LayoutRead(message = "いいえ", waiting = true, layout = 1))
+        step(LayoutRead(message = "", waiting = false, layout = 1))
+        step(LayoutRead(message = "いいえ", waiting = true, layout = 0))
+        // Handed over (only an empty read since "いいえ" went): once. "はい" again from layout 0 after it: a new line.
+        step(LayoutRead(message = "はい", waiting = true, layout = 0))
+        assertEquals(listOf("はい", "いいえ", "はい"), sent)
+    }
+
+    @Test
+    fun `without the watch's layout index nothing is skipped`() {
+        val sent = mutableListOf<String>()
+        fun step(read: LayoutRead) { sent += texts(lines.read(read)) }
+        step(LayoutRead(message = "はい", waiting = true))
+        step(LayoutRead(message = "", waiting = false))
+        step(LayoutRead(message = "はい", waiting = true))
+        assertEquals(listOf("はい", "はい"), sent)
+    }
 }
