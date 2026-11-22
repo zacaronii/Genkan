@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import app.genkan.yomikata.LayoutRead
@@ -102,14 +103,16 @@ class BuiltInText @Inject constructor(
     val layoutActive: StateFlow<Boolean> = _layoutActive.asStateFlow()
 
     /**
-     * Once the game's id can be read from its RAM, its catalog entry's layout (if it has one) is
-     * read by the player between frames. Tries for a while: a game sets its memory up as it boots.
+     * Once the game's id is known (learned on an earlier play, or read from its RAM), its catalog
+     * entry's layout (if it has one) is read by the player between frames. Tries for a while: a
+     * game sets its memory up as it boots.
      */
     private suspend fun watchLayout() {
         val game = session.game.value
+        val learned = game.rommRomId?.let { yomikataIds.idFor(it).first() }
         repeat(LAYOUT_TRIES) {
             val id = withContext(Dispatchers.IO) {
-                ids[game.key] ?: player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } }
+                ids[game.key] ?: learned ?: player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } }
             }
             if (id != null) {
                 ids[game.key] = id
