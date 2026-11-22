@@ -86,10 +86,26 @@ object GameDetailsFormat {
     }
 
     /** "Main story about 32 h", when HowLongToBeat has a main story time. */
-    fun hltbLine(mainStorySec: Int?): String? {
-        val seconds = mainStorySec?.takeIf { it > 0 } ?: return null
-        val estimate = if (seconds >= 3600) "${(seconds + 1800) / 3600}${NBSP}h" else "${seconds / 60}${NBSP}min"
-        return "Main story about $estimate"
+    fun hltbLine(mainStorySec: Int?): String? = estimate(mainStorySec)?.let { "Main story about $it" }
+
+    /**
+     * HowLongToBeat's longer times under the main story's: "Main + extras about 45 h · everything
+     * about 80 h", either alone when the other is missing, or null without both.
+     */
+    fun hltbMoreLine(mainPlusExtraSec: Int?, completionistSec: Int?): String? {
+        val parts = listOfNotNull(
+            estimate(mainPlusExtraSec)?.let { "Main + extras about $it" },
+            estimate(completionistSec)?.let { if (mainPlusExtraSec.isPositive()) "everything about $it" else "Everything about $it" },
+        )
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
+    }
+
+    private fun Int?.isPositive() = this != null && this > 0
+
+    /** A HowLongToBeat time in round hours, or minutes under an hour; null when there is none. */
+    private fun estimate(seconds: Int?): String? {
+        val s = seconds?.takeIf { it > 0 } ?: return null
+        return if (s >= 3600) "${(s + 1800) / 3600}${NBSP}h" else "${s / 60}${NBSP}min"
     }
 
     /**
