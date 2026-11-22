@@ -71,6 +71,8 @@ class CoreActivity : ComponentActivity() {
      * frame until it says it's done: the frame just drawn and the memory then are one moment.
      */
     @Volatile private var capture: (() -> Boolean)? = null
+    /** The frame the last capture took, beside its memory; what keptFrame() gives. */
+    @Volatile private var captured: KeptFrame? = null
     /** The overlay over the game, for a core with one picture (not yet a DS's two screens). */
     private var overlay: OverlayView? = null
 
@@ -268,11 +270,20 @@ class CoreActivity : ComponentActivity() {
             if (length <= 0) return false
             val ram = ByteArray(length)
             val done = CountDownLatch(1)
-            GenkanTap.requestFrame()
+            captured = null
+            var requested = false
             capture = capture@{
-                // Not the kept frame yet: the request came mid-frame. The next one is.
+                // The request is made here, on the emulation thread, between two frames: the
+                // next frame is the one kept, and its memory is what this copies after it.
+                if (!requested) {
+                    GenkanTap.requestFrame()
+                    requested = true
+                    return@capture false
+                }
                 if (GenkanTap.frameSize() == null) return@capture false
-                // The emulation thread waits here, so nothing moves while memory is copied.
+                // The emulation thread waits here, so nothing moves while the frame and the
+                // memory are copied.
+                captured = keptPixels()
                 var at = 0
                 val chunk = ByteArray(CAPTURE_CHUNK)
                 while (at < length) {
@@ -298,7 +309,7 @@ class CoreActivity : ComponentActivity() {
             }
         }
 
-        override fun keptFrame(): Bundle? = keptFrameBundle(scaled = false)
+        override fun keptFrame(): Bundle? = captured?.let { frameBundleOf(it, scaled = false) }
 
         override fun readVideo(offset: Long, size: Int): ByteArray? {
             if (size !in 1..MAX_READ) return null
@@ -328,10 +339,20 @@ class CoreActivity : ComponentActivity() {
     }
 
     /** The core's whole stacked frame, enlarged so small text is big enough to read. */
-    private fun keptFrameBundle(scaled: Boolean = true): Bundle? {
+    private fun keptFrameBundle(scaled: Boolean = true): Bundle? = keptPixels()?.let { frameBundleOf(it, scaled) }
+
+    /** A copy of the frame GenkanTap kept last, or null when it has none. */
+    private fun keptPixels(): KeptFrame? {
         val (width, height) = GenkanTap.frameSize() ?: return null
         val pixels = ByteBuffer.allocateDirect(width * height * 4)
         if (!GenkanTap.copyFrame(pixels, 0, height)) return null
+        return KeptFrame(pixels, width, height)
+    }
+
+    private class KeptFrame(val pixels: ByteBuffer, val width: Int, val height: Int)
+
+    private fun frameBundleOf(frame: KeptFrame, scaled: Boolean): Bundle {
+        val (pixels, width, height) = Triple(frame.pixels, frame.width, frame.height)
         val scale = if (scaled) (MIN_FRAME_SIDE + width - 1) / width else 1
         val row = width * 4
         val memory = SharedMemory.create("genkan-frame", row * scale * height * scale)
