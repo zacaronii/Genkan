@@ -16,6 +16,7 @@ import app.genkan.capture.ScreenCapture
 import app.genkan.core.BuiltInPlayer
 import app.genkan.core.BuiltInText
 import app.genkan.core.CoreActivity
+import app.genkan.core.OverlayPanel
 import app.genkan.core.PlayerSettings
 import app.genkan.core.ScreenLook
 import app.genkan.launch.GameLauncher
@@ -75,6 +76,8 @@ import javax.inject.Inject
  * (writes what a card made now would carry, the frame as WebP and the last 3 s as M4A, to Download/genkan-card-media)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
+ *   adb shell am broadcast -a app.genkan.debug.PANEL -n app.genkan/.debug.DictionaryDebugReceiver --es items 'Yes|No' [--ei cursor 0]
+ * (draws a choice panel with those rows over the built-in player's game, as a layout's choice would; no items clears it)
  *   adb shell am broadcast -a app.genkan.debug.LOOK -n app.genkan/.debug.DictionaryDebugReceiver --es look CRT
  * (draws the built-in player's game with that ScreenLook for this play, as the reader's Look chip does)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FIND -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
@@ -200,6 +203,12 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Card media: frame ${frame?.width}x${frame?.height}, audio ${voice?.size} samples, in $dir")
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
+                    "app.genkan.debug.PANEL" -> {
+                        val items = intent.getStringExtra("items").orEmpty().split('|').filter { it.isNotBlank() }
+                        val cursor = intent.getIntExtra("cursor", -1).takeIf { it >= 0 }
+                        val panel = items.takeIf { it.isNotEmpty() }?.let { OverlayPanel(OverlayPanel.Kind.CHOICE, it, cursor) }
+                        player.game.value?.session?.showPanel(panel?.toJson().orEmpty())
+                    }
                     "app.genkan.debug.LOOK" -> player.setLook(ScreenLook.of(intent.getStringExtra("look")))
                     // Test play without sending sessions: the real settings wait in a file until resumed.
                     "app.genkan.debug.READING_LOG_PAUSE" -> {

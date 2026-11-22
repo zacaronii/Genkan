@@ -236,6 +236,11 @@ class CoreActivity : ComponentActivity() {
             }
         }
 
+        override fun showPanel(panelJson: String) {
+            val panel = OverlayPanel.fromJson(panelJson)
+            runOnUiThread { overlay?.showPanel(panel) }
+        }
+
         override fun showOverlay(screenTextJson: String) {
             val text = runCatching { app.genkan.ocr.ScreenText.fromJson(screenTextJson) }.getOrNull() ?: return
             runOnUiThread { overlay?.show(text) }
