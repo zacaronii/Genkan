@@ -1576,6 +1576,15 @@ ShaderManager::Chain ShaderManager::getShader(const ShaderManager::Config& confi
         };
     }
 
+    case Type::SHADER_CUSTOM: {
+        // Genkan: one pass from the app's own sources.
+        auto param = [&](const char* key) {
+            auto found = config.params.find(key);
+            return found == config.params.end() ? std::string() : found->second;
+        };
+        bool linear = param("linear") == "1";
+        return { { { param("vertex"), param("fragment"), linear, 1.0 } }, linear };
+    }
     case Type::SHADER_UPSCALE_CUT3: {
         std::string defines = buildDefines(cut3UpscaleParams, config.params);
         return {

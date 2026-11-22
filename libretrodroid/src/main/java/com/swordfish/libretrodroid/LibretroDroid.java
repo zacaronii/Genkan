@@ -37,6 +37,11 @@ public class LibretroDroid {
     public static final int SHADER_UPSCALE_CUT = 4;
     public static final int SHADER_UPSCALE_CUT2 = 5;
     public static final int SHADER_UPSCALE_CUT3 = 6;
+    // Genkan: a shader whose sources come from the app (vertex, fragment, and whether it samples linearly).
+    public static final int SHADER_CUSTOM = 7;
+    public static final String SHADER_CUSTOM_PARAM_VERTEX = "vertex";
+    public static final String SHADER_CUSTOM_PARAM_FRAGMENT = "fragment";
+    public static final String SHADER_CUSTOM_PARAM_LINEAR = "linear";
 
     public static final String SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
     public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";

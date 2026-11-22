@@ -62,4 +62,12 @@ sealed interface ShaderConfig {
         val hardEdgesSearchMaxError: Float = 0.25f,
         val hardEdgesSearchMaxDistance: Int = 4,
     ) : ShaderConfig
+
+    /**
+     * Genkan: a single-pass shader from the app, as GLSL ES 1.0 sources using the uniforms the
+     * other shaders get (texture, textureSize, screenDensity) and the attributes vPosition and
+     * vCoordinate. [linear]: whether the texture is sampled linearly. A shader that won't compile
+     * falls back to [Default].
+     */
+    data class Custom(val vertex: String, val fragment: String, val linear: Boolean) : ShaderConfig
 }
