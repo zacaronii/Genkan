@@ -61,10 +61,10 @@ jobs:
           tools/hookbridge/kit.sh
 
       # Compares the screenshot tests with the committed PNGs (a shot passes while under 1% of its
-      # pixels differ). It doesn't fail the build yet: first the numbers, then a decision. It runs
-      # before the step below, whose recording rewrites the PNGs.
-      - name: Compare screenshots (not failing the build yet)
-        continue-on-error: true
+      # pixels differ) and fails the build when one differs: a changed screen comes with its
+      # re-recorded PNG (./gradlew :app:recordRoborazziDebug). It runs before the step below,
+      # whose recording rewrites the PNGs.
+      - name: Compare screenshots
         run: ./gradlew :app:verifyRoborazziDebug
 
       - name: Upload screenshot comparisons
