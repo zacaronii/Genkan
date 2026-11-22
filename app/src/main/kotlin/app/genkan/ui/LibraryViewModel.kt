@@ -197,6 +197,18 @@ class LibraryViewModel @Inject constructor(
     /** The "Sort & filter" panel's focused row while it is open (0 the sort, 1 the filter), else null. */
     val orderPanel: StateFlow<Int?> = _orderPanel.asStateFlow()
 
+    /** The focus the last key moved to, and whether a held key's repeat moved it there. */
+    private data class KeyStep(val focus: LibraryFocus?, val repeat: Boolean)
+
+    /**
+     * The last key's step. A focus counts as a repeat's only while it is the one this step led to:
+     * a tap, a reload of the shelf or a new order moving it is not a key's, and shows at once.
+     */
+    private val keyStep = MutableStateFlow(KeyStep(null, repeat = false))
+
+    /** The bottom screen's next focus, and whether a held key's repeat moved it. */
+    private data class FollowedFocus(val focus: FocusedGame.Focus?, val repeat: Boolean)
+
     /** The game the focus stays on while a new order rearranges a console's shelf. */
     private val keeper = FocusKeeper()
 
@@ -253,17 +265,20 @@ class LibraryViewModel @Inject constructor(
             }
         }
         refreshLocal()
-        // The bottom screen shows the focused game while the launcher is in front. It follows once
-        // the focus pauses: both screens draw on this one main thread, and redrawing the details
-        // (their queries, cover and summary) on every step of a held D-pad costs the shelf frames.
+        // The bottom screen shows the focused game while the launcher is in front. A step after a
+        // rest shows at once; steps that follow it closely (a held D-pad) wait for the focus to
+        // pause: both screens draw on this one main thread, and redrawing the details (their
+        // queries, cover and summary) on every step of a held D-pad costs the shelf frames.
         viewModelScope.launch {
-            combine(_focus, games, platforms) { focus, list, shelves ->
+            combine(_focus, keyStep, games, platforms) { focus, step, list, shelves ->
                 val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
-                game?.let { FocusedGame.Focus(it, ContinuePlaying.consoleOf(it, shelves, shelves.getOrNull(focus.platformIndex)), coverModel(it)) }
-            }.distinctUntilChanged().collectLatest { focus ->
-                if (focusedGame.focus.value != null) delay(DETAILS_FOLLOW_MS)
-                focusedGame.set(focus)
-            }
+                val shown = game?.let { FocusedGame.Focus(it, ContinuePlaying.consoleOf(it, shelves, shelves.getOrNull(focus.platformIndex)), coverModel(it)) }
+                // A held D-pad's repeat never shows at once: its first comes 400 ms after the
+                // press, and rebuilding the details then costs the shelf frames as it starts to scroll.
+                FollowedFocus(shown, repeat = step.focus == focus && step.repeat)
+            }.distinctUntilChanged { a, b -> a.focus == b.focus }
+                .restThrottle(DETAILS_FOLLOW_MS, atOnce = { !it.repeat })
+                .collect { focusedGame.set(it.focus) }
         }
         // The bottom screen's Play / Download button does what A does on that game.
         viewModelScope.launch {
@@ -340,6 +355,8 @@ class LibraryViewModel @Inject constructor(
         val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
             ?: return false
         moved = true
+        // Said with the focus it led to, so the details can tell a held D-pad's repeat from a press.
+        keyStep.value = KeyStep(next, repeat = repeatCount > 0)
         _focus.value = next
         return true
     }
@@ -578,8 +595,6 @@ class LibraryViewModel @Inject constructor(
 
     private companion object {
         const val NOTICE_MS = 4_000L
-        /** How long the focus rests before the bottom screen follows it. */
-        const val DETAILS_FOLLOW_MS = 120L
         /** How long the focus rests before the artwork warmer stops looking ahead. */
         const val WARM_REST_MS = 250L
         const val SAVE_SYNC_TIMEOUT_MS = 15_000L
