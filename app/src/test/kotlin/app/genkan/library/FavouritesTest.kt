@@ -5,6 +5,9 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -47,6 +50,19 @@ class FavouritesTest {
         db.library().upsertGames(listOf(game(1, "Alpha")))
         dao.add(FavouriteEntity(1, addedAt = 100))
         dao.remove(1)
+        assertEquals(emptyList<Long>(), shelf())
+    }
+
+    @Test
+    fun two_quick_toggles_mark_and_unmark() = runBlocking {
+        db.library().upsertGames(listOf(game(1, "Alpha")))
+        assertTrue(dao.toggle(1, now = 100))
+        assertFalse(dao.toggle(1, now = 101))
+        assertEquals(emptyList<Long>(), shelf())
+        // Started together, as from two presses the screen hadn't caught up with: each decides
+        // from what is stored, so an even number of toggles always leaves the game unmarked.
+        val results = (1..4).map { async(Dispatchers.IO) { dao.toggle(1, now = 200L + it) } }.awaitAll()
+        assertEquals(2, results.count { it })
         assertEquals(emptyList<Long>(), shelf())
     }
 

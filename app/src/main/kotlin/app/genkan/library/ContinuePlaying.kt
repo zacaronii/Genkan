@@ -32,11 +32,16 @@ object ContinuePlaying {
     /**
      * The focus once the strip changed from [before] to [after] (this shelf appearing, or a local
      * shelf loading, shifts the others). Until the player has [moved], the library opens on this
-     * shelf's first game. After that the focus stays on the same console, wherever it now stands;
+     * shelf's first game, or without it at the strip's first entry. After that the focus stays on the same console, wherever it now stands;
      * on one that is gone, it goes back to the strip.
      */
     fun refocus(focus: LibraryFocus, before: List<PlatformEntity>, after: List<PlatformEntity>, moved: Boolean): LibraryFocus {
-        if (!moved && after.firstOrNull()?.id == ID) return LibraryFocus(pane = LibraryPane.GAMES, platformIndex = 0, gameIndex = 0)
+        // The shelves arrive one by one (a local one, "Continue playing", "Favourites"), so until
+        // the player moves the library always opens at the strip's start, never on whichever
+        // console happened to be first a moment ago.
+        if (!moved) {
+            return if (after.firstOrNull()?.id == ID) LibraryFocus(pane = LibraryPane.GAMES, platformIndex = 0, gameIndex = 0) else LibraryFocus()
+        }
         val id = before.getOrNull(focus.platformIndex)?.id
         val index = after.indexOfFirst { it.id == id }
         if (index == focus.platformIndex) return focus

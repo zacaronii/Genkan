@@ -30,7 +30,6 @@ import app.genkan.launch.LaunchPlan
 import app.genkan.library.ArtworkWarmer
 import app.genkan.library.ContinuePlaying
 import app.genkan.library.FavouriteDao
-import app.genkan.library.FavouriteEntity
 import app.genkan.library.Favourites
 import app.genkan.library.GameCase
 import app.genkan.library.InsertTimeline
@@ -292,7 +291,9 @@ class LibraryViewModel @Inject constructor(
             deleteAction(focusedGame); return true
         }
         if (key == PadKey.R2) {
-            focusedGame?.takeIf(Favourites::canMark)?.let(::toggleFavourite)
+            // Only on a RomM game; on the console strip R2 does nothing, and the hints don't offer it.
+            val game = focusedGame?.takeIf(Favourites::canMark) ?: return false
+            toggleFavourite(game)
             return true
         }
         val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
@@ -445,11 +446,10 @@ class LibraryViewModel @Inject constructor(
 
     /** Marks [game] as a favourite, or unmarks it. */
     private fun toggleFavourite(game: GameEntity) {
-        val marked = game.id in favouriteIds.value
         viewModelScope.launch {
-            if (marked) favouriteDao.remove(game.id) else favouriteDao.add(FavouriteEntity(game.id, System.currentTimeMillis()))
+            val marked = favouriteDao.toggle(game.id, System.currentTimeMillis())
+            show(if (marked) "Added ${game.name} to favourites" else "Removed ${game.name} from favourites")
         }
-        show(if (marked) "Removed ${game.name} from favourites" else "Added ${game.name} to favourites")
     }
 
     private fun deleteAction(game: GameEntity) {
