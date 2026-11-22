@@ -173,18 +173,26 @@ private fun LibraryBody(
                 subtitle = notice ?: focusedGame?.let { gameLine(it, downloads[it.id], emulatorFor) },
                 onToggleView = onToggleView,
             )
-            if (platforms.isEmpty()) {
-                EmptyLibrary(sync)
-            } else {
-                GameGrid(
-                    games = games,
-                    downloads = downloads,
-                    focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
-                    coverModel = coverModel,
-                    onColumns = onColumns,
-                    onSelect = onSelectGame,
-                )
+            Box(Modifier.weight(1f)) {
+                if (platforms.isEmpty()) {
+                    EmptyLibrary(sync)
+                } else {
+                    GameGrid(
+                        games = games,
+                        downloads = downloads,
+                        focusedIndex = focus.gameIndex.takeIf { focus.pane == LibraryPane.GAMES },
+                        coverModel = coverModel,
+                        onColumns = onColumns,
+                        onSelect = onSelectGame,
+                    )
+                }
             }
+            val gridGame = games.getOrNull(focus.gameIndex)
+            HintRow(
+                Hints.library(gridGame, gridGame?.let { downloads[it.id] }, onGames = focus.pane == LibraryPane.GAMES, emulatorFor = emulatorFor) +
+                    Hints.libraryAnywhere(failed = sync is SyncStatus.Failed),
+                Modifier.padding(top = 12.dp),
+            )
         }
     }
 }
@@ -296,7 +304,7 @@ private fun ConsoleStrip(
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-        ButtonGlyph("L1")
+        ButtonGlyph(PadButton.L1)
         Row(
             Modifier.weight(1f).padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
@@ -322,19 +330,20 @@ private fun ConsoleStrip(
                 NeighbourConsole(next.name, Modifier.weight(1f, fill = false)) { onSelect(selected + 1) }
             }
         }
-        ButtonGlyph("R1")
-        Text(
-            // Y's hint is under the shelf; up here only what the sync is doing, and Start.
-            when (sync) {
-                SyncStatus.Idle -> ""
-                is SyncStatus.Running -> "Syncing ${sync.platform}…"
-                is SyncStatus.Done -> "Start: settings"
-                is SyncStatus.Failed -> "Sync failed"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp),
-        )
+        ButtonGlyph(PadButton.R1)
+        // What the pad does anywhere in the library; the focused game's own hints are under the shelf.
+        // While a sync runs, its state stands in for them; after one failed, it comes first and Y retries.
+        if (sync is SyncStatus.Running || sync is SyncStatus.Failed) {
+            Text(
+                if (sync is SyncStatus.Running) "Syncing ${sync.platform}…" else "Sync failed",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+        if (sync !is SyncStatus.Running) {
+            HintRow(Hints.libraryAnywhere(failed = sync is SyncStatus.Failed), Modifier.padding(start = 16.dp))
+        }
         ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
     }
 }
@@ -364,24 +373,8 @@ private fun ViewToggle(target: LibraryView, onToggle: () -> Unit, modifier: Modi
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        ButtonGlyph("Select")
+        ButtonGlyph(PadButton.SELECT)
         Text(if (target == LibraryView.GRID) "Grid" else "Shelf", style = MaterialTheme.typography.labelMedium, color = colors.onSurface)
-    }
-}
-
-/** A controller button's name in a small pill, as the hints show them. */
-@Composable
-private fun ButtonGlyph(label: String) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .height(20.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.onSurface.copy(alpha = 0.14f))
-            .padding(horizontal = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.onSurface)
     }
 }
 
@@ -406,38 +399,22 @@ private fun HintBar(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                notice ?: game?.let { shelfStatus(it, console, download) } ?: console,
+                notice ?: game?.let { shelfStatus(it, console, download, emulatorFor) } ?: console,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (notice != null) colors.primary else colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(
-            Modifier.padding(start = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (game != null) {
-                // On the console strip, A goes down to the cases; on a case it acts on the game.
-                Hint("A", if (onShelf) primaryHint(game, download, emulatorFor) else "Choose")
-                if (onShelf && download?.state == DownloadState.INSTALLED) Hint("X", "Delete")
-            }
-            Hint("Y", "Sync")
-        }
+        HintRow(Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor), Modifier.padding(start = 16.dp))
     }
 }
 
-@Composable
-private fun Hint(button: String, action: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ButtonGlyph(button)
-        Text(action, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-/** The line under the title: the console, the year, the size and whether the game is here. */
-private fun shelfStatus(game: GameEntity, console: String, download: DownloadEntity?): String {
+/**
+ * The line under the title: the console, the year, the size and whether the game is here (and
+ * playable: with no emulator for its console, A has nothing to offer, so this line says why).
+ */
+private fun shelfStatus(game: GameEntity, console: String, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
     if (LocalShelves.isLocal(game)) return console
     val state = when (download?.state) {
         null -> "not downloaded"
@@ -446,24 +423,10 @@ private fun shelfStatus(game: GameEntity, console: String, download: DownloadEnt
             val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
             "downloading $percent%"
         }
-        DownloadState.INSTALLED -> "on this device"
+        DownloadState.INSTALLED -> if (emulatorFor(game.platformSlug) != null) "on this device" else "on this device, no emulator installed"
         DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
     }
     return listOfNotNull(console, game.releaseYear?.toString(), formatSize(game.fsSizeBytes), state).joinToString("  ·  ")
-}
-
-/** What A does for [game], the same choice gameLine spells out in the grid. */
-private fun primaryHint(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
-    when (game.platformSlug) {
-        LocalShelves.PC_SLUG -> return "Play in GameNative"
-        LocalShelves.APPS_SLUG -> return "Open"
-    }
-    return when (download?.state) {
-        null -> "Download"
-        DownloadState.QUEUED, DownloadState.RUNNING -> "Cancel"
-        DownloadState.INSTALLED -> emulatorFor(game.platformSlug)?.let { "Play in $it" } ?: "No emulator"
-        DownloadState.FAILED -> "Retry"
-    }
 }
 
 @Composable
@@ -590,24 +553,19 @@ private fun DownloadBadge(download: DownloadEntity?, modifier: Modifier) {
 }
 
 private fun gameLine(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String {
-    when (game.platformSlug) {
-        LocalShelves.PC_SLUG -> return "${game.name}  ·  A: play in GameNative"
-        LocalShelves.APPS_SLUG -> return "${game.name}  ·  A: open"
-    }
+    if (LocalShelves.isLocal(game)) return game.name
     val size = formatSize(game.fsSizeBytes)
-    return when (download?.state) {
-        null -> "${game.name}  ·  $size  ·  A: download"
-        DownloadState.QUEUED -> "${game.name}  ·  queued  ·  A: cancel"
+    val state = when (download?.state) {
+        null -> size
+        DownloadState.QUEUED -> "queued"
         DownloadState.RUNNING -> {
             val percent = if (download.bytesTotal > 0) download.bytesDone * 100 / download.bytesTotal else 0
-            "${game.name}  ·  downloading $percent% of $size  ·  A: cancel"
+            "downloading $percent% of $size"
         }
-        DownloadState.INSTALLED -> {
-            val play = emulatorFor(game.platformSlug)?.let { "A: play in $it" } ?: "no emulator installed"
-            "${game.name}  ·  $size  ·  $play  ·  X: delete"
-        }
-        DownloadState.FAILED -> "${game.name}  ·  failed: ${download.error ?: "unknown error"}  ·  A: retry"
+        DownloadState.INSTALLED -> if (emulatorFor(game.platformSlug) != null) size else "$size  ·  no emulator installed"
+        DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
     }
+    return "${game.name}  ·  $state"
 }
 
 @Composable
@@ -629,8 +587,8 @@ private fun EmptyLibrary(sync: SyncStatus) {
 private fun syncLabel(sync: SyncStatus): String = when (sync) {
     SyncStatus.Idle -> ""
     is SyncStatus.Running -> "Syncing ${sync.platform}…"
-    is SyncStatus.Done -> "Y: sync  ·  Start: settings"
-    is SyncStatus.Failed -> "Sync failed · Y to retry"
+    is SyncStatus.Done -> ""
+    is SyncStatus.Failed -> "Sync failed"
 }
 
 internal fun formatSize(bytes: Long): String = when {

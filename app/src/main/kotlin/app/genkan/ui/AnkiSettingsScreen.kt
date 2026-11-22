@@ -52,10 +52,11 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
         Text("Anki", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "Cards go to an AnkiConnect server (desktop Anki with the AnkiConnect add-on, listening on " +
-                "0.0.0.0). Cards made offline wait here and are sent when it answers. B: back",
+                "0.0.0.0). Cards made offline wait here and are sent when it answers.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
         )
+        HintRow(Hints.form())
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.apiKey, { v -> viewModel.edit { it.copy(apiKey = v) } }, "API key (if AnkiConnect has one)", keyboardType = KeyboardType.Password)
