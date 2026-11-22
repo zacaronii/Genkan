@@ -15,6 +15,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.launch.HookKit
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
+import app.genkan.play.PlaySessionDao
 import app.genkan.play.SessionTracker
 import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.Job
@@ -27,6 +28,7 @@ import android.os.SystemClock
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LaunchPlan
 import app.genkan.library.ArtworkWarmer
+import app.genkan.library.ContinuePlaying
 import app.genkan.library.GameCase
 import app.genkan.library.InsertTimeline
 import app.genkan.library.MediaKind
@@ -76,6 +78,7 @@ sealed class LibraryEvent {
 class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     dao: LibraryDao,
+    playSessions: PlaySessionDao,
     private val session: RomMSession,
     private val librarySync: LibrarySync,
     private val downloadQueue: DownloadQueue,
@@ -144,10 +147,22 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { viewSettings.setView(next) }
     }
 
-    /** PC games first (the visual novels live there), then RomM's platforms, then apps. */
+    /** The games on the "Continue playing" shelf, most recently played first. */
+    private val recent: StateFlow<List<GameEntity>> =
+        playSessions.recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Whether the player has moved the focus yet; until then the library opens on "Continue playing". */
+    private var moved = false
+
+    /**
+     * "Continue playing" first once a game has been played, then PC games (the visual novels live
+     * there), then RomM's platforms, then apps.
+     */
     val platforms: StateFlow<List<PlatformEntity>> =
-        combine(dao.platforms(), local) { romm, shelves ->
-            shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
+        combine(dao.platforms(), local, recent) { romm, shelves, played ->
+            listOfNotNull(ContinuePlaying.platform(played.size).takeIf { played.isNotEmpty() }) +
+                shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val games: StateFlow<List<GameEntity>> =
@@ -157,6 +172,7 @@ class LibraryViewModel @Inject constructor(
             .flatMapLatest { id ->
                 when {
                     id == null -> flowOf(emptyList())
+                    id == ContinuePlaying.ID -> recent
                     id < 0 -> local.map { it.games[id].orEmpty() }
                     else -> dao.games(id)
                 }
@@ -165,6 +181,24 @@ class LibraryViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
+        // The strip changes under the focus: "Continue playing" appears, a local shelf loads.
+        viewModelScope.launch {
+            var before = emptyList<PlatformEntity>()
+            platforms.collect { after ->
+                _focus.update { ContinuePlaying.refocus(it, before, after, moved) }
+                before = after
+            }
+        }
+        // A play moves its game to the front of "Continue playing"; the focus goes with it.
+        viewModelScope.launch {
+            var before = emptyList<GameEntity>()
+            recent.collect { after ->
+                if (platforms.value.getOrNull(_focus.value.platformIndex)?.id == ContinuePlaying.ID) {
+                    _focus.update { it.copy(gameIndex = ContinuePlaying.keepGame(it.gameIndex, before, after)) }
+                }
+                before = after
+            }
+        }
         refreshLocal()
         // The bottom screen shows the focused game while the launcher is in front. It follows once
         // the focus pauses: both screens draw on this one main thread, and redrawing the details
@@ -172,7 +206,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             combine(_focus, games, platforms) { focus, list, shelves ->
                 val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
-                game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
+                game?.let { FocusedGame.Focus(it, ContinuePlaying.consoleOf(it, shelves, shelves.getOrNull(focus.platformIndex)), coverModel(it)) }
             }.distinctUntilChanged().collectLatest { focus ->
                 if (focusedGame.focus.value != null) delay(DETAILS_FOLLOW_MS)
                 focusedGame.set(focus)
@@ -240,17 +274,22 @@ class LibraryViewModel @Inject constructor(
         }
         val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
             ?: return false
+        moved = true
         _focus.value = next
         return true
     }
 
-    fun selectPlatform(index: Int) = _focus.update {
-        if (it.platformIndex == index) it.copy(pane = LibraryPane.PLATFORMS)
-        else LibraryFocus(pane = LibraryPane.PLATFORMS, platformIndex = index)
+    fun selectPlatform(index: Int) {
+        moved = true
+        _focus.update {
+            if (it.platformIndex == index) it.copy(pane = LibraryPane.PLATFORMS)
+            else LibraryFocus(pane = LibraryPane.PLATFORMS, platformIndex = index)
+        }
     }
 
     /** A tap on a game focuses it; a tap on the focused game acts like A. */
     fun selectGame(index: Int) {
+        moved = true
         val wasFocused = _focus.value.pane == LibraryPane.GAMES && _focus.value.gameIndex == index
         _focus.update { it.copy(pane = LibraryPane.GAMES, gameIndex = index) }
         if (wasFocused) games.value.getOrNull(index)?.let(::primaryAction)

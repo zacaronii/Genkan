@@ -47,6 +47,7 @@ import androidx.compose.foundation.shape.CircleShape
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.library.ContinuePlaying
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryPane
@@ -263,13 +264,15 @@ private fun ShelfLibrary(
                     artModel = artModel,
                     onSelect = onSelectGame,
                     staticMedia = staticMedia,
+                    shelfId = platforms.getOrNull(focus.platformIndex)?.id ?: 0L,
                 )
             }
         }
         val game = games.getOrNull(focus.gameIndex)
         HintBar(
             game = game,
-            console = platforms.getOrNull(focus.platformIndex)?.name.orEmpty(),
+            console = game?.let { ContinuePlaying.consoleOf(it, platforms, platforms.getOrNull(focus.platformIndex)) }
+                ?: platforms.getOrNull(focus.platformIndex)?.name.orEmpty(),
             download = game?.let { downloads[it.id] },
             notice = notice,
             onShelf = focus.pane == LibraryPane.GAMES,

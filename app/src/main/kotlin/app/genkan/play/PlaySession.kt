@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import app.genkan.library.GameEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -48,6 +49,19 @@ interface PlaySessionDao {
            FROM play_sessions WHERE romId = :romId AND endedAt IS NOT NULL""",
     )
     fun totals(romId: Long): Flow<PlayTotals>
+
+    /**
+     * The games played most recently, newest first: finished plays of at least [minMs], at most
+     * [limit] games, and only those still in the library.
+     */
+    @Query(
+        """SELECT games.* FROM games
+           JOIN (SELECT romId, MAX(startedAt) AS lastPlayed FROM play_sessions
+                 WHERE endedAt IS NOT NULL AND durationMs >= :minMs GROUP BY romId) AS played
+           ON played.romId = games.id
+           ORDER BY played.lastPlayed DESC LIMIT :limit""",
+    )
+    fun recentlyPlayed(minMs: Long, limit: Int): Flow<List<GameEntity>>
 
     @Query("DELETE FROM play_sessions WHERE id = :id")
     suspend fun delete(id: Long)
