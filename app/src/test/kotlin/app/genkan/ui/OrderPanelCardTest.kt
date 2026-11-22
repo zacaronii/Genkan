@@ -1,13 +1,22 @@
 package app.genkan.ui
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.genkan.library.LibraryOrder
 import app.genkan.library.LibrarySort
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,31 +41,67 @@ class OrderPanelCardTest {
     @get:Rule(order = 1)
     val compose = createComposeRule()
 
-    private fun tap(text: String, from: LibraryOrder): LibraryOrder {
-        var changed = from
-        compose.setContent { GenkanTheme { OrderPanelCard(from, row = 0, onOrder = { changed = it }, onClose = {}) } }
-        compose.onNodeWithText(text).performClick()
-        compose.waitForIdle()
-        return changed
+    /** The panel showing [order]; each tap's change is shown in turn. */
+    private var order by mutableStateOf(LibraryOrder())
+
+    private fun show(from: LibraryOrder) {
+        order = from
+        compose.setContent { GenkanTheme { OrderPanelCard(order, row = 0, onOrder = { order = it }, onClose = {}) } }
     }
+
+    private fun arrow(glyph: String) = compose.onNodeWithTag("sort-arrow-$glyph")
 
     @Test
     fun `the left arrow steps back`() {
-        assertEquals(LibrarySort.LAST_PLAYED, tap("‹", LibraryOrder(sort = LibrarySort.RECENTLY_ADDED)).sort)
+        show(LibraryOrder(sort = LibrarySort.RECENTLY_ADDED))
+        arrow("‹").performClick()
+        compose.waitForIdle()
+        assertEquals(LibrarySort.LAST_PLAYED, order.sort)
     }
 
     @Test
     fun `the right arrow steps on`() {
-        assertEquals(LibrarySort.MAIN_STORY, tap("›", LibraryOrder(sort = LibrarySort.RECENTLY_ADDED)).sort)
+        show(LibraryOrder(sort = LibrarySort.RECENTLY_ADDED))
+        arrow("›").performClick()
+        compose.waitForIdle()
+        assertEquals(LibrarySort.MAIN_STORY, order.sort)
     }
 
     @Test
     fun `the rest of the row steps on, as A does`() {
-        assertEquals(LibrarySort.LAST_PLAYED, tap("Title", LibraryOrder(sort = LibrarySort.TITLE)).sort)
+        show(LibraryOrder(sort = LibrarySort.TITLE))
+        // The row's left end: its name, away from both arrows.
+        compose.onNodeWithText("Sort", substring = false, useUnmergedTree = true).performClick()
+        compose.waitForIdle()
+        assertEquals(LibrarySort.LAST_PLAYED, order.sort)
     }
 
     @Test
     fun `the filter row toggles`() {
-        assertEquals(true, tap("Downloaded only", LibraryOrder()).downloadedOnly)
+        show(LibraryOrder())
+        compose.onNodeWithText("Downloaded only", useUnmergedTree = true).performClick()
+        compose.waitForIdle()
+        assertEquals(true, order.downloadedOnly)
+    }
+
+    @Test
+    fun `each arrow takes taps over at least 48 dp square, and near its edges`() {
+        show(LibraryOrder(sort = LibrarySort.RECENTLY_ADDED))
+        for (glyph in listOf("‹", "›")) {
+            // The laid-out size, not the bounds the row clips it to.
+            val size = arrow(glyph).fetchSemanticsNode().size
+            val least = with(compose.density) { 48.dp.roundToPx() }
+            assertTrue("$glyph is ${size.width}x${size.height}", size.width >= least && size.height >= least)
+        }
+        // 4 dp in from each side of each area, well off the glyph itself.
+        for ((glyph, step) in listOf("‹" to LibrarySort.LAST_PLAYED, "›" to LibrarySort.MAIN_STORY)) {
+            for (x in listOf(4f, 44f)) {
+                order = LibraryOrder(sort = LibrarySort.RECENTLY_ADDED)
+                compose.waitForIdle()
+                arrow(glyph).performTouchInput { click(Offset(with(density) { x.dp.toPx() }, centerY)) }
+                compose.waitForIdle()
+                assertEquals("$glyph at $x dp", step, order.sort)
+            }
+        }
     }
 }

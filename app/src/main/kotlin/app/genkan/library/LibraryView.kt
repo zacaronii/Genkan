@@ -2,6 +2,7 @@ package app.genkan.library
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -52,21 +53,25 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
     }
 
     /** The sort and filter for consoles' games (not "Continue playing" or "Favourites"). */
-    val order: Flow<LibraryOrder> = context.libraryStore.data.map {
-        LibraryOrder(LibrarySort.parse(it[SORT]), it[DOWNLOADED_ONLY] == true)
-    }
+    val order: Flow<LibraryOrder> = context.libraryStore.data.map(::orderOf)
 
     suspend fun setOrder(order: LibraryOrder) {
-        context.libraryStore.edit {
-            it[SORT] = order.sort.name
-            it[DOWNLOADED_ONLY] = order.downloadedOnly
-        }
+        context.libraryStore.edit { store(it, order) }
     }
 
-    private companion object {
-        val SORT = stringPreferencesKey("sort")
-        val DOWNLOADED_ONLY = booleanPreferencesKey("downloaded_only")
-        val VIEW = stringPreferencesKey("view")
-        val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
+    internal companion object {
+        /** The sort and filter as [prefs] hold them. */
+        fun orderOf(prefs: Preferences) = LibraryOrder(LibrarySort.parse(prefs[SORT]), prefs[DOWNLOADED_ONLY] == true)
+
+        /** Writes [order] into [prefs], for [orderOf] to read back. */
+        fun store(prefs: MutablePreferences, order: LibraryOrder) {
+            prefs[SORT] = order.sort.name
+            prefs[DOWNLOADED_ONLY] = order.downloadedOnly
+        }
+
+        private val SORT = stringPreferencesKey("sort")
+        private val DOWNLOADED_ONLY = booleanPreferencesKey("downloaded_only")
+        private val VIEW = stringPreferencesKey("view")
+        private val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
     }
 }
