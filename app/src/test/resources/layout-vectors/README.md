@@ -1,4 +1,4 @@
-Copied unmodified from Yomikata, commit fac323a (branch tansaku-layout, Yomikata PR #40 on #39 on #37 on text-codes, not merged
+Copied unmodified from Yomikata, commit 6583a0d (branch tansaku-layout, Yomikata PR #40 on #39 on #37 on text-codes, not merged
 yet), tools/tests/layout-vectors/, and flag-mask.json from commit a925743 (branch suikoden2-table). Its README
 follows.
 
