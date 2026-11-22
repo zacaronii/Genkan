@@ -65,6 +65,14 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, v
 }
 
 
+/**
+ * The game a lookup counts for: a manual's lookup on [lineId] for the manual's game ([manualKey])
+ * when it was opened from that game's details, else the game being played ([playingKey]); null
+ * with no game to count it for.
+ */
+fun lookupGameKey(lineId: Long?, manualKey: String?, playingKey: String): String? =
+    manualKey?.takeIf { lineId == MANUAL_LINE } ?: playingKey.takeIf { it != NowPlaying.NONE.key }
+
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -229,6 +237,12 @@ class ReaderViewModel @Inject constructor(
     /** Taps on the playing game's manual: each looks the word under it up as a line of its own. */
     val manualTaps = ManualTaps(manualText, viewModelScope) { text, offset -> lookUp(MANUAL_LINE, text, offset) }
 
+    /**
+     * The game a manual's lookups count for ("game:<id>"), while a manual opened from a game's
+     * details is showing; null counts them for the game being played, as every other lookup.
+     */
+    var manualGameKey: String? = null
+
     /** The manual went: its lookup goes with it. */
     fun manualClosed() {
         manualTaps.closed()
@@ -266,8 +280,8 @@ class ReaderViewModel @Inject constructor(
         val prefs = popupPrefs.prefs.value
         val count = if (first != null && prefs.counts) counts.record(first.expression, first.reading) else 0
         // And for the game being read, whatever the popup shows, for the game's details.
-        val game = session.game.value.key
-        if (first != null && game != NowPlaying.NONE.key) {
+        val game = lookupGameKey(_lookup.value?.lineId, manualGameKey, session.game.value.key)
+        if (first != null && game != null) {
             WordStatuses.key(first.expression).takeIf { it.isNotEmpty() }?.let { term ->
                 gameLookups.record(game, term, WordStatuses.key(first.reading), System.currentTimeMillis())
             }

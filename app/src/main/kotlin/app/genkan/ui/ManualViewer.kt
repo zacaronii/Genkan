@@ -394,14 +394,37 @@ fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
     val open by manual.open.collectAsStateWithLifecycle()
     val file = open ?: return
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = manual.pageOf(file))
+    DisposableEffect(file) {
+        onDispose { manual.keepPage(file, listState.firstVisibleItemIndex) }
+    }
+    // Its lookups count for the game being played.
+    LookupManual(file, reader, onClose = manual::closed, listState = listState, closeLabel = "Back to reader", gameKey = null)
+}
+
+/**
+ * A manual whose words look up through [reader] on a tap: the word is boxed on its page and the
+ * lookup's panel opens over the manual, on the other half from the tap. The lookups count for
+ * [gameKey]'s game ("game:<id>"), or with null for the game being played. Closing the manual
+ * closes its lookup.
+ */
+@Composable
+fun LookupManual(
+    file: File,
+    reader: ReaderViewModel,
+    onClose: (file: File, problem: String?) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    closeLabel: String = "Close",
+    gameKey: String?,
+) {
     val status by reader.manualTaps.status.collectAsStateWithLifecycle()
     val hit by reader.manualTaps.hit.collectAsStateWithLifecycle()
     val lookup by reader.lookup.collectAsStateWithLifecycle()
     val popup by reader.popup.collectAsStateWithLifecycle()
-    var onTop by remember(file) { mutableStateOf(false) }
-    DisposableEffect(file) {
+    val onTop by reader.manualTaps.onTop.collectAsStateWithLifecycle()
+    DisposableEffect(file, gameKey) {
+        reader.manualGameKey = gameKey
         onDispose {
-            manual.keepPage(file, listState.firstVisibleItemIndex)
+            reader.manualGameKey = null
             reader.manualClosed()
         }
     }
@@ -410,16 +433,14 @@ fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
         onTop = onTop,
         onCloseLookup = reader::closeLookup,
         popup = { DictionaryPopup(popup, reader.dictionaries, reader, Modifier.fillMaxSize()) },
+        status = status,
     ) {
         ManualFile(
             file,
-            onClose = manual::closed,
+            onClose = onClose,
             listState = listState,
-            closeLabel = "Back to reader",
-            onTapText = { f, pages, page, x, y, width, tapY ->
-                onTop = panelOnTop(tapY)
-                reader.manualTaps.tap(f, pages, page, x, y, width)
-            },
+            closeLabel = closeLabel,
+            onTapText = reader.manualTaps::tap,
             status = status,
             mark = manualMark(hit, lookup),
         )

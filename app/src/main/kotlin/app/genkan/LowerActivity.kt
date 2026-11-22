@@ -28,6 +28,7 @@ import app.genkan.ui.GenkanTheme
 import app.genkan.ui.CompanionMode
 import app.genkan.ui.GameDetailsScreen
 import app.genkan.ui.GameDetailsViewModel
+import app.genkan.ui.LookupManual
 import app.genkan.ui.PlayManualLayer
 import app.genkan.ui.ReaderLookPicker
 import app.genkan.ui.ReaderScreen
@@ -83,7 +84,15 @@ class LowerActivity : ComponentActivity() {
                 val mode by details.mode.collectAsStateWithLifecycle()
                 val canShowDetails by details.canShowDetails.collectAsStateWithLifecycle()
                 when (mode) {
-                    CompanionMode.DETAILS -> GameDetailsScreen(details, onShowReader = details::showReader)
+                    CompanionMode.DETAILS -> GameDetailsScreen(
+                        details,
+                        onShowReader = details::showReader,
+                        // A tap on a word in the manual looks it up, counted for the game shown.
+                        manualView = { file, close ->
+                            val game by details.details.collectAsStateWithLifecycle()
+                            LookupManual(file, reader, onClose = close, gameKey = game?.focus?.game?.id?.let { "game:$it" })
+                        },
+                    )
                     CompanionMode.READER -> Box(Modifier.fillMaxSize()) {
                         ReaderScreen(
                             viewModel = reader,

@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -130,5 +131,29 @@ class ManualLookupTest {
         assertEquals(0.8f, heights[2], 0.02f)
         assertFalse(panelOnTop(heights[0]))
         assertTrue(panelOnTop(heights[1]) && panelOnTop(heights[2]))
+    }
+
+    /** The tops of the nodes showing [text], in root pixels. */
+    private fun topsOf(text: String) = compose.onAllNodesWithText(text).fetchSemanticsNodes().map { it.positionInRoot.y }
+
+    @Test
+    fun `with the panel on top, the bar's message shows below it`() {
+        var onTop by mutableStateOf(true)
+        compose.setContent {
+            ManualWithLookup(
+                Lookup(MANUAL_LINE, 1, null, "ことばを"), onTop = onTop, onCloseLookup = {},
+                popup = { Box(Modifier.fillMaxSize()) }, status = ManualTaps.NO_TEXT,
+            ) {
+                ManualViewer(FakeManual(pages = 2), onClose = {}, status = ManualTaps.NO_TEXT)
+            }
+        }
+        val height = compose.onRoot().fetchSemanticsNode().size.height
+        // The bar's copy is under the panel; the other is clear of it.
+        assertTrue(topsOf(ManualTaps.NO_TEXT).any { it >= height * MANUAL_PANEL_FRACTION })
+        onTop = false
+        compose.waitForIdle()
+        // A panel at the bottom leaves the bar in view: only its copy.
+        assertEquals(1, topsOf(ManualTaps.NO_TEXT).size)
+        assertTrue(topsOf(ManualTaps.NO_TEXT).single() < height * 0.2f)
     }
 }
