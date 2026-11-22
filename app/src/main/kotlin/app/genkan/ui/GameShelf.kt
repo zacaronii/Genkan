@@ -73,6 +73,9 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 
 /**
  * The shelf's tunable numbers, the reviewer's defaults kept in one place. Distances are in
@@ -301,7 +304,13 @@ internal fun GameShelf(
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             cameraDistance = 14f * density.density
                         }
-                        val select = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                        val select = Modifier
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                            // For accessibility (and device tests): each case is its game, the focused one selected.
+                            .semantics {
+                                contentDescription = game.name
+                                selected = index == focused
+                            }
                         // The models are built once per game. Coil's models are plain Any, which
                         // Compose compares by identity, so a fresh URL string on each step would
                         // recompose every case in the window.

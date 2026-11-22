@@ -2,9 +2,6 @@ package app.genkan.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -17,8 +14,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,17 +37,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
@@ -54,9 +57,9 @@ import app.genkan.library.ContinuePlaying
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryOrder
-import app.genkan.library.OrderPanel
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
+import app.genkan.library.OrderPanel
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import coil3.compose.AsyncImage
@@ -67,7 +70,7 @@ private val GridSpacing = 16.dp
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel) {
     val platforms by viewModel.platforms.collectAsStateWithLifecycle()
-    val games by viewModel.games.collectAsStateWithLifecycle()
+    val shelf by viewModel.shelf.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
@@ -85,7 +88,8 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
         onOrder = viewModel::setOrder,
         view = view,
         platforms = platforms,
-        games = games,
+        games = shelf.games,
+        gamesFor = shelf.platformId,
         focus = focus,
         sync = sync,
         downloads = downloads,
@@ -137,13 +141,15 @@ fun LibraryContent(
     orderPanel: Int? = null,
     onToggleOrderPanel: () -> Unit = {},
     onOrder: (LibraryOrder) -> Unit = {},
+    /** The shelf [games] are of: a switch to another shelf keeps the last one's games for a moment. */
+    gamesFor: Long? = platforms.getOrNull(focus.platformIndex)?.id,
 ) {
     Box(Modifier.fillMaxSize()) {
         // While the insert animation has the disc or cartridge, the shelf's own goes back in its case.
         LibraryBody(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
             onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
-            order.downloadedOnly,
+            order.downloadedOnly, gamesFor,
         )
         if (orderPanel != null) OrderPanelCard(order, orderPanel, onOrder, onToggleOrderPanel, Modifier.align(Alignment.TopEnd))
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
@@ -169,9 +175,10 @@ private fun LibraryBody(
     staticMedia: Boolean?,
     favourites: Set<Long>,
     downloadedOnly: Boolean,
+    gamesFor: Long?,
 ) {
     if (view == LibraryView.SHELF) {
-        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly)
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly, gamesFor)
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -184,7 +191,7 @@ private fun LibraryBody(
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         PlatformRail(
-            names = platforms.mapIndexed { i, p -> consoleLabel(p, shown = games.size.takeIf { downloadedOnly && i == focus.platformIndex }) },
+            names = platforms.map { p -> consoleLabel(p, shownCount(p, downloadedOnly, gamesFor, games.size)) },
             selected = focus.platformIndex,
             railFocused = focus.pane == LibraryPane.PLATFORMS,
             onSelect = onSelectPlatform,
@@ -273,6 +280,7 @@ private fun ShelfLibrary(
     staticMedia: Boolean?,
     favourites: Set<Long>,
     downloadedOnly: Boolean,
+    gamesFor: Long?,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -284,7 +292,7 @@ private fun ShelfLibrary(
         ConsoleStrip(
             platforms = platforms,
             selected = focus.platformIndex,
-            shown = games.size.takeIf { downloadedOnly },
+            shown = platforms.getOrNull(focus.platformIndex)?.let { shownCount(it, downloadedOnly, gamesFor, games.size) },
             stripFocused = focus.pane == LibraryPane.PLATFORMS,
             sync = sync,
             onSelect = onSelectPlatform,
@@ -383,6 +391,14 @@ private fun ConsoleStrip(
         ViewToggle(LibraryView.GRID, onToggleView, Modifier.padding(start = 12.dp))
     }
 }
+
+/**
+ * How many of [platform]'s games the shelf shows, for its label: with "Downloaded only", the size
+ * of the shelf's list once that list is of [platform] ([gamesFor]); null (RomM's count) otherwise,
+ * so a shelf just switched to never shows the last one's number, or a 0 that only means loading.
+ */
+internal fun shownCount(platform: PlatformEntity, downloadedOnly: Boolean, gamesFor: Long?, shownGames: Int): Int? =
+    shownGames.takeIf { downloadedOnly && gamesFor == platform.id }
 
 /**
  * A console's name and how many games it has: RomM's count, or [shown] (what's on the shelf)
@@ -539,7 +555,13 @@ private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, f
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     Column(
-        Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        Modifier
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            // For accessibility (and device tests): the card is its game, the focused one selected.
+            .semantics(mergeDescendants = true) {
+                contentDescription = game.name
+                selected = focused
+            },
     ) {
         Box(
             Modifier

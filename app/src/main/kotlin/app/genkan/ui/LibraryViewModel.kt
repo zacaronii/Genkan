@@ -200,7 +200,11 @@ class LibraryViewModel @Inject constructor(
     /** The game the focus stays on while a new order rearranges a console's shelf. */
     private val keeper = FocusKeeper()
 
-    val games: StateFlow<List<GameEntity>> =
+    /**
+     * The selected shelf's games, with the shelf they are of. Switching shelves keeps the last
+     * shelf's list until the new one's first query returns; the id says which one this is.
+     */
+    val shelf: StateFlow<ShelfGames> =
         combine(platforms, _focus.map { it.platformIndex }.distinctUntilChanged()) { list, index -> list.getOrNull(index) }
             .map { it?.id }
             .distinctUntilChanged()
@@ -212,9 +216,11 @@ class LibraryViewModel @Inject constructor(
                     id < 0 -> local.map { it.games[id].orEmpty() }
                     // A console's games in the chosen order; the other shelves keep their own.
                     else -> combine(dao.games(id), order, installed, lastPlayed) { list, o, here, played -> o.arrange(list, here, played) }
-                }
+                }.map { ShelfGames(id, it) }
             }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            .stateIn(viewModelScope, SharingStarted.Eagerly, ShelfGames(null, emptyList()))
+
+    val games: StateFlow<List<GameEntity>> = shelf.map { it.games }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
@@ -588,3 +594,6 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { librarySync.sync() }
     }
 }
+
+/** A shelf's games ([games]) and the shelf they are of ([platformId]; null before there is one). */
+data class ShelfGames(val platformId: Long?, val games: List<GameEntity>)

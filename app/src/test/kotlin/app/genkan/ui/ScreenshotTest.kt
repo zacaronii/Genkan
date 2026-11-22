@@ -340,7 +340,7 @@ class ScreenshotTest {
 }
 
 /** Made-up library, downloads and dictionaries; no real hosts, users or games. */
-private object FakeData {
+internal object FakeData {
     /** A fixed "now", 2026-01-15 12:00 UTC, so dates in the screenshots never change. */
     const val NOW = 1_768_478_400_000L
 
