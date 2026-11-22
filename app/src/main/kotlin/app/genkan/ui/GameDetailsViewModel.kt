@@ -20,6 +20,7 @@ import app.genkan.play.PlayTotals
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
+import app.genkan.manual.Manuals
 import app.genkan.saves.SaveStatus
 import app.genkan.saves.SaveSync
 import app.genkan.stats.ReadingDao
@@ -109,16 +110,11 @@ class GameDetailsViewModel @Inject constructor(
     private val screenLooks: ScreenLooks,
     saveSync: SaveSync,
     private val session: RomMSession,
-    httpClient: OkHttpClient,
+    private val manuals: Manuals,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
     private val readerPinned = MutableStateFlow(false)
-
-    /** Carries the RomM sign-in, as Coil's loader does, for fetching manuals. */
-    private val assetClient = httpClient.newBuilder()
-        .addInterceptor(RomMImageAuthInterceptor(session::credentials))
-        .build()
 
     val mode: StateFlow<CompanionMode> =
         combine(launcher.inFront, focusedGame.focus, readerPinned, focusedGame.launching) { inFront, focus, pinned, launching ->
@@ -214,24 +210,15 @@ class GameDetailsViewModel @Inject constructor(
      */
     fun openManual() {
         val game = details.value?.focus?.game ?: return
-        val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return
-        if (manualJob?.isActive == true) return
-        val folder = File(context.cacheDir, MANUALS_FOLDER)
-        val file = File(folder, manualFileName(game))
+        if (!manuals.has(game) || manualJob?.isActive == true) return
         manualJob = viewModelScope.launch {
-            if (!file.isFile || file.length() == 0L) {
+            if (manuals.cached(game) == null) {
                 noticeJob?.cancel()
                 _notice.value = "Fetching the manual…"
-                val fetched = withContext(Dispatchers.IO) {
-                    runCatching {
-                        fetch(url, file)
-                        // Earlier versions of this game's manual are no longer wanted.
-                        folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name != file.name }?.forEach { it.delete() }
-                    }
-                }
-                fetched.exceptionOrNull()?.let { show("Couldn't fetch the manual: ${it.message}"); return@launch }
-                _notice.value = null
             }
+            val file = runCatching { manuals.file(game) }
+                .getOrElse { show("Couldn't fetch the manual: ${it.message}"); return@launch }
+            _notice.value = null
             _manual.value = file
         }
     }
@@ -300,29 +287,7 @@ class GameDetailsViewModel @Inject constructor(
     }
 
     /** Downloads [url] to [file] through a .part file, so a cut-off download is never opened. */
-    private fun fetch(url: String, file: File) {
-        file.parentFile?.mkdirs()
-        val part = File(file.path + ".part")
-        assetClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
-            part.outputStream().use { out -> response.body.byteStream().copyTo(out) }
-        }
-        if (!part.renameTo(file)) throw IOException("couldn't save it")
-    }
-
     companion object {
         private const val NOTICE_MS = 4_000L
-        private const val MANUALS_FOLDER = "manuals"
-
-        /**
-         * The cached manual's file name: the game's id, then a hash of what identifies this
-         * version of the manual, so a changed manual is fetched again. Games carry no updated
-         * time, so the hash covers the manual's path (RomM adds a timestamp to some asset paths)
-         * and the game's file size.
-         */
-        fun manualFileName(game: GameEntity): String {
-            val digest = MessageDigest.getInstance("SHA-1").digest("${game.manualPath}|${game.fsSizeBytes}".toByteArray())
-            return "${game.id}-${digest.take(6).joinToString("") { "%02x".format(it) }}.pdf"
-        }
     }
 }

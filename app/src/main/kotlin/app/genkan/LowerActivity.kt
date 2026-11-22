@@ -21,10 +21,14 @@ import app.genkan.capture.CaptureConsentActivity
 import app.genkan.hardware.FocusDirectorActivity
 import app.genkan.hardware.RefocusGate
 import app.genkan.home.DualScreenState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.CompanionMode
 import app.genkan.ui.GameDetailsScreen
 import app.genkan.ui.GameDetailsViewModel
+import app.genkan.ui.PlayManualLayer
 import app.genkan.ui.ReaderScreen
 import app.genkan.ui.ReaderViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -79,12 +83,16 @@ class LowerActivity : ComponentActivity() {
                 val canShowDetails by details.canShowDetails.collectAsStateWithLifecycle()
                 when (mode) {
                     CompanionMode.DETAILS -> GameDetailsScreen(details, onShowReader = details::showReader)
-                    CompanionMode.READER -> ReaderScreen(
-                        viewModel = reader,
-                        onAskCaptureConsent = { startActivity(Intent(this, CaptureConsentActivity::class.java)) },
-                        onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                        onShowGame = details::showDetails.takeIf { canShowDetails },
-                    )
+                    CompanionMode.READER -> Box(Modifier.fillMaxSize()) {
+                        ReaderScreen(
+                            viewModel = reader,
+                            onAskCaptureConsent = { startActivity(Intent(this@LowerActivity, CaptureConsentActivity::class.java)) },
+                            onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                            onShowGame = details::showDetails.takeIf { canShowDetails },
+                        )
+                        // The playing game's manual, over the reader.
+                        PlayManualLayer(reader.manual)
+                    }
                 }
             }
         }

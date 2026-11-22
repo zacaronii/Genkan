@@ -18,6 +18,7 @@ import app.genkan.core.BuiltInText
 import app.genkan.core.BuiltInPlayer
 import app.genkan.core.ScreenLook
 import app.genkan.core.ScreenLooks
+import app.genkan.manual.PlayManual
 import app.genkan.ppsspp.HookFinder
 import app.genkan.ppsspp.PpssppText
 import app.genkan.dictionary.Dictionaries
@@ -83,6 +84,8 @@ class ReaderViewModel @Inject constructor(
     val overlay: GameOverlay,
     private val player: BuiltInPlayer,
     private val screenLooks: ScreenLooks,
+    /** The playing game's manual, which the Manual chip opens over the reader. */
+    val manual: PlayManual,
 ) : ViewModel(), PopupActions {
 
     /** The look the built-in player draws its game with now and whether it's the one kept, or null with no game there. */

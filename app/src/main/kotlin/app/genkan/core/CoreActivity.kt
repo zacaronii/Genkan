@@ -124,7 +124,10 @@ class CoreActivity : ComponentActivity() {
             if (def.splitScreens) setOnTouchListener(ignoreTouches)
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = quit()
+            // Back closes what is open on the bottom screen (the manual) first, and only then the game.
+            override fun handleOnBackPressed() {
+                if (host?.let { runCatching { it.bottomBack() }.getOrDefault(false) } != true) quit()
+            }
         })
         lifecycle.addObserver(retroView)
         // OCR reads the view's own frame (see frame()), so its fractions are the view's.
@@ -413,10 +416,36 @@ class CoreActivity : ComponentActivity() {
 
     /** Select held while Start goes down: save and quit. Seen before the core gets the keys. */
     private fun onPadKey(event: KeyEvent): Boolean {
-        // Either stick's click swaps the DS's lower screen and the reader on the bottom display.
-        val lower = lowerScreen
-        if (lower != null && (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL || event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR)) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) lower.toggle()
+        // Either stick's click steps the bottom display through what it can show (see [BottomCycle]):
+        // on a DS its lower screen, the reader and the manual; elsewhere the reader and the manual.
+        // A game that isn't a DS and has no manual keeps its stick clicks.
+        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL || event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR) {
+            val lower = lowerScreen
+            val h = host
+            val hasManual = h?.let { runCatching { it.hasManual() }.getOrDefault(false) } == true
+            if (lower == null && !hasManual) return false
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                val manualOpen = h?.let { runCatching { it.manualOpen() }.getOrDefault(false) } == true
+                val now = when {
+                    lower?.isShowing == true -> BottomCycle.GAME
+                    manualOpen -> BottomCycle.MANUAL
+                    else -> BottomCycle.READER
+                }
+                when (BottomCycle.next(now, ds = lower != null, hasManual = hasManual)) {
+                    BottomCycle.GAME -> {
+                        if (manualOpen) runCatching { h?.setManual(false) }
+                        lower?.show()
+                    }
+                    BottomCycle.READER -> {
+                        lower?.hide()
+                        if (manualOpen) runCatching { h?.setManual(false) }
+                    }
+                    BottomCycle.MANUAL -> {
+                        lower?.hide()
+                        runCatching { h?.setManual(true) }
+                    }
+                }
+            }
             return true
         }
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
@@ -461,5 +490,26 @@ class CoreActivity : ComponentActivity() {
         private const val MIN_FRAME_SIDE = 720
         @SuppressLint("ClickableViewAccessibility")
         private val ignoreTouches = View.OnTouchListener { _, _ -> true }
+    }
+}
+
+/** What the bottom display shows during a game in the built-in player, as the stick click steps it. */
+enum class BottomCycle {
+    /** A DS's lower screen, taking touches for the game. */
+    GAME,
+    READER,
+    MANUAL,
+    ;
+
+    companion object {
+        /**
+         * After [now]: on a DS ([ds]), its lower screen, the reader, the manual (when the game has
+         * one), and round again; elsewhere the reader and the manual.
+         */
+        fun next(now: BottomCycle, ds: Boolean, hasManual: Boolean): BottomCycle = when (now) {
+            GAME -> READER
+            READER -> if (hasManual) MANUAL else if (ds) GAME else READER
+            MANUAL -> if (ds) GAME else READER
+        }
     }
 }

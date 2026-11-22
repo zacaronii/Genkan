@@ -26,6 +26,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,7 +106,12 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
  * file it's about, so a failure that reports after another manual opened names the old one.
  */
 @Composable
-private fun ManualFile(file: File, onClose: (file: File, problem: String?) -> Unit) {
+internal fun ManualFile(
+    file: File,
+    onClose: (file: File, problem: String?) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    closeLabel: String = "Close",
+) {
     val close by rememberUpdatedState(onClose)
     var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
     LaunchedEffect(file) {
@@ -124,7 +131,7 @@ private fun ManualFile(file: File, onClose: (file: File, problem: String?) -> Un
         null -> Box(Modifier.fillMaxSize().background(Color(0xFF2A2A30)), contentAlignment = Alignment.Center) {
             Text("Opening the manual…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
         }
-        else -> ManualViewer(open, onClose = { close(file, null) })
+        else -> ManualViewer(open, onClose = { close(file, null) }, listState = listState, closeLabel = closeLabel)
     }
 }
 
@@ -463,4 +470,19 @@ private fun ScreenshotViewer(screenshots: List<Any>, start: Int, onClose: () -> 
             Chip("Close", onClose)
         }
     }
+}
+
+/**
+ * The playing game's manual over the reader while [manual] has it open, at the page it was left
+ * at; Back to reader (or Back) closes it and keeps that page.
+ */
+@Composable
+fun PlayManualLayer(manual: app.genkan.manual.PlayManual) {
+    val open by manual.open.collectAsStateWithLifecycle()
+    val file = open ?: return
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = manual.pageOf(file))
+    DisposableEffect(file) {
+        onDispose { manual.keepPage(file, listState.firstVisibleItemIndex) }
+    }
+    ManualFile(file, onClose = manual::closed, listState = listState, closeLabel = "Back to reader")
 }

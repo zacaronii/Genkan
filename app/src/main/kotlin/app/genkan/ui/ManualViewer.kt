@@ -99,7 +99,13 @@ internal object PinchFocus {
  * drawn off the main thread when its page comes into view and recycled when it leaves.
  */
 @Composable
-fun ManualViewer(pages: ManualPages, onClose: () -> Unit, listState: LazyListState = rememberLazyListState()) {
+fun ManualViewer(
+    pages: ManualPages,
+    onClose: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    /** The close button's words: "Close" in the details, "Back to reader" during play. */
+    closeLabel: String = "Close",
+) {
     BottomBackHandler(onBack = onClose)
     val close by rememberUpdatedState(onClose)
     val closeAfter = with(LocalDensity.current) { PULL_CLOSE_DISTANCE.toPx() }
@@ -211,7 +217,7 @@ fun ManualViewer(pages: ManualPages, onClose: () -> Unit, listState: LazyListSta
                 .padding(horizontal = 14.dp, vertical = 6.dp),
         )
         Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) {
-            Chip("Close", onClose)
+            Chip(closeLabel, onClose)
         }
     }
 }

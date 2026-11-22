@@ -177,11 +177,11 @@ class GameDetailsFormatTest {
     @Test
     fun `a cached manual's name changes with the manual`() {
         val first = game().copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf")
-        val name = GameDetailsViewModel.manualFileName(first)
+        val name = app.genkan.manual.Manuals.fileName(first)
         assertTrue(name, name.startsWith("1-") && name.endsWith(".pdf"))
-        assertEquals(name, GameDetailsViewModel.manualFileName(first.copy(name = "Renamed")))
-        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
-        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(fsSizeBytes = 42)))
+        assertEquals(name, app.genkan.manual.Manuals.fileName(first.copy(name = "Renamed")))
+        assertNotEquals(name, app.genkan.manual.Manuals.fileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
+        assertNotEquals(name, app.genkan.manual.Manuals.fileName(first.copy(fsSizeBytes = 42)))
     }
 
     @Test
