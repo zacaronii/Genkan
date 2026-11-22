@@ -68,12 +68,14 @@ data class SetupState(
     val textSamples: Boolean,
     val dictionaries: List<DictionaryEntity>,
     val insertAnimation: Boolean = true,
+    val fullBox: Boolean = false,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
         SwitchKey.HOME -> homeOn(status)
         SwitchKey.BUILT_IN_PLAYER -> builtInPlayer
         SwitchKey.INSERT_ANIMATION -> insertAnimation
+        SwitchKey.FULL_BOX -> fullBox
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
     }
@@ -315,6 +317,11 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         "Starting a game slides its disc or cartridge into the machine first. Any button skips it."
     } else {
         "Games start without the animation."
+    }
+    SwitchKey.FULL_BOX -> if (state.fullBox) {
+        "Debug build: the focused game is drawn as a box from its front and spine scans, where it has both."
+    } else {
+        "Debug build: the focused game is drawn as its case, as usual."
     }
     SwitchKey.PSP_TEXT -> if (state.pspDebugger) {
         "PPSSPP's debugger is reachable from your network while a game runs."

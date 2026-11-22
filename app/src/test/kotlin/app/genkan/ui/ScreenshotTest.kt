@@ -114,6 +114,28 @@ class ScreenshotTest {
         )
     }
 
+    /** The full-box prototype at four turns: 0, a three-quarter view, side-on, and past 90 to the back. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun fullBoxTurns() = shoot("full_box_turns", TOP_PIXELS) {
+        androidx.compose.foundation.layout.Row(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF202024)),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            for (angle in listOf(0f, 28f, 80f, 160f)) {
+                FullBox(
+                    front = "fake:/covers/psx/1.png",
+                    spine = "fake:/spines/psx/1.png",
+                    back = "fake:/covers/psx/2.png",
+                    maxWidth = androidx.compose.ui.unit.Dp(200f),
+                    maxHeight = androidx.compose.ui.unit.Dp(300f),
+                    angle = angle,
+                )
+            }
+        }
+    }
+
     /** DS cases, narrower and rounder. */
     @Test
     @Config(qualifiers = TOP_SCREEN)

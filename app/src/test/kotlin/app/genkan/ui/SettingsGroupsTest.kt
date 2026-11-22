@@ -10,10 +10,25 @@ class SettingsGroupsTest {
     private val groups = SettingsGroups.DEFAULT
 
     @Test
-    fun `every action has exactly one row`() {
-        val reachable = groups.flatMap { group -> group.rows.flatMap { it.actions } }
+    fun `every action has exactly one row in a debug build's settings`() {
+        val reachable = SettingsGroups.DEBUG.flatMap { group -> group.rows.flatMap { it.actions } }
         assertEquals(SetupAction.entries.toSet(), reachable.toSet())
         assertEquals(reachable.distinct(), reachable)
+    }
+
+    @Test
+    fun `a release build's settings have every action but the debug ones`() {
+        val reachable = groups.flatMap { group -> group.rows.flatMap { it.actions } }
+        assertEquals(SetupAction.entries.toSet() - SetupAction.FULL_BOX, reachable.toSet())
+        assertEquals(reachable.distinct(), reachable)
+    }
+
+    @Test
+    fun `the debug settings add only the full-box switch, under Playing`() {
+        val added = SettingsGroups.DEBUG.flatMap { it.rows } - groups.flatMap { it.rows }.toSet()
+        val playing = SettingsGroups.DEBUG.single { it.id == "playing" }
+        assertEquals(listOf(SwitchKey.FULL_BOX), added.map { (it as SettingsRow.Switch).key })
+        assertEquals(SwitchKey.FULL_BOX, (playing.rows.last() as SettingsRow.Switch).key)
     }
 
     @Test

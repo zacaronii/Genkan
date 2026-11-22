@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -201,6 +202,10 @@ internal fun GameShelf(
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
 
+    // The full-box prototype's switch (debug builds; off otherwise).
+    val fullBox by FullBoxPrototype.on.collectAsState()
+    val fullBoxAngle by FullBoxPrototype.angle.collectAsState()
+
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
     if (trace) SideEffect { ShelfTrace.shelfComposed(focused) }
@@ -322,30 +327,50 @@ internal fun GameShelf(
                                 spine = artModel(game.box2dSidePath),
                                 logo = artModel(game.logoPath),
                                 physical = artModel(game.physicalPath),
+                                front = artModel(game.box2dPath),
+                                back = artModel(game.box2dBackPath),
                             )
                         }
                         // Decided per game: "Continue playing" mixes PC games with consoles'.
                         if (LocalShelves.isLocal(game)) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
                         } else {
-                            ShelfCase(
-                                game = game,
-                                // Each its own console's case, for a shelf of several consoles.
-                                spec = GameCase.specFor(game.platformSlug),
-                                maxWidth = maxCaseWidth,
-                                maxHeight = maxCaseHeight,
-                                art = art,
-                                download = downloads[game.id],
-                                coverAspect = coverAspects[game.id],
-                                onCoverAspect = onCoverAspect,
-                                showMedia = index == focused && active,
-                                badgeOnLeft = index < focused,
-                                raised = index == focused,
-                                mediaOut = mediaNow,
-                                shade = { ShelfGeometry.shade(index - positionNow()) },
-                                modifier = transform.then(select),
-                                trace = trace,
-                            )
+                            val case = @Composable { caseModifier: Modifier ->
+                                ShelfCase(
+                                    game = game,
+                                    // Each its own console's case, for a shelf of several consoles.
+                                    spec = GameCase.specFor(game.platformSlug),
+                                    maxWidth = maxCaseWidth,
+                                    maxHeight = maxCaseHeight,
+                                    art = art,
+                                    download = downloads[game.id],
+                                    coverAspect = coverAspects[game.id],
+                                    onCoverAspect = onCoverAspect,
+                                    showMedia = index == focused && active,
+                                    badgeOnLeft = index < focused,
+                                    raised = index == focused,
+                                    mediaOut = mediaNow,
+                                    shade = { ShelfGeometry.shade(index - positionNow()) },
+                                    modifier = caseModifier,
+                                    trace = trace,
+                                )
+                            }
+                            if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
+                                // Debug builds' full-box prototype: the focused game as a box from its
+                                // scans, its case in the meantime.
+                                FullBox(
+                                    front = art.front,
+                                    spine = art.spine,
+                                    back = art.back,
+                                    maxWidth = maxCaseWidth,
+                                    maxHeight = maxCaseHeight,
+                                    angle = fullBoxAngle,
+                                    modifier = transform.then(select),
+                                    fallback = { case(Modifier) },
+                                )
+                            } else {
+                                case(transform.then(select))
+                            }
                         }
                     }
                 }
@@ -414,7 +439,15 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
  * changed skips recomposition.
  */
 @Immutable
-private data class CaseArt(val cover: Any?, val spine: Any?, val logo: Any?, val physical: Any?)
+private data class CaseArt(
+    val cover: Any?,
+    val spine: Any?,
+    val logo: Any?,
+    val physical: Any?,
+    /** The box's front and back scans, for the full-box prototype. */
+    val front: Any? = null,
+    val back: Any? = null,
+)
 
 /** The proportions of a case's parts, as shares of its width, per [CaseStyle]. */
 private class CaseParts(val corner: Float, val spine: Float, val frame: Float, val plastic: Boolean)
