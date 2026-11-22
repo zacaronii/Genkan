@@ -15,21 +15,20 @@ import app.genkan.library.FavouriteDao
 import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
+import app.genkan.manual.Manuals
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlayTotals
 import app.genkan.romm.RomMApiFactory
-import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
-import app.genkan.manual.Manuals
 import app.genkan.saves.SaveStatus
 import app.genkan.saves.SaveSync
 import app.genkan.stats.ReadingDao
 import app.genkan.stats.ReadingGameTotals
 import app.genkan.words.GameLookupDao
+import app.genkan.words.GameLookupTotals
 import app.genkan.yomikata.TextSource
 import app.genkan.yomikata.YomikataCatalog
 import app.genkan.yomikata.YomikataIds
-import app.genkan.words.GameLookupTotals
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -48,11 +47,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
-import java.io.IOException
-import java.security.MessageDigest
 import javax.inject.Inject
 
 /** What the bottom screen shows: the focused game while browsing, the reader otherwise. */
@@ -286,7 +281,6 @@ class GameDetailsViewModel @Inject constructor(
         )
     }
 
-    /** Downloads [url] to [file] through a .part file, so a cut-off download is never opened. */
     companion object {
         private const val NOTICE_MS = 4_000L
     }

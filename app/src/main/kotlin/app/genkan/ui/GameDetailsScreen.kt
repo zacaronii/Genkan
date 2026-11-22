@@ -26,16 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,11 +57,7 @@ import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import app.genkan.library.Favourites
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Whether a game's fan art, when it has one, is the backdrop instead of its blurred cover.
@@ -100,40 +93,6 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
     manual?.let { file -> ManualFile(file, onClose = viewModel::closeManual) }
 }
 
-/**
- * Opens [file] with [PdfManualPages] for [ManualViewer], and closes it again when the viewer
- * goes. A file that won't open closes the viewer with a notice. [onClose] is always told which
- * file it's about, so a failure that reports after another manual opened names the old one.
- */
-@Composable
-internal fun ManualFile(
-    file: File,
-    onClose: (file: File, problem: String?) -> Unit,
-    listState: LazyListState = rememberLazyListState(),
-    closeLabel: String = "Close",
-) {
-    val close by rememberUpdatedState(onClose)
-    var pages by remember(file) { mutableStateOf<ManualPages?>(null) }
-    LaunchedEffect(file) {
-        val opened = try {
-            // Not cut short: an open that finishes as the viewer goes is closed just below.
-            withContext(NonCancellable) { PdfManualPages.open(file) }
-        } catch (e: Exception) {
-            close(file, "Couldn't open the manual: ${e.message}")
-            return@LaunchedEffect
-        }
-        if (isActive) pages = opened else opened.close()
-    }
-    DisposableEffect(file) {
-        onDispose { pages?.close() }
-    }
-    when (val open = pages) {
-        null -> Box(Modifier.fillMaxSize().background(Color(0xFF2A2A30)), contentAlignment = Alignment.Center) {
-            Text("Opening the manual…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
-        }
-        else -> ManualViewer(open, onClose = { close(file, null) }, listState = listState, closeLabel = closeLabel)
-    }
-}
 
 /**
  * The details drawn from plain state; null [details] is an empty screen. Touch-first, in two
@@ -470,19 +429,4 @@ private fun ScreenshotViewer(screenshots: List<Any>, start: Int, onClose: () -> 
             Chip("Close", onClose)
         }
     }
-}
-
-/**
- * The playing game's manual over the reader while [manual] has it open, at the page it was left
- * at; Back to reader (or Back) closes it and keeps that page.
- */
-@Composable
-fun PlayManualLayer(manual: app.genkan.manual.PlayManual) {
-    val open by manual.open.collectAsStateWithLifecycle()
-    val file = open ?: return
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = manual.pageOf(file))
-    DisposableEffect(file) {
-        onDispose { manual.keepPage(file, listState.firstVisibleItemIndex) }
-    }
-    ManualFile(file, onClose = manual::closed, listState = listState, closeLabel = "Back to reader")
 }

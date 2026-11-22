@@ -29,7 +29,7 @@ import javax.inject.Singleton
 class PlayManual @Inject constructor(
     nowPlaying: NowPlaying,
     private val library: LibraryDao,
-    private val manuals: Manuals,
+    private val manuals: ManualSource,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 

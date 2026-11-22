@@ -34,6 +34,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -66,8 +67,8 @@ class CoreActivity : ComponentActivity() {
     }
 
     private var selectDown = false
-    /** The Back held now closed something on the bottom screen, so its repeats and release go nowhere. */
-    private var backToBottom = false
+    /** Whether a Back closes something on the bottom screen first ([closedOnBottom]). */
+    private val backPress = BackPress(::closedOnBottom)
     /** Whether the stick clicks step the bottom screen: on consoles whose own pad has none. */
     private var stickCycles = false
     private var lowerScreen: LowerScreen? = null
@@ -416,7 +417,6 @@ class CoreActivity : ComponentActivity() {
         finish()
     }
 
-    /** Select held while Start goes down: save and quit. Seen before the core gets the keys. */
     /**
      * The system's Back closes what is open on the bottom screen (the manual, in the launcher's
      * process) before it would quit the game: only a first press, never the Back the system makes
@@ -426,27 +426,20 @@ class CoreActivity : ComponentActivity() {
      */
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.flags and KeyEvent.FLAG_FALLBACK == 0) {
-            when {
-                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> backToBottom = closedOnBottom()
-                event.action == KeyEvent.ACTION_UP && backToBottom -> {
-                    backToBottom = false
-                    return true
-                }
-            }
-            if (backToBottom) return true
-        }
+        val fallback = event.flags and KeyEvent.FLAG_FALLBACK != 0
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && backPress.onKey(event.action, event.repeatCount, fallback)) return true
         return super.dispatchKeyEvent(event)
     }
 
     /**
      * Asks the launcher's process to close what is open on the bottom screen; true when it did.
      * Waits at most [BOTTOM_BACK_WAIT_MS]: a slow or gone launcher counts as nothing closed, so
-     * Back still quits the game.
+     * Back still quits the game. A launcher that answers later may still close the manual, so that
+     * one press then both closes it and quits: accepted, as better than Back doing nothing.
      */
     private fun closedOnBottom(): Boolean {
         val h = host ?: return false
-        val answer = java.util.concurrent.atomic.AtomicBoolean(false)
+        val answer = AtomicBoolean(false)
         val done = CountDownLatch(1)
         Thread {
             answer.set(runCatching { h.bottomBack() }.getOrDefault(false))
@@ -455,6 +448,7 @@ class CoreActivity : ComponentActivity() {
         return done.await(BOTTOM_BACK_WAIT_MS, TimeUnit.MILLISECONDS) && answer.get()
     }
 
+    /** Select held while Start goes down: save and quit. Seen before the core gets the keys. */
     private fun onPadKey(event: KeyEvent): Boolean {
         // Either stick's click steps the bottom display through what it can show (see [BottomCycle]):
         // on a DS its lower screen, the reader and the manual; elsewhere the reader and the manual.
@@ -564,5 +558,29 @@ enum class BottomCycle {
             READER -> if (hasManual) MANUAL else if (ds) GAME else READER
             MANUAL -> if (ds) GAME else READER
         }
+    }
+}
+
+/**
+ * What the player does with a system Back: the first press asks [closedOnBottom] (the launcher
+ * closes what is open on the bottom screen); when it closed something, that press's repeats and
+ * release are taken too, so the same press doesn't also quit. A held press's repeats and the Back
+ * the system makes from an unhandled pad button (fallback) never ask.
+ */
+internal class BackPress(private val closedOnBottom: () -> Boolean) {
+    private var taken = false
+
+    /** Whether the Back event ([action], [repeatCount], [fallback]) is taken here; false passes it on (and Back quits). */
+    fun onKey(action: Int, repeatCount: Int, fallback: Boolean): Boolean {
+        if (fallback) return false
+        if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
+            taken = closedOnBottom()
+            return taken
+        }
+        if (action == KeyEvent.ACTION_UP && taken) {
+            taken = false
+            return true
+        }
+        return taken
     }
 }
