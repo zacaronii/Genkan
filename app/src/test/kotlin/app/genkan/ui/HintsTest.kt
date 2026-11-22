@@ -41,6 +41,8 @@ class HintsTest {
     @Test
     fun sync_and_settings_work_anywhere_in_the_library() {
         assertEquals("L2 Sort | Y Sync | Start Settings", Hints.libraryAnywhere().text())
+        assertEquals("L3 Downloaded", listOf(Hints.downloadedFilter(false)).text())
+        assertEquals("L3 All games", listOf(Hints.downloadedFilter(true)).text())
         // After a failed sync both stay: retry, or fix the server in settings.
         assertEquals("L2 Sort | Y Retry | Start Settings", Hints.libraryAnywhere(failed = true).text())
     }
