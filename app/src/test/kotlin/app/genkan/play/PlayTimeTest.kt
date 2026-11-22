@@ -59,9 +59,10 @@ class PlayTimeTest {
     }
 
     @Test
-    fun `events outside the session are ignored`() {
+    fun `events after now are ignored, and those before the start only say what's in front`() {
+        // Resumed before the start and never paused until 11 s: in front from the start.
         val events = listOf(e(-5_000, RESUMED), e(1_000, RESUMED), e(11_000, PAUSED), e(60_000, RESUMED))
-        assertEquals(Measured(11_000, 10_000), PlayTime.measure(0, 50_000, emu, events))
+        assertEquals(Measured(11_000, 11_000), PlayTime.measure(0, 50_000, emu, events))
     }
 
     @Test
@@ -80,5 +81,24 @@ class PlayTimeTest {
         assertEquals(Measured(55_000, 53_900), PlayTime.measure(0, 90_000, "app.genkan", events, setOf("Core")))
         // Without the filter the launcher's time after the game counts too.
         assertEquals(Measured(90_000, 89_000), PlayTime.measure(0, 90_000, "app.genkan", events))
+    }
+
+    @Test
+    fun `a game already in front when the session opens counts from the start`() {
+        // Genkan opens the session once the launch is done: the game's one RESUMED is before it.
+        val events = listOf(e(-3_000, RESUMED), e(78_000, PAUSED))
+        assertEquals(Measured(78_000, 78_000), PlayTime.measure(0, 90_000, emu, events))
+    }
+
+    @Test
+    fun `a stretch that ended before the start adds nothing`() {
+        val events = listOf(e(-30_000, RESUMED), e(-10_000, PAUSED), e(5_000, RESUMED), e(25_000, PAUSED))
+        assertEquals(Measured(25_000, 20_000), PlayTime.measure(0, 90_000, emu, events))
+    }
+
+    @Test
+    fun `another app in front before the start doesn't count as the emulator`() {
+        val events = listOf(e(-4_000, RESUMED, pkg = "com.other.app"), e(10_000, RESUMED), e(30_000, PAUSED))
+        assertEquals(Measured(30_000, 20_000), PlayTime.measure(0, 90_000, emu, events))
     }
 }

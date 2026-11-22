@@ -1,137 +1,111 @@
 package app.genkan.play
 
 import android.app.Application
-import android.os.IBinder
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import app.genkan.core.BuiltInPlayer
-import app.genkan.core.CoreDef
-import app.genkan.core.ICoreSession
+import app.genkan.core.CoreActivity
 import app.genkan.library.GameEntity
 import app.genkan.romm.RomMSession
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowUsageStatsManager
 
-/** When a play ends: an emulator's when the launcher is back, the built-in player's when its game ends. */
+/** How long a play lasts, from Android's usage events, once the launcher is back. */
 @RunWith(AndroidJUnit4::class)
 @Config(application = Application::class, sdk = [36])
 class SessionTrackerTest {
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val dao = FakePlaySessionDao()
-    private val player = BuiltInPlayer()
     private val romm = mockk<RomMSession> { every { api() } returns null }
-    private val tracker = SessionTracker(context, dao, romm, player)
+    private val tracker = SessionTracker(context, dao, romm)
 
-    /** The player's death watch on the running game, to end it as its process would. */
-    private val death = slot<IBinder.DeathRecipient>()
+    private val core = CoreActivity::class.java.name
+    private val home = "app.genkan.HomeActivity"
 
-    private fun startPlayer() {
-        val binder = mockk<IBinder>(relaxed = true) { every { linkToDeath(capture(death), any()) } returns Unit }
-        val session = mockk<ICoreSession>(relaxed = true) { every { asBinder() } returns binder }
-        player.attach(session, romId = 7, core = mockk<CoreDef>(relaxed = true))
+    private fun usage(pkg: String, activity: String, at: Long, type: Int) {
+        val event = ShadowUsageStatsManager.EventBuilder.buildEvent()
+            .setPackage(pkg).setClass(activity).setTimeStamp(at).setEventType(type).build()
+        shadowOf(context.getSystemService(UsageStatsManager::class.java)).addEvent(event)
     }
 
-    /** Waits for the tracker's own coroutine to see the player's change. */
-    private fun settle() = Thread.sleep(300)
-
-    @Test
-    fun `an emulator's play ends when the launcher is back`() = runBlocking {
-        tracker.begin(7, "org.ppsspp.ppsspp")
+    /**
+     * A play as the Thor showed it: Genkan opens the session once the launch is done, [ago] ms
+     * back, with the game's activity already resumed 2 s before that; it leaves the front [played]
+     * ms after the session opened, and Genkan's launcher comes back.
+     */
+    private fun play(pkg: String, activity: String, ago: Long, played: Long): Long = runBlocking {
+        tracker.begin(7, pkg)
+        dao.backdate(ago)
+        val start = dao.open()!!.startedAt
+        usage(pkg, activity, start - 2_000, UsageEvents.Event.ACTIVITY_RESUMED)
+        usage(pkg, activity, start + played, UsageEvents.Event.ACTIVITY_PAUSED)
+        usage(context.packageName, home, start + played, UsageEvents.Event.ACTIVITY_RESUMED)
         assertTrue(tracker.onLauncherResumed())
-        assertNull(dao.open())
+        start
     }
 
     @Test
-    fun `the launcher in front for a moment doesn't end a built-in play`() = runBlocking {
-        tracker.begin(7, context.packageName)
-        startPlayer()
-        settle()
-        // The launcher resumes mid-game (on main this closed, or dropped, the play).
-        assertFalse(tracker.onLauncherResumed())
-        assertNotNull(dao.open())
+    fun `a built-in play whose game was in front before the session opened is timed in full`() {
+        // On main this play was "Dropped a 17 ms session": the game's one RESUMED came before the start.
+        val start = play(context.packageName, core, ago = 80_000, played = 78_000)
+        val row = dao.rows.single()
+        assertEquals(78_000L, row.durationMs)
+        assertEquals(start + 78_000, row.endedAt)
     }
 
     @Test
-    fun `a built-in play waits for the player's game to start`() = runBlocking {
-        tracker.begin(7, context.packageName)
-        // The launcher is back before the player's first frame.
-        assertFalse(tracker.onLauncherResumed())
-        assertNotNull(dao.open())
-    }
-
-    /** An activity event of Genkan's, as Android's usage stats record it. */
-    private fun usage(at: Long, type: Int, activity: String) {
-        val event = org.robolectric.shadows.ShadowUsageStatsManager.EventBuilder.buildEvent()
-            .setPackage(context.packageName).setClass(activity).setTimeStamp(at).setEventType(type).build()
-        org.robolectric.Shadows.shadowOf(context.getSystemService(android.app.usage.UsageStatsManager::class.java)).addEvent(event)
-    }
-
-    @Test
-    fun `a built-in play ends when its game ends, timed by the player's own activity`() = runBlocking {
-        tracker.begin(7, context.packageName)
-        dao.backdate(20_000)
-        val start = dao.open()!!.startedAt
-        val core = app.genkan.core.CoreActivity::class.java.name
-        val home = "app.genkan.HomeActivity"
-        val resumed = android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED
-        val paused = android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED
-        // The game from 1 s in; the launcher resumes for a moment at 10 s; the game goes on.
-        usage(start + 1_000, resumed, core)
-        usage(start + 10_000, resumed, home)
-        usage(start + 10_100, paused, home)
-        startPlayer()
-        settle()
-        assertFalse(tracker.onLauncherResumed())
-        // The game ends 19 s in.
-        usage(start + 19_000, paused, core)
-        usage(start + 19_000, resumed, home)
-        death.captured.binderDied()
-        settle()
-        assertNull(dao.open())
-        val closed = dao.rows.single()
-        assertEquals(7L, closed.romId)
-        assertEquals(18_000L, closed.durationMs)
+    fun `Genkan's launcher and bottom screen don't count as the built-in game`() {
+        runBlocking {
+            tracker.begin(7, context.packageName)
+            dao.backdate(80_000)
+            val start = dao.open()!!.startedAt
+            // The bottom screen stays resumed throughout; the game plays 30 s.
+            usage(context.packageName, "app.genkan.LowerActivity", start - 5_000, UsageEvents.Event.ACTIVITY_RESUMED)
+            usage(context.packageName, core, start - 1_000, UsageEvents.Event.ACTIVITY_RESUMED)
+            usage(context.packageName, core, start + 30_000, UsageEvents.Event.ACTIVITY_PAUSED)
+            usage(context.packageName, home, start + 30_000, UsageEvents.Event.ACTIVITY_RESUMED)
+            tracker.onLauncherResumed()
+        }
+        assertEquals(30_000L, dao.rows.single().durationMs)
     }
 
     @Test
-    fun `a built-in play under the 10 s floor is still dropped`() = runBlocking {
-        tracker.begin(7, context.packageName)
-        dao.backdate(8_000)
-        val start = dao.open()!!.startedAt
-        // The game showed for 5 s, then closed (a refused disc, say).
-        usage(start + 1_000, android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED, app.genkan.core.CoreActivity::class.java.name)
-        usage(start + 6_000, android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED, app.genkan.core.CoreActivity::class.java.name)
-        startPlayer()
-        settle()
-        death.captured.binderDied()
-        settle()
+    fun `an external emulator already in front at the start is timed in full too`() {
+        play("org.example.emulator", "org.example.Game", ago = 80_000, played = 60_000)
+        assertEquals(60_000L, dao.rows.single().durationMs)
+    }
+
+    @Test
+    fun `an emulator that comes to the front after the start is timed as before`() {
+        runBlocking {
+            tracker.begin(7, "org.ppsspp.ppsspp")
+            dao.backdate(80_000)
+            val start = dao.open()!!.startedAt
+            usage("org.ppsspp.ppsspp", "PpssppActivity", start + 1_000, UsageEvents.Event.ACTIVITY_RESUMED)
+            usage("org.ppsspp.ppsspp", "PpssppActivity", start + 41_000, UsageEvents.Event.ACTIVITY_PAUSED)
+            tracker.onLauncherResumed()
+        }
+        assertEquals(40_000L, dao.rows.single().durationMs)
+    }
+
+    @Test
+    fun `a play under the 10 s floor is still dropped`() {
+        play(context.packageName, core, ago = 80_000, played = 6_000)
         assertTrue(dao.rows.isEmpty())
+        assertNull(runBlocking { dao.open() })
     }
-
-    @Test
-    fun `a built-in play that never started ends once the launcher is back after a while`() = runBlocking {
-        tracker.begin(7, context.packageName)
-        dao.backdate(SessionTrackerTestLimits.OVERDUE_MS)
-        assertTrue(tracker.onLauncherResumed())
-        assertNull(dao.open())
-    }
-}
-
-private object SessionTrackerTestLimits {
-    /** Past SessionTracker's wait for the player's game to start. */
-    const val OVERDUE_MS = 61_000L
 }
 
 /** Play sessions in memory, as Room keeps them. */

@@ -6,7 +6,6 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Process
 import android.util.Log
-import app.genkan.core.BuiltInPlayer
 import app.genkan.core.CoreActivity
 import app.genkan.romm.RomMPlaySessionEntry
 import app.genkan.romm.RomMPlaySessionIngestPayload
@@ -28,72 +27,27 @@ import javax.inject.Singleton
 /**
  * Tracks plays of RomM games and reports them to RomM. A session opens when Genkan launches a
  * game and closes the next time the launcher comes back to the front, which is how Genkan learns
- * the player left the game. A game in the built-in player is Genkan's own activity, and the
- * launcher can come to the front for a moment while it runs: its session closes when the
- * player's game ends instead.
+ * the player left the game.
  */
 @Singleton
 class SessionTracker @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: PlaySessionDao,
     private val session: RomMSession,
-    private val player: BuiltInPlayer,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val uploadLock = Mutex()
-    private val endLock = Mutex()
-
-    /** Whether the built-in player's game has been seen running since the open session began. */
-    @Volatile
-    private var playerSeen = false
-
-    init {
-        scope.launch {
-            player.game.collect { game ->
-                if (game != null) {
-                    playerSeen = true
-                } else if (playerSeen) {
-                    // The built-in player's game ended: its session with it.
-                    if (endBuiltIn()) upload()
-                }
-            }
-        }
-    }
 
     suspend fun begin(romId: Long, emulatorPackage: String) {
-        endLock.withLock {
-            endOpenSession()
-            playerSeen = player.game.value != null && emulatorPackage == context.packageName
-            dao.insert(PlaySessionEntity(romId = romId, emulatorPackage = emulatorPackage, startedAt = System.currentTimeMillis()))
-        }
+        endOpenSession()
+        dao.insert(PlaySessionEntity(romId = romId, emulatorPackage = emulatorPackage, startedAt = System.currentTimeMillis()))
     }
 
-    /**
-     * Closes the running session, if any, and starts its upload. True when one was closed. A
-     * built-in play stays open while its game runs, or before it has started (the launcher can
-     * be in front between the launch and the player's first frame), unless that start is long
-     * overdue.
-     */
+    /** Closes the running session, if any, and starts its upload. True when one was closed. */
     suspend fun onLauncherResumed(): Boolean {
-        val closed = endLock.withLock {
-            val open = dao.open() ?: return@withLock false
-            if (open.emulatorPackage == context.packageName) {
-                val running = player.game.value != null
-                val overdue = !playerSeen && System.currentTimeMillis() - open.startedAt > BUILT_IN_START_MS
-                if (running || (!playerSeen && !overdue)) return@withLock false
-            }
-            endOpenSession()
-        }
+        val closed = endOpenSession()
         if (closed) scope.launch { upload() }
         return closed
-    }
-
-    /** Closes an open built-in play, now that its game ended. */
-    private suspend fun endBuiltIn(): Boolean = endLock.withLock {
-        val open = dao.open() ?: return@withLock false
-        if (open.emulatorPackage != context.packageName) return@withLock false
-        playerSeen = false
-        endOpenSession()
     }
 
     fun hasUsageAccess(): Boolean {
@@ -112,9 +66,11 @@ class SessionTracker @Inject constructor(
     private suspend fun endOpenSession(): Boolean {
         val open = dao.open() ?: return false
         val now = System.currentTimeMillis()
-        // The built-in player shares Genkan's package: only its own activity is the game.
+        // The game is often in front before the session opens: look back for its RESUMED. The
+        // built-in player shares Genkan's package, so only its own activity is the game.
         val classes = if (open.emulatorPackage == context.packageName) setOf(CoreActivity::class.java.name) else null
-        val measured = PlayTime.measure(open.startedAt, now, open.emulatorPackage, usageEvents(open.startedAt, now), classes)
+        val events = usageEvents(open.startedAt - LOOK_BACK_MS, now)
+        val measured = PlayTime.measure(open.startedAt, now, open.emulatorPackage, events, classes)
         if (measured.durationMs < MIN_SESSION_MS) {
             // The emulator closed straight away (a missing BIOS, a refused file): not a play.
             dao.delete(open.id)
@@ -186,8 +142,8 @@ class SessionTracker @Inject constructor(
     private companion object {
         const val TAG = "SessionTracker"
         const val MIN_SESSION_MS = 10_000L
-        /** How long a built-in play may wait for the player's game before the launcher's return ends it. */
-        const val BUILT_IN_START_MS = 60_000L
+        /** How far before a session's start to read what was already in front (the launch takes seconds). */
+        const val LOOK_BACK_MS = 60_000L
         /** RomM's ingest limit per request. */
         const val BATCH = 100
     }

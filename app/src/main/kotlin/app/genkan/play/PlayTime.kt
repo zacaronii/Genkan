@@ -16,7 +16,9 @@ data class Measured(val endedAt: Long, val durationMs: Long)
  * Measures a session from usage events. The emulator counts as in front while any of its
  * activities is resumed, so the menu-to-game hop inside Dolphin is one stretch, and sleep or a
  * trip to another app is left out. Without usage access there are no events; the session then
- * runs from launch until Genkan came back.
+ * runs from launch until Genkan came back. Events from before [startedAt] are read too, adding no
+ * time: Genkan opens the session once the launch is done, so the game is often already in front
+ * by then, its one RESUMED before the start.
  */
 object PlayTime {
 
@@ -31,7 +33,7 @@ object PlayTime {
         var total = 0L
         var lastSeen = startedAt
         for (event in events.sortedBy { it.timestamp }) {
-            if (event.timestamp < startedAt || event.timestamp > now) continue
+            if (event.timestamp > now) continue
             val wasInFront = resumed.isNotEmpty()
             when {
                 event.kind == UsageKind.SCREEN_OFF -> resumed.clear()
@@ -40,10 +42,12 @@ object PlayTime {
                 event.kind == UsageKind.RESUMED -> resumed += event.className.orEmpty()
                 else -> resumed -= event.className.orEmpty()
             }
-            if (!wasInFront && resumed.isNotEmpty()) stretchStart = event.timestamp
+            // Before the start, the events only say what's in front by then.
+            val at = maxOf(event.timestamp, startedAt)
+            if (!wasInFront && resumed.isNotEmpty()) stretchStart = at
             if (wasInFront && resumed.isEmpty()) {
-                total += event.timestamp - stretchStart!!
-                lastSeen = event.timestamp
+                total += at - stretchStart!!
+                if (event.timestamp >= startedAt) lastSeen = event.timestamp
             }
         }
         if (resumed.isNotEmpty()) {
