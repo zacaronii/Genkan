@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Process
 import android.util.Log
+import app.genkan.core.CoreActivity
 import app.genkan.romm.RomMPlaySessionEntry
 import app.genkan.romm.RomMPlaySessionIngestPayload
 import app.genkan.romm.RomMSession
@@ -65,7 +66,11 @@ class SessionTracker @Inject constructor(
     private suspend fun endOpenSession(): Boolean {
         val open = dao.open() ?: return false
         val now = System.currentTimeMillis()
-        val measured = PlayTime.measure(open.startedAt, now, open.emulatorPackage, usageEvents(open.startedAt, now))
+        // The game is often in front before the session opens: look back for its RESUMED. The
+        // built-in player shares Genkan's package, so only its own activity is the game.
+        val classes = if (open.emulatorPackage == context.packageName) setOf(CoreActivity::class.java.name) else null
+        val events = usageEvents(open.startedAt - LOOK_BACK_MS, now)
+        val measured = PlayTime.measure(open.startedAt, now, open.emulatorPackage, events, classes)
         if (measured.durationMs < MIN_SESSION_MS) {
             // The emulator closed straight away (a missing BIOS, a refused file): not a play.
             dao.delete(open.id)
@@ -137,6 +142,8 @@ class SessionTracker @Inject constructor(
     private companion object {
         const val TAG = "SessionTracker"
         const val MIN_SESSION_MS = 10_000L
+        /** How far before a session's start to read what was already in front (the launch takes seconds). */
+        const val LOOK_BACK_MS = 60_000L
         /** RomM's ingest limit per request. */
         const val BATCH = 100
     }

@@ -15,6 +15,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.launch.HookKit
 import app.genkan.launch.LocalShelves
 import app.genkan.launch.LaunchResult
+import app.genkan.play.PlaySessionDao
 import app.genkan.play.SessionTracker
 import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.Job
@@ -27,6 +28,9 @@ import android.os.SystemClock
 import app.genkan.home.LauncherPresence
 import app.genkan.launch.LaunchPlan
 import app.genkan.library.ArtworkWarmer
+import app.genkan.library.ContinuePlaying
+import app.genkan.library.FavouriteDao
+import app.genkan.library.Favourites
 import app.genkan.library.GameCase
 import app.genkan.library.InsertTimeline
 import app.genkan.library.MediaKind
@@ -39,7 +43,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryFocus
+import app.genkan.library.FocusKeeper
 import app.genkan.library.LibraryNavigator
+import app.genkan.library.LibraryOrder
+import app.genkan.library.OrderPanel
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibrarySync
 import app.genkan.library.LibraryView
@@ -76,6 +83,8 @@ sealed class LibraryEvent {
 class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     dao: LibraryDao,
+    playSessions: PlaySessionDao,
+    private val favouriteDao: FavouriteDao,
     private val session: RomMSession,
     private val librarySync: LibrarySync,
     private val downloadQueue: DownloadQueue,
@@ -144,27 +153,105 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { viewSettings.setView(next) }
     }
 
-    /** PC games first (the visual novels live there), then RomM's platforms, then apps. */
+    /** The games on the "Continue playing" shelf, most recently played first. */
+    private val recent: StateFlow<List<GameEntity>> =
+        playSessions.recentlyPlayed(ContinuePlaying.MIN_PLAY_MS, ContinuePlaying.MAX_GAMES)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The games on the "Favourites" shelf, by title. */
+    private val favourites: StateFlow<List<GameEntity>> =
+        favouriteDao.games().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Every game marked as a favourite, for what R2 and the hints say. */
+    val favouriteIds: StateFlow<Set<Long>> =
+        favouriteDao.ids().map { it.toSet() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Whether the player has moved the focus yet; until then the library opens on "Continue playing". */
+    private var moved = false
+
+    /**
+     * "Continue playing" first once a game has been played, then "Favourites" once one is marked,
+     * then PC games (the visual novels live there), then RomM's platforms, then apps.
+     */
     val platforms: StateFlow<List<PlatformEntity>> =
-        combine(dao.platforms(), local) { romm, shelves ->
-            shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
+        combine(dao.platforms(), local, recent, favourites) { romm, shelves, played, marked ->
+            listOfNotNull(
+                ContinuePlaying.platform(played.size).takeIf { played.isNotEmpty() },
+                Favourites.platform(marked.size).takeIf { marked.isNotEmpty() },
+            ) +
+                shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val games: StateFlow<List<GameEntity>> =
+    /** The sort and filter for consoles' games, as last left. */
+    val order: StateFlow<LibraryOrder> = viewSettings.order.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryOrder())
+
+    /** The games on this device, for "downloaded only". */
+    private val installed = downloadQueue.downloads
+        .map { rows -> rows.filterValues { it.state == DownloadState.INSTALLED }.keys }
+        .distinctUntilChanged()
+
+    /** Each game's latest play here, for "last played". */
+    private val lastPlayed = playSessions.lastPlayedByGame().map { rows -> rows.associate { it.romId to it.lastPlayed } }
+
+    private val _orderPanel = MutableStateFlow<Int?>(null)
+    /** The "Sort & filter" panel's focused row while it is open (0 the sort, 1 the filter), else null. */
+    val orderPanel: StateFlow<Int?> = _orderPanel.asStateFlow()
+
+    /** The game the focus stays on while a new order rearranges a console's shelf. */
+    private val keeper = FocusKeeper()
+
+    /**
+     * The selected shelf's games, with the shelf they are of. Switching shelves keeps the last
+     * shelf's list until the new one's first query returns; the id says which one this is.
+     */
+    val shelf: StateFlow<ShelfGames> =
         combine(platforms, _focus.map { it.platformIndex }.distinctUntilChanged()) { list, index -> list.getOrNull(index) }
             .map { it?.id }
             .distinctUntilChanged()
             .flatMapLatest { id ->
                 when {
                     id == null -> flowOf(emptyList())
+                    id == ContinuePlaying.ID -> recent
+                    id == Favourites.ID -> favourites
                     id < 0 -> local.map { it.games[id].orEmpty() }
-                    else -> dao.games(id)
-                }
+                    // A console's games in the chosen order; the other shelves keep their own.
+                    else -> combine(dao.games(id), order, installed, lastPlayed) { list, o, here, played -> o.arrange(list, here, played) }
+                }.map { ShelfGames(id, it) }
             }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            .stateIn(viewModelScope, SharingStarted.Eagerly, ShelfGames(null, emptyList()))
+
+    val games: StateFlow<List<GameEntity>> = shelf.map { it.games }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
+        // A new sort or filter moves the games: the focus stays on the one it was on, if shown.
+        viewModelScope.launch {
+            games.collect { list ->
+                val index = keeper.place(list) ?: return@collect
+                _focus.update { it.copy(gameIndex = index) }
+            }
+        }
+        // The strip changes under the focus: "Continue playing" appears, a local shelf loads.
+        viewModelScope.launch {
+            var before = emptyList<PlatformEntity>()
+            platforms.collect { after ->
+                _focus.update { ContinuePlaying.refocus(it, before, after, moved) }
+                before = after
+            }
+        }
+        // A play moves its game to the front of "Continue playing", and marking or unmarking a
+        // favourite changes "Favourites": the focus stays on its game, or the nearest place.
+        for ((shelf, list) in listOf(ContinuePlaying.ID to recent, Favourites.ID to favourites)) {
+            viewModelScope.launch {
+                var before = emptyList<GameEntity>()
+                list.collect { after ->
+                    if (platforms.value.getOrNull(_focus.value.platformIndex)?.id == shelf) {
+                        _focus.update { it.copy(gameIndex = ContinuePlaying.keepGame(it.gameIndex, before, after)) }
+                    }
+                    before = after
+                }
+            }
+        }
         refreshLocal()
         // The bottom screen shows the focused game while the launcher is in front. It follows once
         // the focus pauses: both screens draw on this one main thread, and redrawing the details
@@ -172,7 +259,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             combine(_focus, games, platforms) { focus, list, shelves ->
                 val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
-                game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
+                game?.let { FocusedGame.Focus(it, ContinuePlaying.consoleOf(it, shelves, shelves.getOrNull(focus.platformIndex)), coverModel(it)) }
             }.distinctUntilChanged().collectLatest { focus ->
                 if (focusedGame.focus.value != null) delay(DETAILS_FOLLOW_MS)
                 focusedGame.set(focus)
@@ -223,6 +310,12 @@ class LibraryViewModel @Inject constructor(
     fun onKey(key: PadKey, repeatCount: Int = 0): Boolean {
         // The activity decides what a key does to the insert animation; nothing else moves under it.
         if (_insert.value != null) return true
+        // The "Sort & filter" panel has the pad while it is open.
+        _orderPanel.value?.let { row -> return onOrderPanelKey(row, key, repeatCount) }
+        if (key == PadKey.L2) {
+            if (repeatCount == 0) _orderPanel.value = 0
+            return true
+        }
         if (key == PadKey.Y) {
             sync(); return true
         }
@@ -238,19 +331,32 @@ class LibraryViewModel @Inject constructor(
         if (focusedGame != null && key == PadKey.X) {
             deleteAction(focusedGame); return true
         }
+        if (key == PadKey.R2) {
+            // Only on a RomM game; on the console strip R2 does nothing, and the hints don't offer it.
+            val game = focusedGame?.takeIf(Favourites::canMark) ?: return false
+            toggleFavourite(game)
+            return true
+        }
         val next = LibraryNavigator.onKey(_focus.value, key, platforms.value.size, games.value.size, columns, view.value, repeatCount)
             ?: return false
+        moved = true
         _focus.value = next
         return true
     }
 
-    fun selectPlatform(index: Int) = _focus.update {
-        if (it.platformIndex == index) it.copy(pane = LibraryPane.PLATFORMS)
-        else LibraryFocus(pane = LibraryPane.PLATFORMS, platformIndex = index)
+    fun selectPlatform(index: Int) {
+        moved = true
+        keeper.drop()
+        _focus.update {
+            if (it.platformIndex == index) it.copy(pane = LibraryPane.PLATFORMS)
+            else LibraryFocus(pane = LibraryPane.PLATFORMS, platformIndex = index)
+        }
     }
 
     /** A tap on a game focuses it; a tap on the focused game acts like A. */
     fun selectGame(index: Int) {
+        moved = true
+        keeper.drop()
         val wasFocused = _focus.value.pane == LibraryPane.GAMES && _focus.value.gameIndex == index
         _focus.update { it.copy(pane = LibraryPane.GAMES, gameIndex = index) }
         if (wasFocused) games.value.getOrNull(index)?.let(::primaryAction)
@@ -381,6 +487,49 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Up and down pick a row (and may repeat: they stop at the ends); left, right and A change it
+     * once per press, so a held button doesn't race through the sorts; B or L2 closes; every
+     * other key waits.
+     */
+    private fun onOrderPanelKey(row: Int, key: PadKey, repeatCount: Int): Boolean {
+        val fresh = repeatCount == 0
+        when (key) {
+            PadKey.UP -> _orderPanel.value = (row - 1).coerceAtLeast(0)
+            PadKey.DOWN -> _orderPanel.value = (row + 1).coerceAtMost(OrderPanel.ROWS - 1)
+            PadKey.LEFT -> if (fresh) setOrder(OrderPanel.change(order.value, row, -1))
+            PadKey.RIGHT, PadKey.A -> if (fresh) setOrder(OrderPanel.change(order.value, row, 1))
+            PadKey.B, PadKey.L2 -> if (fresh) closeOrderPanel()
+            else -> Unit
+        }
+        return true
+    }
+
+    /** Opens or closes the "Sort & filter" panel (a tap on its Close, or L2). */
+    fun toggleOrderPanel() {
+        if (_orderPanel.value == null) _orderPanel.value = 0 else closeOrderPanel()
+    }
+
+    private fun closeOrderPanel() {
+        _orderPanel.value = null
+        keeper.drop()
+    }
+
+    fun setOrder(next: LibraryOrder) {
+        // Only a console's shelf is rearranged; the others keep their own order.
+        val shelf = platforms.value.getOrNull(_focus.value.platformIndex)?.id ?: 0
+        keeper.keep(games.value.getOrNull(_focus.value.gameIndex)?.id?.takeIf { shelf > 0 })
+        viewModelScope.launch { viewSettings.setOrder(next) }
+    }
+
+    /** Marks [game] as a favourite, or unmarks it. */
+    private fun toggleFavourite(game: GameEntity) {
+        viewModelScope.launch {
+            val marked = favouriteDao.toggle(game.id, System.currentTimeMillis())
+            show(if (marked) "Added ${game.name} to favourites" else "Removed ${game.name} from favourites")
+        }
+    }
+
     private fun deleteAction(game: GameEntity) {
         if (downloads.value[game.id]?.state != DownloadState.INSTALLED) return
         if (deleteArmedFor == game.id) {
@@ -445,3 +594,6 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { librarySync.sync() }
     }
 }
+
+/** A shelf's games ([games]) and the shelf they are of ([platformId]; null before there is one). */
+data class ShelfGames(val platformId: Long?, val games: List<GameEntity>)

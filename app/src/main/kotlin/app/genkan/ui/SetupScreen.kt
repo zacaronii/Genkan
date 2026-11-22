@@ -111,13 +111,13 @@ fun SetupContent(
     onRow: (group: Int, row: Int, action: SetupAction) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    Row(
+    Column(
         Modifier
             .fillMaxSize()
             .background(colors.background)
             .padding(24.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, color = colors.primary)
             groups.forEachIndexed { index, group ->
@@ -128,12 +128,6 @@ fun SetupContent(
                     onClick = { onSelectGroup(index) },
                 )
             }
-            Box(Modifier.weight(1f))
-            Text(
-                if (focus.pane == SettingsPane.ROWS) "B: groups" else "B: back",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-            )
         }
         val group = groups.getOrNull(focus.group) ?: return@Row
         // Keyed on the group so each one opens scrolled to its top.
@@ -159,6 +153,15 @@ fun SetupContent(
                 }
             }
         }
+    }
+    val focusedRow = groups.getOrNull(focus.group)?.rows?.getOrNull(focus.row)
+    HintRow(
+        Hints.settings(
+            onRows = focus.pane == SettingsPane.ROWS,
+            rowAction = focusedRow?.let { Hints.settingsRow(it.title, (it as? SettingsRow.Switch)?.let { s -> state.isOn(s.key) }) },
+        ),
+        Modifier.padding(top = 12.dp),
+    )
     }
 }
 

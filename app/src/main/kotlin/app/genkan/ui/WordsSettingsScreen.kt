@@ -52,10 +52,11 @@ fun WordsSettingsScreen(viewModel: WordsSettingsViewModel) {
         Text(
             "The popup's ✓ Known and ⊘ Ignore buttons mark a word by its dictionary headword, for every reading " +
                 "and form. Marked words are never underlined in the backlog, whatever Anki says. Press a lit button " +
-                "again to clear it. B: back",
+                "again to clear it.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
         )
+        HintRow(Hints.form())
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (prefs.fromHachidori) {
                 Text(

@@ -22,6 +22,8 @@ import app.genkan.library.GameCase
 import app.genkan.library.MediaKind
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
+import app.genkan.library.LibraryOrder
+import app.genkan.library.LibrarySort
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
 import app.genkan.library.PlatformEntity
@@ -36,6 +38,7 @@ import coil3.annotation.ExperimentalCoilApi
 import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
+import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Test
@@ -119,6 +122,23 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 8, staticMedia = false)
     }
 
+    /** The "Sort & filter" panel open over the shelf (L2), on the sort. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfOrderPanel() = shoot("shelf_order_panel", TOP_PIXELS) {
+        library(
+            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = false,
+            order = LibraryOrder(LibrarySort.LAST_PLAYED, downloadedOnly = true), orderPanel = 0,
+        )
+    }
+
+    /** "Downloaded only" with nothing of the console on the device. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfNothingDownloaded() = shoot("shelf_nothing_downloaded", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 1, emptyList(), gameIndex = 0, order = LibraryOrder(downloadedOnly = true))
+    }
+
     /** A PlayStation game's disc (the server's cut-out) dropped onto the spindle and spinning up. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -166,6 +186,8 @@ class ScreenshotTest {
         staticMedia: Boolean? = null,
         insert: InsertState? = null,
         insertProgress: Float? = null,
+        order: LibraryOrder = LibraryOrder(),
+        orderPanel: Int? = null,
     ) {
         LibraryContent(
             view = view,
@@ -185,6 +207,8 @@ class ScreenshotTest {
             staticMedia = staticMedia,
             insert = insert,
             staticInsertProgress = insertProgress,
+            order = order,
+            orderPanel = orderPanel,
         )
     }
 
@@ -193,6 +217,13 @@ class ScreenshotTest {
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetails() = shoot("game_details", BOTTOM_PIXELS) {
         GameDetailsContent(details = FakeData.fullDetails, onShowReader = {})
+    }
+
+    /** A PSP game whose text PPSSPP's hook reads: the chip under its details line. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsTextChip() = shoot("game_details_text_chip", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails.copy(textSource = app.genkan.yomikata.TextSource.HOOK), onShowReader = {})
     }
 
     /** The same game scrolled to the end of its details, where the screenshot strip is. */
@@ -288,7 +319,7 @@ class ScreenshotTest {
         shadowOf(display).setWidth(pixels.first)
         shadowOf(display).setRealHeight(pixels.second)
         shadowOf(display).setHeight(pixels.second)
-        captureRoboImage("src/test/screenshots/$name.png") {
+        captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = COMPARE) {
             CompositionLocalProvider(
                 LocalInspectionMode provides true,
                 LocalAsyncImagePreviewHandler provides AsyncImagePreviewHandler { request ->
@@ -309,7 +340,7 @@ class ScreenshotTest {
 }
 
 /** Made-up library, downloads and dictionaries; no real hosts, users or games. */
-private object FakeData {
+internal object FakeData {
     /** A fixed "now", 2026-01-15 12:00 UTC, so dates in the screenshots never change. */
     const val NOW = 1_768_478_400_000L
 
@@ -738,3 +769,9 @@ private class FakeManual(pages: Int) : ManualPages {
 
     override fun close() {}
 }
+
+/**
+ * When verifying (CI's compare step), a shot passes while under 1% of its pixels differ: the PNGs
+ * are recorded on macOS and CI renders on Linux, where text antialiasing differs.
+ */
+private val COMPARE = RoborazziOptions(compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01F))

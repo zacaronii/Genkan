@@ -23,6 +23,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import app.genkan.home.LauncherPresence
 import app.genkan.home.DualScreenState
+import app.genkan.download.DownloadQueue
 import android.view.Display
 import app.genkan.hardware.FocusDirectorActivity
 import app.genkan.play.SessionTracker
@@ -74,6 +75,7 @@ class HomeActivity : ComponentActivity() {
     @Inject lateinit var sessionTracker: SessionTracker
     @Inject lateinit var launcher: LauncherPresence
     @Inject lateinit var sampleInbox: SampleInbox
+    @Inject lateinit var downloadQueue: DownloadQueue
 
     private val viewModel: SetupViewModel by viewModels()
     private val appViewModel: AppViewModel by viewModels()
@@ -157,6 +159,9 @@ class HomeActivity : ComponentActivity() {
         }
         // Back from a game: memory samples it saved go to the Yomikata inbox, if one is set.
         lifecycleScope.launch { sampleInbox.send() }
+        // Downloads queued while Android wouldn't start the service (Genkan in the background)
+        // start now that Genkan is in front.
+        downloadQueue.resume()
     }
 
     /**
