@@ -287,6 +287,18 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsLook() = shoot("game_details_look", BOTTOM_PIXELS) {
+        // Scrolled to the end of the buttons, where the look and Delete are.
+        GameDetailsContent(
+            details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP)),
+            onShowReader = {},
+            actionsScroll = rememberScrollState(Int.MAX_VALUE),
+        )
+    }
+
+    /** The same five buttons at rest: the first three whole, the art smaller, the column fading where it goes on. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsButtons() = shoot("game_details_buttons", BOTTOM_PIXELS) {
         GameDetailsContent(details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP)), onShowReader = {})
     }
 
