@@ -23,6 +23,8 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
         val controls: Map<String, String>,
         val cleanup: List<CleanupStep>,
         val every: Int,
+        /** The entry's tables then a set's files, built once per set; null when one is missing. */
+        val withSet: (List<String>) -> CharTable?,
     )
 
     @Volatile private var watched: Watched? = null
@@ -47,9 +49,17 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
             val every = (poll as? Number)?.toInt()?.takeIf { it > 0 }?.let { maxOf(1, FRAMES_PER_SECOND / it) } ?: 1
             val table = tableText.takeIf { it.isNotBlank() }?.let { CharTable.parse(listOf(it)) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
+            val setTexts = entry.optJSONObject("set_tables")?.let { s -> s.keys().asSequence().associateWith { s.getString(it) } }.orEmpty()
+            val sets = HashMap<List<String>, CharTable?>()
+            val withSet = { paths: List<String> ->
+                sets.getOrPut(paths) {
+                    val files = paths.map { setTexts[it] }
+                    if (files.any { it == null }) null else CharTable.parse(listOfNotNull(tableText.takeIf { it.isNotBlank() }) + files.filterNotNull())
+                }
+            }
             last = null
             gate.reset()
-            watched = Watched(layout, table, entry.optInt("unit", 2), controls, CleanupStep.parse(entry.optJSONArray("cleanup")), every)
+            watched = Watched(layout, table, entry.optInt("unit", 2), controls, CleanupStep.parse(entry.optJSONArray("cleanup")), every, withSet)
             Log.i(TAG, "Watching a layout every $every frame(s)")
             true
         } catch (e: Exception) {
@@ -67,7 +77,7 @@ class LayoutWatch(private val core: CoreDef, private val report: (String) -> Uni
             // The read right after the layout's `when` turns true can still hold what the memory
             // held before (a movie's data): it waits for the next.
             if (!gate.admit(Layouts.live(w.layout, memory))) return
-            val read = Layouts.read(w.layout, memory, w.unit, w.table, w.controls, w.cleanup)
+            val read = Layouts.read(w.layout, memory, w.unit, w.table, w.controls, w.cleanup, w.withSet)
             // Compared as values; turned into JSON only when it changed.
             if (read == last) return
             last = read

@@ -155,6 +155,9 @@ class CharTable private constructor(
         two.count { it.endsWith("00") } > two.count { it.startsWith("00") }
     }
 
+    /** Whether [code] (hex, memory byte order) is one the tables mark as an end (`/`). */
+    fun isEnd(code: String): Boolean = code.uppercase() in ends
+
     /** Whether [code] ends a string or a line. */
     fun isBreak(code: String): Boolean = code.uppercase().let { it in ends || it in newlines }
 
@@ -167,11 +170,25 @@ class CharTable private constructor(
 
     /**
      * [bytes] as text, [unit] bytes per code: ends and page breaks become blank lines, newlines
-     * line breaks, other [controls] nothing, and codes the table lacks U+FFFD.
+     * line breaks, other [controls] nothing, and codes the table lacks U+FFFD. [codes] (lead
+     * bytes, whole length with arguments) are looked for before any of these, and are nothing.
      */
-    fun decode(bytes: ByteArray, unit: Int, controls: Map<String, String> = emptyMap()): String = buildString {
+    fun decode(
+        bytes: ByteArray,
+        unit: Int,
+        controls: Map<String, String> = emptyMap(),
+        codes: List<Pair<ByteArray, Int>> = emptyList(),
+    ): String = buildString {
         var i = 0
         while (i + unit <= bytes.size) {
+            // A text's own codes (controls with arguments) are looked for first: the longest lead,
+            // its whole length, decoded to nothing.
+            val lead = codes.filter { (lead, _) -> i + lead.size <= bytes.size && lead.indices.all { bytes[i + it] == lead[it] } }
+                .maxByOrNull { it.first.size }
+            if (lead != null) {
+                i += lead.second
+                continue
+            }
             val code = hex(bytes, i, unit)
             when {
                 code in ends || controls[code] == "end" -> append("\n\n")

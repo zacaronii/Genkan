@@ -102,7 +102,7 @@ class BuiltInText @Inject constructor(
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
                 // Genkan can't hash the executable: the release id's only listed version stands in.
                 val layout = Layouts.pick(entry, id) ?: return
-                val watching = player.watchLayout(layout, entry, catalog.tableText(entry).orEmpty())
+                val watching = player.watchLayout(layout, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(listOf(layout))))
                 setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
                 return
@@ -115,7 +115,8 @@ class BuiltInText @Inject constructor(
     suspend fun debugWatch(layoutJson: String) {
         val game = session.game.value
         val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
-        setLayoutActive(player.watchLayout(org.json.JSONObject(layoutJson), entry, entry?.let(catalog::tableText).orEmpty()))
+        val layout = org.json.JSONObject(layoutJson)
+        setLayoutActive(player.watchLayout(layout, entry, entry?.let(catalog::tableText).orEmpty(), catalog.files(Layouts.setTablePaths(listOf(layout)))))
     }
 
     /**

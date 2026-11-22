@@ -54,10 +54,13 @@ class LayoutsTest {
             // The entry's tables, in the order it lists them, from the vector's path -> text.
             val tables = vector.optJSONObject("tables")
             val paths = entry.optJSONArray("tables")
-            val table = paths?.let { p -> CharTable.parse(List(p.length()) { tables!!.getString(p.getString(it)) }) }
+            val entryFiles = paths?.let { p -> List(p.length()) { tables!!.getString(p.getString(it)) } }.orEmpty()
+            val table = paths?.let { CharTable.parse(entryFiles) }
+            // A layout's own set: the entry's tables, then the set's files.
+            val withSet = { set: List<String> -> CharTable.parse(entryFiles + set.map { tables!!.getString(it) }) }
             val controls = entry.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty()
             val cleanup = CleanupStep.parse(entry.optJSONArray("cleanup"))
-            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls, cleanup)
+            val read = Layouts.read(vector.getJSONObject("layout"), memory(vector), entry.optInt("unit", 2), table, controls, cleanup, withSet)
             val expected = vector.getJSONObject("expected")
             val actual = asReference(read)
             val name = vector.getString("name")
@@ -148,6 +151,14 @@ class LayoutsTest {
             it.getJSONObject("message").put("pages", JSONObject("""{"break": "0A00", "cursor": {"address": "0x40", "type": "u32"}}"""))
         }
         assertTrue(Layouts.understood(paged))
+        // Codes with a table (controls that take arguments), a script page, a layout's table sets.
+        val scripted = JSONObject(known.toString()).also {
+            it.getJSONObject("message").put("charset", "table").remove("rows")
+            it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 4}"""))
+            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32"}}"""))
+            it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
+        }
+        assertTrue(Layouts.understood(scripted))
         fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
         val unknown = listOf(
             changed { it.put("typing_speed", JSONObject()) },
@@ -177,7 +188,20 @@ class LayoutsTest {
             *listOf("{}", """{"0": 2}""", """{"03": 1.5}""", """{"0300": 1}""", """{"03": 17}""", """{"0102030405": 6}""").map { codes ->
                 changed { it.getJSONObject("message").put("codes", JSONObject(codes)) }
             }.toTypedArray(),
-            changed { it.getJSONObject("message").put("charset", "table").put("codes", JSONObject("""{"03": 2}""")) },
+            // A script only with a table, without rows; open whole hex bytes; offset a number.
+            changed { it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40"}}""")) },
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8", "offset": {"address": "0x40"}}"""))
+            },
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "counts": "bytes"}}"""))
+            },
+            // A layout's tables: a number and at least one set of files, by decimal values.
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {}}""")) },
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {"x1": ["a.tbl"]}}""")) },
+            changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {"1": []}}""")) },
         )
         for (layout in unknown) {
             assertEquals(layout.toString(), false, Layouts.understood(layout))

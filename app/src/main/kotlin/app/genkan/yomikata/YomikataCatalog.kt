@@ -102,12 +102,17 @@ class YomikataCatalog @Inject constructor(
                 ?: return@withLock null
         }
         val entry = runCatching { CatalogEntry.parse(text) }.onFailure { Log.w(TAG, "Bad entry $path: $it") }.getOrNull()
-        // Tables have no hash of their own: fetched again whenever their entry changed.
-        entry?.tables?.forEach { table ->
+        // Tables have no hash of their own: fetched again whenever their entry changed. A layout's
+        // own table sets come along too.
+        entry?.let { it.tables + Layouts.setTablePaths(it.layouts) }?.forEach { table ->
             if (!fresh || !File(dir, table).isFile) runCatching { save(table, fetch(table)) }
         }
         entry
     }
+
+    /** The catalog files at [paths] that are on the device, by path (a layout's table sets). */
+    fun files(paths: Collection<String>): Map<String, String> =
+        paths.mapNotNull { path -> File(dir, path).takeIf(File::isFile)?.let { path to it.readText() } }.toMap()
 
     /** An entry's table files as one text (later files win, as parsing them in order does), or null. */
     fun tableText(entry: CatalogEntry): String? {

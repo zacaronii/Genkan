@@ -71,11 +71,18 @@ class BuiltInPlayer @Inject constructor() {
      * Asks the player to read [layout] between frames (null: stop), with [entry]'s table, unit,
      * controls and cleanup; whether the player took it.
      */
-    fun watchLayout(layout: org.json.JSONObject?, entry: CatalogEntry?, tableText: String = ""): Boolean = try {
+    fun watchLayout(
+        layout: org.json.JSONObject?,
+        entry: CatalogEntry?,
+        tableText: String = "",
+        /** The files of the layout's own table sets, by path. */
+        setTables: Map<String, String> = emptyMap(),
+    ): Boolean = try {
         val entryJson = org.json.JSONObject()
             .put("unit", entry?.unit ?: 2)
             .put("controls", org.json.JSONObject((entry?.controls ?: emptyMap()) as Map<*, *>))
             .put("cleanup", entry?.cleanupJson ?: org.json.JSONArray())
+            .put("set_tables", org.json.JSONObject(setTables as Map<*, *>))
         _game.value?.session?.watchLayout(layout?.toString().orEmpty(), tableText, entryJson.toString()) == true
     } catch (e: RemoteException) {
         false
