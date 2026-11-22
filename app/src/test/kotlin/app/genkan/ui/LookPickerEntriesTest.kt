@@ -62,11 +62,17 @@ class LookPickerEntriesTest {
     @Test
     fun `the list shows the console's looks, the one in use even outside them, and all on show-all`() {
         val psx = ScreenLook.suiting("psx")
-        val groups = LookPickerEntries.of(suits = psx, selected = ScreenLook.DOT)
+        val groups = LookPickerEntries.of(suits = psx, keep = setOf(ScreenLook.DOT))
         assertEquals(psx!! + ScreenLook.DOT, looks(groups).toSet())
         // A family with nothing left has no heading: only Dot of the LCD family, kept as the look in use.
         assertEquals(listOf(ScreenLook.DOT), groups.single { it.first == "LCD" }.second.map { it.look })
         assertEquals(listOf("Plain", "CRT", "Smoothing"), LookPickerEntries.of(suits = psx).map { it.first })
         assertEquals(ScreenLook.entries.size, looks(LookPickerEntries.of(suits = psx, showAll = true)).size)
+    }
+
+    @Test
+    fun `every look kept stays listed`() {
+        val shown = looks(LookPickerEntries.of(suits = ScreenLook.suiting("psx"), keep = setOf(ScreenLook.DOT, ScreenLook.LCD3X)))
+        assertTrue(ScreenLook.DOT in shown && ScreenLook.LCD3X in shown && ScreenLook.LCD !in shown)
     }
 }

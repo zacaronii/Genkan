@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,11 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -40,17 +43,17 @@ object LookPickerEntries {
     /**
      * The picker's entries under their headings: with [console] (a game's override), "Console's"
      * first, then each family's looks in the order [ScreenLook] lists them. With [suits] (the
-     * console's looks, [ScreenLook.suiting]) only those, and [selected] wherever it is, unless
-     * [showAll]; a family left with none has no heading.
+     * console's looks, [ScreenLook.suiting]) only those, and [keep] (the looks in use) wherever
+     * they are, unless [showAll]; a family left with none has no heading.
      */
     fun of(
         console: ScreenLook? = null,
         suits: Set<ScreenLook>? = null,
-        selected: ScreenLook? = null,
+        keep: Set<ScreenLook> = emptySet(),
         showAll: Boolean = false,
     ): List<Pair<String?, List<LookChoice>>> = buildList {
         console?.let { add(null to listOf(LookChoice(null, "Console's (${it.label})", "Whatever its console uses: ${it.description}"))) }
-        val shown = ScreenLook.entries.filter { showAll || suits == null || it in suits || it == selected }
+        val shown = ScreenLook.entries.filter { showAll || suits == null || it in suits || it in keep }
         shown.groupBy { it.family }.forEach { (family, looks) ->
             add(family.title to looks.map { LookChoice(it, it.label, it.description) })
         }
@@ -76,7 +79,7 @@ fun LookPicker(
     console: ScreenLook? = null,
     /** The looks that suit the console ([ScreenLook.suiting]), listed unless "show all"; null lists every look. */
     suits: Set<ScreenLook>? = null,
-    /** The console's name, for the "show all" row. */
+    /** The console's name, for the "show all" chip. */
     consoleName: String? = null,
     focusSelected: Boolean = false,
     closeLabel: String = "Close",
@@ -86,11 +89,15 @@ fun LookPicker(
     val colors = MaterialTheme.colorScheme
     var showAll by remember { mutableStateOf(showAllAtFirst) }
     val filters = LookPickerEntries.filters(suits)
-    val groups = remember(console, suits, selected, showAll) { LookPickerEntries.of(console, suits, selected, showAll) }
+    // Every look in use since the list opened stays listed (the reader's list stays open across picks), to compare.
+    val kept = remember { mutableSetOf<ScreenLook>() }
+    selected?.let { kept += it }
+    val groups = remember(console, suits, selected, showAll) { LookPickerEntries.of(console, suits, kept.toSet(), showAll) }
     val focus = remember { FocusRequester() }
-    // The selected row's place in the list (headings take a row each, and the "show all" row one), to start there.
+    val toggleFocus = remember { FocusRequester() }
+    // The selected row's place in the list (headings take a row each), to start there.
     val selectedIndex = remember(groups, selected) {
-        var index = if (filters) 1 else 0
+        var index = 0
         var found = 0
         for ((heading, choices) in groups) {
             if (heading != null) index++
@@ -99,7 +106,8 @@ fun LookPicker(
         found
     }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0))
-    if (focusSelected) LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // A frame first: the selected row is a lazy item, laid out (and its requester attached) after this runs.
+    if (focusSelected) LaunchedEffect(Unit) { withFrameNanos {}; runCatching { focus.requestFocus() } }
     Column(
         modifier
             .fillMaxSize()
@@ -109,16 +117,17 @@ fun LookPicker(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, color = colors.primary, modifier = Modifier.weight(1f))
+            // In the header, so it's in view wherever the list is scrolled.
+            if (filters) {
+                Box(Modifier.focusRequester(toggleFocus)) {
+                    Chip(if (showAll) "${consoleName ?: "This console"}'s only" else "Show all ${ScreenLook.entries.size}") { showAll = !showAll }
+                }
+            }
             Chip(closeLabel, onClose)
         }
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            if (filters) {
-                item(key = "show-all") {
-                    ShowAllRow(showAll, consoleName, total = ScreenLook.entries.size, onClick = { showAll = !showAll })
-                }
-            }
             groups.forEach { (heading, choices) ->
                 heading?.let { item(key = "h-$it") { Text(it, style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) } }
                 choices.forEach { choice ->
@@ -128,41 +137,15 @@ fun LookPicker(
                             choice,
                             isSelected,
                             onClick = { onPick(choice.look) },
-                            modifier = if (isSelected && focusSelected) Modifier.focusRequester(focus) else Modifier,
+                            modifier = Modifier
+                                // On the pad, Right from any look goes to the "show all" chip.
+                                .then(if (filters) Modifier.focusProperties { right = toggleFocus } else Modifier)
+                                .then(if (isSelected && focusSelected) Modifier.focusRequester(focus) else Modifier),
                         )
                     }
                 }
             }
         }
-    }
-}
-
-/** The row that lists every look, or only the console's again. */
-@Composable
-private fun ShowAllRow(showAll: Boolean, consoleName: String?, total: Int, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(10.dp)
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val console = consoleName ?: "this console"
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .border(2.dp, if (focused) colors.primary else colors.onSurface.copy(alpha = 0.25f), shape)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Text(
-            if (showAll) "Show only the looks for $console" else "Show all $total looks",
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.primary,
-        )
-        Text(
-            if (showAll) "Every look is listed; the ones that suit $console are listed first by default."
-            else "Listed: the looks that suit $console. The others can still be picked.",
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
-        )
     }
 }
 

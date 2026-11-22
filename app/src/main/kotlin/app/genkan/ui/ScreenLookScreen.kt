@@ -42,7 +42,7 @@ val LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "gba" to "Game Boy Advance",
     "nds" to "Nintendo DS",
     "psx" to "PlayStation",
-    "psp" to "PSP",
+    "psp" to "PlayStation Portable",
 )
 
 @HiltViewModel
