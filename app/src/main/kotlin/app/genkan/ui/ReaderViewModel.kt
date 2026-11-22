@@ -1,12 +1,10 @@
 package app.genkan.ui
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Context
 import android.graphics.Bitmap
 import app.genkan.manual.ManualText
-import app.genkan.ocr.ScreenText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.MineSource
@@ -41,8 +39,6 @@ import app.genkan.words.WordMarks
 import app.genkan.words.WordStatus
 import app.genkan.words.WordStatuses
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.io.File
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,11 +64,6 @@ data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, v
     val end: Int get() = start + (result?.matchedLength ?: 0)
 }
 
-/** The lookup's line id for a word on a manual page: its own, so nothing in the backlog lights up. */
-const val MANUAL_LINE = -2L
-
-/** The word being looked up on a manual: on [page], where OCR read it. */
-data class ManualHit(val page: Int, val hit: ScreenText.Hit)
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
@@ -235,60 +226,22 @@ class ReaderViewModel @Inject constructor(
         if (line != null) lookUp(line.id, line.text, line.text.indexOf(text) + offset) else lookUp(SCREEN_LINE, text, offset)
     }
 
-    private val _manualStatus = MutableStateFlow<String?>(null)
-    /** What a tap on the manual is doing, for its bar: reading the page, or why nothing was looked up. */
-    val manualStatus: StateFlow<String?> = _manualStatus.asStateFlow()
+    /** Taps on the playing game's manual: each looks the word under it up as a line of its own. */
+    val manualTaps = ManualTaps(manualText, viewModelScope) { text, offset -> lookUp(MANUAL_LINE, text, offset) }
 
-    private val _manualHit = MutableStateFlow<ManualHit?>(null)
-    /** Where on the manual the word being looked up is, to box it there. */
-    val manualHit: StateFlow<ManualHit?> = _manualHit.asStateFlow()
-
-    private var manualJob: Job? = null
-
-    /**
-     * A tap on [page] of the playing game's manual [file] at ([x], [y]), fractions of the page:
-     * the page is read by OCR on its first tap (the bar says so meanwhile), and the word under
-     * the tap is looked up as a line of its own. Off every line, the bar says there's no text.
-     */
-    fun tapManual(file: File, pages: ManualPages, page: Int, x: Float, y: Float, widthPx: Int) {
-        manualJob?.cancel()
-        manualJob = viewModelScope.launch {
-            if (!manualText.isRead(file.path, page)) _manualStatus.value = "Reading this page…"
-            val hit = try {
-                manualText.hit(file.path, pages, page, x, y, widthPx)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Couldn't read page ${page + 1} of the manual", e)
-                return@launch say("Couldn't read this page")
-            }
-            if (hit == null) return@launch say("No text there")
-            _manualStatus.value = null
-            lookUp(MANUAL_LINE, hit.text, hit.offset)
-            _manualHit.value = ManualHit(page, hit)
-        }
-    }
-
-    /** Shows [message] in the manual's bar for a moment. */
-    private suspend fun say(message: String) {
-        _manualStatus.value = message
-        kotlinx.coroutines.delay(MANUAL_STATUS_MS)
-        _manualStatus.value = null
-    }
-
-    /** The manual went: its lookup and its bar's word go with it. */
+    /** The manual went: its lookup goes with it. */
     fun manualClosed() {
-        manualJob?.cancel()
-        _manualStatus.value = null
+        manualTaps.closed()
         if (_lookup.value?.lineId == MANUAL_LINE) closeLookup()
     }
 
     /** A tap at [offset] in answer [index] of the choice on screen: the answer is looked up as a line of its own. */
     fun lookUpAnswer(index: Int, text: String, offset: Int) = lookUp(answerLine(index), text, offset)
 
-    private fun lookUp(lineId: Long, text: String, offset: Int) {
-        if (offset !in text.indices) return
-        _manualHit.value = null
+    /** Looks the text from [offset] on up; false when [offset] isn't in [text], so nothing started. */
+    private fun lookUp(lineId: Long, text: String, offset: Int): Boolean {
+        if (offset !in text.indices) return false
+        manualTaps.clearHit()
         // Start on a whole character: never between the halves of a surrogate pair (𠮟).
         val start = if (offset > 0 && text[offset].isLowSurrogate()) offset - 1 else offset
         lookupJob?.cancel()
@@ -300,6 +253,7 @@ class ReaderViewModel @Inject constructor(
             _lookup.value = Lookup(lineId, start, result, text)
             show(result)
         }
+        return true
     }
 
     /** Shows [result] with each entry's Anki badge, then checks Anki itself for them. */
@@ -386,7 +340,7 @@ class ReaderViewModel @Inject constructor(
         val lookup = _lookup.value ?: return
         // A card from the manual needs its page as the picture, not the game's screen: not yet.
         if (lookup.lineId == MANUAL_LINE) {
-            viewModelScope.launch { say("Cards from the manual aren't made yet") }
+            manualTaps.say("Cards from the manual aren't made yet")
             return
         }
         val hit = shownResult?.hits?.getOrNull(index) ?: return
@@ -451,7 +405,7 @@ class ReaderViewModel @Inject constructor(
         lookupJob?.cancel()
         _lookup.value = null
         _popup.value = null
-        _manualHit.value = null
+        manualTaps.clearHit()
     }
 
     fun openPicker() {
@@ -473,10 +427,6 @@ class ReaderViewModel @Inject constructor(
     private companion object {
         /** The line id of a lookup from the overlay whose text isn't in the backlog. */
         const val SCREEN_LINE = -1L
-
-        const val MANUAL_STATUS_MS = 2_500L
-
-        private const val TAG = "ReaderViewModel"
         /** Lines scanned between showing their marks, on a full backlog. */
         const val PUBLISH_EVERY = 10
         const val NOTICE_MS = 5_000L

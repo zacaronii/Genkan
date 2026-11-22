@@ -64,7 +64,7 @@ class ManualTapTest {
     fun `a tap gives the page and the point on it, before and after zooming in`() {
         val taps = mutableListOf<Tap>()
         compose.setContent {
-            ManualViewer(FakeManual(pages = 3), onClose = {}, onTapText = { page, x, y, width -> taps += Tap(page, x, y, width) })
+            ManualViewer(FakeManual(pages = 3), onClose = {}, onTapText = { page, x, y, width, _ -> taps += Tap(page, x, y, width) })
         }
         tapPage(0.25f, 0.3f)
         val first = taps.single()

@@ -410,11 +410,59 @@ class ScreenshotTest {
             FakeManual(pages = 12),
             onClose = {},
             closeLabel = "Back to reader",
-            onTapText = { _, _, _, _ -> },
+            onTapText = { _, _, _, _, _ -> },
             status = "Reading this page…",
             // Over the third grey line beside the picture box.
             mark = ManualMark(0, app.genkan.ocr.ScreenText.Box(0.52f, 0.29f / 1.294f, 0.70f, 0.306f / 1.294f)),
         )
+    }
+
+    /**
+     * A word looked up on the manual while playing: boxed on its page, the lookup's panel over the
+     * manual on the other half from the tap (a tap in the upper half: the panel below), a stand-in where the dictionary's entries go.
+     */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualLookupPanelBelow() = shoot("manual_lookup_panel_below", BOTTOM_PIXELS) {
+        val word = app.genkan.dictionary.TermHit(matched = "とけい", deinflected = "とけい", expression = "時計", reading = "とけい")
+        ManualWithLookup(
+            lookup = Lookup(MANUAL_LINE, 0, app.genkan.dictionary.LookupResult("とけいを", listOf(word), "[]"), "とけいをまく"),
+            onTop = false,
+            onCloseLookup = {},
+            popup = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF34343C))) },
+        ) {
+            ManualViewer(
+                FakeManual(pages = 12),
+                onClose = {},
+                closeLabel = "Back to reader",
+                onTapText = { _, _, _, _, _ -> },
+                mark = ManualMark(0, app.genkan.ocr.ScreenText.Box(0.52f, 0.29f / 1.294f, 0.70f, 0.306f / 1.294f)),
+            )
+        }
+    }
+
+    /**
+     * A word looked up on the manual while playing: boxed on its page, the lookup's panel over the
+     * manual on the other half from the tap (a tap in the lower half: the panel above), a stand-in where the dictionary's entries go.
+     */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualLookupPanelAbove() = shoot("manual_lookup_panel_above", BOTTOM_PIXELS) {
+        val word = app.genkan.dictionary.TermHit(matched = "とけい", deinflected = "とけい", expression = "時計", reading = "とけい")
+        ManualWithLookup(
+            lookup = Lookup(MANUAL_LINE, 0, app.genkan.dictionary.LookupResult("とけいを", listOf(word), "[]"), "とけいをまく"),
+            onTop = true,
+            onCloseLookup = {},
+            popup = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF34343C))) },
+        ) {
+            ManualViewer(
+                FakeManual(pages = 12),
+                onClose = {},
+                closeLabel = "Back to reader",
+                onTapText = { _, _, _, _, _ -> },
+                mark = ManualMark(0, app.genkan.ocr.ScreenText.Box(0.06f, 65f / 129.4f, 0.40f, 66.6f / 129.4f)),
+            )
+        }
     }
 
     /** The same manual scrolled to where page 4 ends and page 5 begins. */

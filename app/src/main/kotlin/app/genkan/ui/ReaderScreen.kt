@@ -76,7 +76,8 @@ fun ReaderScreen(
     val threads by viewModel.session.threads.collectAsStateWithLifecycle()
     val chosen by viewModel.session.chosenThread.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
-    val lookup by viewModel.lookup.collectAsStateWithLifecycle()
+    // A word looked up on the manual has its panel over the manual; the reader leaves it alone.
+    val lookup = viewModel.lookup.collectAsStateWithLifecycle().value?.takeIf { it.lineId != MANUAL_LINE }
     val popup by viewModel.popup.collectAsStateWithLifecycle()
     val ocrOn by viewModel.ocr.enabled.collectAsStateWithLifecycle()
     val capturing by viewModel.capture.running.collectAsStateWithLifecycle()
@@ -215,11 +216,9 @@ fun ReaderScreen(
             lookup?.let { current ->
                 LookupPanel(
                     current,
-                    popup,
-                    viewModel,
                     onClose = viewModel::closeLookup,
                     modifier = Modifier.align(Alignment.BottomCenter).height(panelHeight),
-                )
+                ) { DictionaryPopup(popup, viewModel.dictionaries, viewModel, Modifier.fillMaxSize()) }
             }
         }
     }
@@ -453,12 +452,20 @@ private fun ThreadPicker(threads: List<ThreadSample>, chosen: String?, onChoose:
 }
 
 @Composable
-internal fun LookupPanel(lookup: Lookup, popup: PopupContent?, viewModel: ReaderViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun LookupPanel(
+    lookup: Lookup,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** At the screen's top: its rounded corners go below. */
+    atTop: Boolean = false,
+    /** The dictionary's entries for the word, under the panel's header. */
+    popup: @Composable () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            .clip(if (atTop) RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp) else RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             .background(colors.surface)
             .padding(top = 12.dp),
     ) {
@@ -475,7 +482,7 @@ internal fun LookupPanel(lookup: Lookup, popup: PopupContent?, viewModel: Reader
             )
             Chip("Close", onClose)
         }
-        DictionaryPopup(popup, viewModel.dictionaries, viewModel, Modifier.fillMaxSize())
+        popup()
     }
 }
 
