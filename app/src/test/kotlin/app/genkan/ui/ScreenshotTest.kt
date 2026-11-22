@@ -365,7 +365,6 @@ class ScreenshotTest {
             selected = null,
             console = app.genkan.core.ScreenLook.DEFAULT,
             suits = app.genkan.core.ScreenLook.suiting("psp"),
-            consoleName = "PlayStation Portable",
             onPick = {},
             onClose = {},
         )
@@ -380,7 +379,6 @@ class ScreenshotTest {
             selected = null,
             console = app.genkan.core.ScreenLook.DEFAULT,
             suits = app.genkan.core.ScreenLook.suiting("psp"),
-            consoleName = "PlayStation Portable",
             onPick = {},
             onClose = {},
             showAllAtFirst = true,

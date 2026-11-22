@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -79,8 +80,6 @@ fun LookPicker(
     console: ScreenLook? = null,
     /** The looks that suit the console ([ScreenLook.suiting]), listed unless "show all"; null lists every look. */
     suits: Set<ScreenLook>? = null,
-    /** The console's name, for the "show all" chip. */
-    consoleName: String? = null,
     focusSelected: Boolean = false,
     closeLabel: String = "Close",
     /** Whether the list opens showing every look; off in the app, so the console's come first. */
@@ -118,11 +117,19 @@ fun LookPicker(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, color = colors.primary, modifier = Modifier.weight(1f))
+            // At most two lines, so a long game name can't make the header taller than the list allows.
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                color = colors.primary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             // In the header, so it's in view wherever the list is scrolled.
             if (filters) {
                 Box(Modifier.focusRequester(toggleFocus)) {
-                    Chip(if (showAll) "${consoleName ?: "This console"}'s only" else "Show all ${ScreenLook.entries.size}") { showAll = !showAll }
+                    Chip(if (showAll) "Show fewer" else "Show all ${ScreenLook.entries.size}") { showAll = !showAll }
                 }
             }
             Chip(closeLabel, onClose)
@@ -191,7 +198,6 @@ fun ReaderLookPicker(viewModel: ReaderViewModel) {
         title = "Look for this play",
         selected = now,
         suits = ScreenLook.suiting(platform),
-        consoleName = LOOK_CONSOLES.firstOrNull { it.first == platform }?.second,
         onPick = { it?.let(viewModel::tryLook) },
         onClose = viewModel::closeLookPicker,
     )

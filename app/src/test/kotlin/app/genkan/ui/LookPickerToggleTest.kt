@@ -53,7 +53,6 @@ class LookPickerToggleTest {
                 onPick = {},
                 onClose = {},
                 suits = ScreenLook.suiting("psp"),
-                consoleName = "PlayStation Portable",
             )
         }
         compose.onAllNodesWithText("CRT Lottes").assertCountEquals(0)
@@ -61,7 +60,7 @@ class LookPickerToggleTest {
         compose.onNodeWithText("Show all 19").performClick()
         compose.onNodeWithText("CRT Lottes").assertExists()
         marked("LCD 1x (PSP)").assertExists()
-        compose.onNodeWithText("PlayStation Portable's only").performClick()
+        compose.onNodeWithText("Show fewer").performClick()
         compose.onAllNodesWithText("CRT Lottes").assertCountEquals(0)
         marked("LCD 1x (PSP)").assertExists()
     }
@@ -94,7 +93,7 @@ class LookPickerToggleTest {
         compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
         compose.onNodeWithText("Show all 19").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
-        compose.onNodeWithText("PlayStation's only").assertIsFocused()
+        compose.onNodeWithText("Show fewer").assertIsFocused()
         compose.onNodeWithText("Dot").assertExists()
     }
 }

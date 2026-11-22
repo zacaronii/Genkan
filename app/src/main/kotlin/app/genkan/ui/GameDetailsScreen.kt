@@ -98,7 +98,6 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
             selected = look.own,
             console = look.console,
             suits = ScreenLook.suiting(details!!.focus.game.platformSlug),
-            consoleName = details!!.focus.platformName,
             onPick = viewModel::pickLook,
             onClose = viewModel::closeLookPicker,
         )
