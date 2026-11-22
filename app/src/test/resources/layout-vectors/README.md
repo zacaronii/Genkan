@@ -1,6 +1,5 @@
-Copied unmodified from Yomikata, commit 6583a0d (branch tansaku-layout, Yomikata PR #40 on #39 on #37 on text-codes, not merged
-yet), tools/tests/layout-vectors/, and flag-mask.json from commit a925743 (branch suikoden2-table). Its README
-follows.
+Copied unmodified from Yomikata, commit 92b57f6 (branch all-open, Yomikata's trial branch of the unmerged
+layout PRs), tools/tests/layout-vectors/, flag-mask.json included. Its README follows.
 
 # Layout conformance vectors
 
