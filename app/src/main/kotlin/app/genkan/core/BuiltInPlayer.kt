@@ -98,6 +98,32 @@ class BuiltInPlayer @Inject constructor() {
         } catch (e: RemoteException) {
             null
         } ?: return null
+        return bitmapOf(bundle)
+    }
+
+    /**
+     * One moment of the game: the frame drawn and [range] of its memory (the game's own
+     * addresses) as they were right after it, nothing run in between. The memory passes through
+     * [file] (in the snapshot folder), which is gone after. Null when the player can't.
+     */
+    fun moment(range: LongRange, file: java.io.File): Pair<Bitmap?, ByteArray>? {
+        val game = _game.value ?: return null
+        val length = (range.last - range.first + 1).toInt()
+        return try {
+            if (!game.session.captureTo(file.absolutePath, range.first - game.core.ramBase, length)) return null
+            val ram = file.readBytes()
+            val frame = game.session.keptFrame()?.let(::bitmapOf)
+            frame to ram
+        } catch (e: RemoteException) {
+            null
+        } catch (e: java.io.IOException) {
+            null
+        } finally {
+            file.delete()
+        }
+    }
+
+    private fun bitmapOf(bundle: android.os.Bundle): Bitmap? {
         val width = bundle.getInt(FRAME_WIDTH)
         val height = bundle.getInt(FRAME_HEIGHT)
         val pixels = bundle.getParcelable(FRAME_PIXELS, SharedMemory::class.java) ?: return null

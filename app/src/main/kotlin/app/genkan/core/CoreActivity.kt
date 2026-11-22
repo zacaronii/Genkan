@@ -66,6 +66,11 @@ class CoreActivity : ComponentActivity() {
 
     private var selectDown = false
     private var lowerScreen: LowerScreen? = null
+    /**
+     * A capture waiting for its frame (see captureTo), run on the emulation thread after each
+     * frame until it says it's done: the frame just drawn and the memory then are one moment.
+     */
+    @Volatile private var capture: (() -> Boolean)? = null
     /** The overlay over the game, for a core with one picture (not yet a DS's two screens). */
     private var overlay: OverlayView? = null
 
@@ -125,7 +130,10 @@ class CoreActivity : ComponentActivity() {
             this@CoreActivity.overlay?.let { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
         })
         retroView.requestFocus()
-        retroView.afterFrame = { layoutWatch.afterFrame() }
+        retroView.afterFrame = {
+            layoutWatch.afterFrame()
+            capture?.let { if (it()) capture = null }
+        }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
         }
@@ -253,6 +261,45 @@ class CoreActivity : ComponentActivity() {
             }
         }
 
+        override fun captureTo(path: String, address: Long, length: Int): Boolean {
+            // Only into Genkan's own snapshot folder, which both processes share.
+            val file = java.io.File(path)
+            if (file.parentFile?.canonicalPath != java.io.File(filesDir, "yomikata-snapshots").canonicalPath) return false
+            if (length <= 0) return false
+            val ram = ByteArray(length)
+            val done = CountDownLatch(1)
+            GenkanTap.requestFrame()
+            capture = capture@{
+                // Not the kept frame yet: the request came mid-frame. The next one is.
+                if (GenkanTap.frameSize() == null) return@capture false
+                // The emulation thread waits here, so nothing moves while memory is copied.
+                var at = 0
+                val chunk = ByteArray(CAPTURE_CHUNK)
+                while (at < length) {
+                    val n = minOf(CAPTURE_CHUNK, length - at)
+                    if (GenkanTap.readMemory(address + at, chunk, n)) chunk.copyInto(ram, at, 0, n)
+                    at += n
+                }
+                done.countDown()
+                true
+            }
+            if (!done.await(CAPTURE_WAIT_MS, TimeUnit.MILLISECONDS)) {
+                // A paused game draws no frame: nothing was taken.
+                capture = null
+                return false
+            }
+            return try {
+                file.writeBytes(ram)
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "No capture: $e")
+                file.delete()
+                false
+            }
+        }
+
+        override fun keptFrame(): Bundle? = keptFrameBundle(scaled = false)
+
         override fun readVideo(offset: Long, size: Int): ByteArray? {
             if (size !in 1..MAX_READ) return null
             val out = ByteArray(size)
@@ -372,6 +419,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_PLATFORM = "platform"
         private const val MAX_READ = 64 * 1024
         private const val FRAME_WAIT_MS = 500L
+        private const val CAPTURE_WAIT_MS = 2_000L
+        private const val CAPTURE_CHUNK = 1 shl 20
         private const val AUDIO_EVERY_MS = 100L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L

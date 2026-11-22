@@ -36,4 +36,14 @@ interface ICoreSession {
 
     /** The lines to box over the game (ScreenText's JSON); blank or "[]": none. */
     oneway void showOverlay(String screenTextJson) = 10;
+
+    /**
+     * One moment of the game, whole: the next frame is kept, and before another runs, length
+     * bytes of memory from address go into the file at path (in the snapshot folder; what can't
+     * be read stays zeros). Whether it was taken; keptFrame() then gives that frame.
+     */
+    boolean captureTo(String path, long address, int length) = 11;
+
+    /** The frame the last captureTo kept, at the core's own size, as frame() gives it, or null. */
+    Bundle keptFrame() = 12;
 }

@@ -201,6 +201,7 @@ class BuiltInText @Inject constructor(
         override fun vram() = player.videoRam()
         override fun state(file: java.io.File) = player.saveState(file)
         override fun screen() = player.frame(native = true) ?: player.frame()
+        override fun moment(ram: app.genkan.memory.MainRam, scratch: java.io.File) = player.moment(ram.range, scratch)
     }
 
     /** The table reader for each game key that has one. */
