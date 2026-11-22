@@ -63,4 +63,22 @@ class PlayTimeTest {
         val events = listOf(e(-5_000, RESUMED), e(1_000, RESUMED), e(11_000, PAUSED), e(60_000, RESUMED))
         assertEquals(Measured(11_000, 10_000), PlayTime.measure(0, 50_000, emu, events))
     }
+
+    @Test
+    fun `with classes, only those activities of the package count`() {
+        // The built-in player: Genkan's launcher resumes for a moment mid-game, the game's own
+        // activity is stopped and resumed again (a new instance), then the game ends.
+        val events = listOf(
+            e(1_000, RESUMED, pkg = "app.genkan", cls = "Core"),
+            e(10_000, RESUMED, pkg = "app.genkan", cls = "Home"),
+            e(10_000, STOPPED, pkg = "app.genkan", cls = "Core"),
+            e(10_100, PAUSED, pkg = "app.genkan", cls = "Home"),
+            e(10_100, RESUMED, pkg = "app.genkan", cls = "Core"),
+            e(55_000, PAUSED, pkg = "app.genkan", cls = "Core"),
+            e(55_000, RESUMED, pkg = "app.genkan", cls = "Home"),
+        )
+        assertEquals(Measured(55_000, 53_900), PlayTime.measure(0, 90_000, "app.genkan", events, setOf("Core")))
+        // Without the filter the launcher's time after the game counts too.
+        assertEquals(Measured(90_000, 89_000), PlayTime.measure(0, 90_000, "app.genkan", events))
+    }
 }

@@ -20,7 +20,11 @@ data class Measured(val endedAt: Long, val durationMs: Long)
  */
 object PlayTime {
 
-    fun measure(startedAt: Long, now: Long, packageName: String, events: List<UsageSample>?): Measured {
+    /**
+     * [classes]: only these activities of [packageName] count as the game. For the built-in
+     * player, whose package is Genkan's own, so the launcher and the bottom screen don't.
+     */
+    fun measure(startedAt: Long, now: Long, packageName: String, events: List<UsageSample>?, classes: Set<String>? = null): Measured {
         if (events == null) return Measured(now, (now - startedAt).coerceAtLeast(0))
         val resumed = HashSet<String>()
         var stretchStart: Long? = null
@@ -32,6 +36,7 @@ object PlayTime {
             when {
                 event.kind == UsageKind.SCREEN_OFF -> resumed.clear()
                 event.packageName != packageName -> continue
+                classes != null && event.className !in classes -> continue
                 event.kind == UsageKind.RESUMED -> resumed += event.className.orEmpty()
                 else -> resumed -= event.className.orEmpty()
             }
