@@ -1,6 +1,5 @@
 package app.genkan.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -424,7 +423,7 @@ private fun ProgressBar(progress: Float) {
  */
 @Composable
 private fun ScreenshotViewer(screenshots: List<Any>, start: Int, onClose: () -> Unit) {
-    BackHandler(onBack = onClose)
+    BottomBackHandler(onBack = onClose)
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (screenshots.size - 1).coerceAtLeast(0))) { screenshots.size }
     // How far the screenshot has been pulled down; past the threshold, letting go closes it.
     var pulled by remember { mutableFloatStateOf(0f) }

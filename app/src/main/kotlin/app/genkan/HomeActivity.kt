@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
+import app.genkan.ui.BottomBack
 import app.genkan.ui.ScreenLookScreen
 import app.genkan.ui.ScreenLookViewModel
 import app.genkan.ui.SetupViewModel
@@ -99,6 +100,8 @@ class HomeActivity : ComponentActivity() {
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private var askedForNotifications = false
+    /** The Back now held down went to the bottom screen, so its release does too. */
+    private var backToBottom = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -224,6 +227,16 @@ class HomeActivity : ComponentActivity() {
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (HomeKeys.isSystemHome(event)) return super.dispatchKeyEvent(event)
+        // The system's Back (the gesture, on either screen) closes what is open on the bottom
+        // screen first: that window never has focus, so its Back arrives here. The pad's B doesn't,
+        // nor the Back the system makes from a B nothing took (FLAG_FALLBACK). Only a first press
+        // closes: a held Back can't close two viewers.
+        val systemBack = event.keyCode == KeyEvent.KEYCODE_BACK && event.flags and KeyEvent.FLAG_FALLBACK == 0
+        if (systemBack && (BottomBack.active || backToBottom)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backToBottom = BottomBack.handle()
+            else if (event.action == KeyEvent.ACTION_UP) backToBottom = false
+            return true
+        }
         val pad = PadKey.from(event.keyCode)
         val screen = appViewModel.screen.value
         // Forms use Compose focus, whose buttons and text fields answer DPAD_CENTER, not A.

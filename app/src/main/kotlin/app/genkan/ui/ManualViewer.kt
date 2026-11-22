@@ -1,7 +1,6 @@
 package app.genkan.ui
 
 import android.graphics.Bitmap
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -101,7 +100,7 @@ internal object PinchFocus {
  */
 @Composable
 fun ManualViewer(pages: ManualPages, onClose: () -> Unit, listState: LazyListState = rememberLazyListState()) {
-    BackHandler(onBack = onClose)
+    BottomBackHandler(onBack = onClose)
     val close by rememberUpdatedState(onClose)
     val closeAfter = with(LocalDensity.current) { PULL_CLOSE_DISTANCE.toPx() }
     var zoom by remember { mutableFloatStateOf(1f) }
