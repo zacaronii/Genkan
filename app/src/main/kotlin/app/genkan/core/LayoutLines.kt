@@ -132,6 +132,9 @@ class LayoutLines {
         return Step(out, settle = complete == null && unsent() != null)
     }
 
+    /** The current line, if it is [text] and hasn't all gone: sent now, as [settled] would. */
+    fun sendIfCurrent(text: String): Line? = current?.takeIf { it.text == text }?.let { settled() }
+
     /** Nothing changed since a read asked to settle: the current line, if it hasn't all gone. */
     fun settled(): Line? = unsent()?.also {
         sentText = it.text

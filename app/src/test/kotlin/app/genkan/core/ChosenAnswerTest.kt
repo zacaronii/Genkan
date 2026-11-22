@@ -8,7 +8,8 @@ import org.junit.Test
 class ChosenAnswerTest {
     private val answers = listOf("Go to the station", "Stay home")
 
-    private fun asking(cursor: Long?) = LayoutRead(message = "Where to?", choosing = true, choices = answers, choiceCursor = cursor)
+    private fun asking(cursor: Long?) =
+        LayoutRead(message = "Where to?\nGo to the station\nStay home", choosing = true, choices = answers, choiceCursor = cursor)
     private val closed = LayoutRead(message = "You set off.", choosing = false)
 
     @Test
@@ -17,7 +18,7 @@ class ChosenAnswerTest {
         assertNull(chosen.read(asking(-1)))
         assertNull(chosen.read(asking(0)))
         assertNull(chosen.read(asking(1)))
-        assertEquals("Stay home", chosen.read(closed))
+        assertEquals(ChosenAnswer.Taken("Stay home", question = "Where to?"), chosen.read(closed))
         // Once: the next reads give nothing.
         assertNull(chosen.read(closed))
     }
@@ -54,5 +55,38 @@ class ChosenAnswerTest {
     @Test
     fun `the backlog line marks the answer`() {
         assertEquals("→ Stay home", ChosenAnswer.line("Stay home"))
+    }
+
+    /** A layout's reads through the backlog, as the player gives them: each line's text, in order. */
+    private fun backlog(vararg reads: LayoutRead): List<String> {
+        val backlog = LayoutBacklog()
+        return reads.flatMap { read -> backlog.read(read).lines.map { it.text } }
+    }
+
+    @Test
+    fun `a quick answer goes after its question, which hadn't settled yet`() {
+        assertEquals(
+            listOf("Where to?", "→ Stay home", "You set off."),
+            backlog(
+                // The question with its answers up, still settling: nothing has gone yet.
+                asking(1),
+                // The choice closes with the page still up for a frame: the question goes, then the answer.
+                LayoutRead(message = "Where to?\nGo to the station\nStay home", choosing = false),
+                LayoutRead(message = "You set off.", waiting = true),
+            ),
+        )
+    }
+
+    @Test
+    fun `a question that went already isn't sent again, and a line typing after it isn't cut short`() {
+        assertEquals(
+            listOf("Where to?", "→ Go to the station", "You set"),
+            backlog(
+                LayoutRead(message = "Where to?\nGo to the station\nStay home", choosing = true, choices = answers, choiceCursor = 0, waiting = true),
+                // The next line starts typing on the read the choice closes.
+                LayoutRead(message = "You", choosing = false, waiting = false),
+                LayoutRead(message = "You set", waiting = true),
+            ),
+        )
     }
 }
