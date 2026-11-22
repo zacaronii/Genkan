@@ -1,6 +1,8 @@
 package app.genkan.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BottomCycleTest {
@@ -29,5 +31,12 @@ class BottomCycleTest {
             listOf(BottomCycle.READER, BottomCycle.MANUAL, BottomCycle.READER),
             cycle(BottomCycle.READER, ds = false, hasManual = true, steps = 2),
         )
+    }
+
+    @Test
+    fun `stick clicks step the bottom screen only where the console's pad has none`() {
+        listOf("gb", "gbc", "gba", "nds", "psp").forEach { assertTrue(it, BottomCycle.takesStickClicks(it)) }
+        // A PlayStation's DualShock has L3 and R3: the game keeps them, with a manual or without.
+        assertFalse(BottomCycle.takesStickClicks("psx"))
     }
 }
