@@ -181,10 +181,11 @@ internal fun GameShelf(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     staticMedia: Boolean? = null,
+    /** Which shelf this is, for what it remembers; "Continue playing" mixes consoles. */
+    shelfId: Long = games.firstOrNull()?.platformId ?: 0L,
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
-    val shelfId = games.first().platformId
     val spec = GameCase.specFor(games.first().platformSlug)
     val local = LocalShelves.isLocal(games.first())
 
@@ -300,7 +301,8 @@ internal fun GameShelf(
                         } else {
                             ShelfCase(
                                 game = game,
-                                spec = spec,
+                                // Each its own console's case, for a shelf of several consoles.
+                                spec = GameCase.specFor(game.platformSlug),
                                 maxWidth = maxCaseWidth,
                                 maxHeight = maxCaseHeight,
                                 art = art,
