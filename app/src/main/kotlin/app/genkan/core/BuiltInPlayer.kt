@@ -13,11 +13,19 @@ import app.genkan.memory.MemorySource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /** A game running in the built-in player, as the reader's process sees it. */
-data class CoreGame(val session: ICoreSession, val romId: Long, val core: CoreDef)
+/** [look]: what the player draws the game with now; [kept]: the look the game would start with next time. */
+data class CoreGame(
+    val session: ICoreSession,
+    val romId: Long,
+    val core: CoreDef,
+    val look: ScreenLook = ScreenLook.DEFAULT,
+    val kept: ScreenLook = look,
+)
 
 /**
  * The reader's link to the built-in player, which runs in its own process (cores aren't made to
@@ -30,13 +38,13 @@ class BuiltInPlayer @Inject constructor() {
     private val _game = MutableStateFlow<CoreGame?>(null)
     val game: StateFlow<CoreGame?> = _game.asStateFlow()
 
-    fun attach(session: ICoreSession, romId: Long, core: CoreDef) {
-        val game = CoreGame(session, romId, core)
+    fun attach(session: ICoreSession, romId: Long, core: CoreDef, look: ScreenLook = ScreenLook.DEFAULT) {
+        val game = CoreGame(session, romId, core, look)
         try {
             session.asBinder().linkToDeath(object : IBinder.DeathRecipient {
                 override fun binderDied() {
                     Log.i(TAG, "The player's process ended")
-                    _game.compareAndSet(game, null)
+                    _game.update { if (it?.session == session) null else it }
                 }
             }, 0)
         } catch (e: RemoteException) {
@@ -88,6 +96,22 @@ class BuiltInPlayer @Inject constructor() {
         _game.value?.session?.watchLayout(layoutJson, tableText, entryJson.toString()) == true
     } catch (e: RemoteException) {
         false
+    }
+
+    /** Draws the running game with [look] for the rest of this play; nothing is saved. */
+    fun setLook(look: ScreenLook) {
+        val game = _game.value ?: return
+        try {
+            game.session.setLook(look.name)
+            _game.compareAndSet(game, game.copy(look = look))
+        } catch (e: RemoteException) {
+            Log.w(TAG, "Player unreachable: $e")
+        }
+    }
+
+    /** The look on screen is now the game's own ([ScreenLooks.setGame] saved it). */
+    fun lookKept() {
+        _game.update { it?.copy(kept = it.look) }
     }
 
     /** Asks the player to save and close its game. */

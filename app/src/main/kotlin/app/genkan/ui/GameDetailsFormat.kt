@@ -180,6 +180,10 @@ object GameDetailsFormat {
         }
     }
 
+    /** The look button's words: the game's own look, or its console's. */
+    fun lookLabel(look: GameLook): String =
+        look.own?.let { "Look: ${it.label}" } ?: "Look: console's (${look.console.label})"
+
     private fun shortTime(at: Long): String = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
 
     private fun sizeSuffix(bytes: Long): String = when {

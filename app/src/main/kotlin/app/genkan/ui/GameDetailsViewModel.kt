@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.genkan.core.CoreCatalog
 import app.genkan.core.PlayerSettings
+import app.genkan.core.ScreenLook
+import app.genkan.core.ScreenLooks
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
@@ -83,7 +85,12 @@ data class GameDetails(
     val lookups: GameLookupTotals = GameLookupTotals(0, 0),
     /** How this build would read its text, once it has run and the catalog knows it. */
     val textSource: TextSource? = null,
+    /** How the built-in player draws it, when the player is on and runs its console. */
+    val look: GameLook? = null,
 )
+
+/** A game's own look in the built-in player ([own], null: its console's) and its console's. */
+data class GameLook(val own: ScreenLook?, val console: ScreenLook)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -99,6 +106,7 @@ class GameDetailsViewModel @Inject constructor(
     private val yomikataIds: YomikataIds,
     private val catalog: YomikataCatalog,
     private val playerSettings: PlayerSettings,
+    private val screenLooks: ScreenLooks,
     saveSync: SaveSync,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -137,8 +145,8 @@ class GameDetailsViewModel @Inject constructor(
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
                 // Favourite, and how its text would be read (the cached catalog only, off the main thread).
-                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game)) { f, t -> f to t },
-            ) { p, r, d, s, f -> GameDetails(focus, p, r.first, d, s, art, f.first, r.second, f.second) }
+                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game)) { f, t, l -> Triple(f, t, l) },
+            ) { p, r, d, s, f -> GameDetails(focus, p, r.first, d, s, art, f.first, r.second, f.second, f.third) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -261,6 +269,22 @@ class GameDetailsViewModel @Inject constructor(
                     withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn) }
                 }
         }
+
+    private fun lookOf(game: GameEntity) =
+        if (LocalShelves.isLocal(game) || CoreCatalog.forPlatform(game.platformSlug) == null) {
+            flowOf(null)
+        } else {
+            combine(playerSettings.enabled, screenLooks.game(game.id), screenLooks.console(game.platformSlug)) { on, own, console ->
+                if (on) GameLook(own, console) else null
+            }
+        }
+
+    /** The game's look steps once: its console's, then each look, then its console's again. */
+    fun stepLook() {
+        val details = details.value ?: return
+        val look = details.look ?: return
+        viewModelScope.launch { screenLooks.setGame(details.focus.game.id, ScreenLook.nextOverride(look.own)) }
+    }
 
     private fun artFor(game: GameEntity): GameArt {
         val baseUrl = session.currentAccount()?.baseUrl
