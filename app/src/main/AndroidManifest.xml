@@ -118,7 +118,8 @@
             android:launchMode="singleTask"
             android:process=":core"
             android:screenOrientation="sensorLandscape"
-            android:taskAffinity="app.genkan.core" />
+            android:taskAffinity="app.genkan.core"
+            android:theme="@style/Theme.Genkan.Core" />
 
         <service
             android:name=".core.CoreHostService"

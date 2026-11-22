@@ -5,6 +5,16 @@
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
 
+    <!--
+        The built-in player: black from the first moment. The system's starting window (with the
+        app's icon on Android 12 and up) would flash between the insert animation and the game.
+    -->
+    <style name="Theme.Genkan.Core" parent="Theme.Genkan">
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <!-- Invisible, untouchable, no animation: exists only to pull WM focus to its display. -->
     <style name="Theme.Genkan.FocusDirector" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowNoDisplay">false</item>
