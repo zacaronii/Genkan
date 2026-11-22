@@ -327,6 +327,8 @@ internal fun GameShelf(
                                 spine = artModel(game.box2dSidePath),
                                 logo = artModel(game.logoPath),
                                 physical = artModel(game.physicalPath),
+                                front = artModel(game.box2dPath),
+                                back = artModel(game.box2dBackPath),
                             )
                         }
                         // Decided per game: "Continue playing" mixes PC games with consoles'.
@@ -335,9 +337,9 @@ internal fun GameShelf(
                         } else if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
                             // Debug builds' full-box prototype: the focused game as a box from its scans.
                             FullBox(
-                                front = artModel(game.box2dPath),
-                                spine = artModel(game.box2dSidePath),
-                                back = artModel(game.box2dBackPath),
+                                front = art.front,
+                                spine = art.spine,
+                                back = art.back,
                                 maxWidth = maxCaseWidth,
                                 maxHeight = maxCaseHeight,
                                 angle = fullBoxAngle,
@@ -430,7 +432,15 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
  * changed skips recomposition.
  */
 @Immutable
-private data class CaseArt(val cover: Any?, val spine: Any?, val logo: Any?, val physical: Any?)
+private data class CaseArt(
+    val cover: Any?,
+    val spine: Any?,
+    val logo: Any?,
+    val physical: Any?,
+    /** The box's front and back scans, for the full-box prototype. */
+    val front: Any? = null,
+    val back: Any? = null,
+)
 
 /** The proportions of a case's parts, as shares of its width, per [CaseStyle]. */
 private class CaseParts(val corner: Float, val spine: Float, val frame: Float, val plastic: Boolean)
