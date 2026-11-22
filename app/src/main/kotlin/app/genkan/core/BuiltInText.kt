@@ -103,16 +103,20 @@ class BuiltInText @Inject constructor(
     val layoutActive: StateFlow<Boolean> = _layoutActive.asStateFlow()
 
     /**
-     * Once the game's id is known (learned on an earlier play, or read from its RAM), its catalog
+     * Once the game's id is known (read from its RAM, or [GameId.choose]'s stored one), its catalog
      * entry's layout (if it has one) is read by the player between frames. Tries for a while: a
      * game sets its memory up as it boots.
      */
     private suspend fun watchLayout() {
         val game = session.game.value
-        val learned = game.rommRomId?.let { yomikataIds.idFor(it).first() }
-        repeat(LAYOUT_TRIES) {
+        val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
+        repeat(LAYOUT_TRIES) { attempt ->
             val id = withContext(Dispatchers.IO) {
-                ids[game.key] ?: learned ?: player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } }
+                ids[game.key] ?: GameId.choose(
+                    ram = player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } },
+                    stored = stored,
+                    attempt = attempt,
+                )
             }
             if (id != null) {
                 ids[game.key] = id
@@ -308,4 +312,15 @@ class BuiltInText @Inject constructor(
         /** A run found in more places than this says nothing about where the line is. */
         const val MAX_PLACES = 3
     }
+}
+
+/** Which id a game is read as, while the player looks for it. */
+internal object GameId {
+    /**
+     * The id in the game's RAM wins: a multi-disc game is one ROM in RomM and each disc names
+     * itself, and a stored id may be stale. The one stored from an earlier play ([stored]) stands
+     * in only when RAM shows none, and only from the second try ([attempt] 1), so a disc's own id
+     * has a first chance to appear.
+     */
+    fun choose(ram: String?, stored: String?, attempt: Int): String? = ram ?: stored?.takeIf { attempt >= 1 }
 }
