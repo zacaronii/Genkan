@@ -140,6 +140,7 @@ fun LibraryContent(
         LibraryBody(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
             onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
+            order.downloadedOnly,
         )
         if (orderPanel != null) OrderPanelCard(order, orderPanel, onOrder, onToggleOrderPanel, Modifier.align(Alignment.TopEnd))
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
@@ -164,9 +165,10 @@ private fun LibraryBody(
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
     favourites: Set<Long>,
+    downloadedOnly: Boolean,
 ) {
     if (view == LibraryView.SHELF) {
-        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites)
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly)
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -195,7 +197,7 @@ private fun LibraryBody(
             Box(Modifier.weight(1f)) {
                 if (platforms.isEmpty()) {
                     EmptyLibrary(sync)
-                } else if (games.isEmpty() && (platforms.getOrNull(focus.platformIndex)?.id ?: 0) > 0) {
+                } else if (downloadedOnly && games.isEmpty() && (platforms.getOrNull(focus.platformIndex)?.id ?: 0) > 0) {
                     NothingDownloaded()
                 } else {
                     GameGrid(
@@ -267,6 +269,7 @@ private fun ShelfLibrary(
     onToggleView: () -> Unit,
     staticMedia: Boolean?,
     favourites: Set<Long>,
+    downloadedOnly: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -286,8 +289,9 @@ private fun ShelfLibrary(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 platforms.isEmpty() -> EmptyLibrary(sync)
-                // A console with nothing shown has nothing downloaded under "downloaded only".
-                games.isEmpty() -> platforms.getOrNull(focus.platformIndex)?.takeIf { it.id > 0 }?.let { NothingDownloaded() }
+                // Under "downloaded only", a console with nothing shown has nothing downloaded;
+                // otherwise an empty list (before the first query returns) draws nothing.
+                games.isEmpty() -> if (downloadedOnly) platforms.getOrNull(focus.platformIndex)?.takeIf { it.id > 0 }?.let { NothingDownloaded() }
                 else -> GameShelf(
                     games = games,
                     focusedIndex = focus.gameIndex,

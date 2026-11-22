@@ -56,3 +56,28 @@ object OrderPanel {
         else -> order.copy(downloadedOnly = !order.downloadedOnly)
     }
 }
+
+/**
+ * The game the focus stays on while a new order rearranges a console's shelf. It lasts only as
+ * long as its change: the next arrangement takes it, and closing the panel or moving the focus
+ * drops it, so an arrangement that never changed can't pull the focus back later.
+ */
+class FocusKeeper {
+    private var id: Long? = null
+
+    /** Keep the focus on [game] through the next arrangement. */
+    fun keep(game: Long?) {
+        id = game
+    }
+
+    fun drop() {
+        id = null
+    }
+
+    /** Where the focus goes in a new arrangement [games]: the kept game's place, the first when it's hidden, or null when nothing is kept. */
+    fun place(games: List<GameEntity>): Int? {
+        val kept = id ?: return null
+        id = null
+        return games.indexOfFirst { it.id == kept }.takeIf { it >= 0 } ?: 0
+    }
+}

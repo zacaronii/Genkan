@@ -53,4 +53,22 @@ class LibraryOrderTest {
         assertEquals(false, OrderPanel.change(OrderPanel.change(start, 1, 1), 1, -1).downloadedOnly)
         assertEquals(LibrarySort.TITLE, LibrarySort.parse("nonsense"))
     }
+
+    @Test
+    fun `the kept focus lasts only for its own change`() {
+        val keeper = FocusKeeper()
+        // A new order that moves the games: the focus follows its game.
+        keeper.keep(9)
+        assertEquals(1, keeper.place(listOf(alpha, beta, gamma)))
+        // Taken once: a later arrangement doesn't move the focus.
+        assertEquals(null, keeper.place(listOf(beta, alpha)))
+        // A change that gave an equal list (no new arrangement), then the panel closed: a much
+        // later arrangement, from a download or a sync, leaves the focus where the player put it.
+        keeper.keep(5)
+        keeper.drop()
+        assertEquals(null, keeper.place(listOf(gamma, alpha)))
+        // A game the filter hid: the first place.
+        keeper.keep(7)
+        assertEquals(0, keeper.place(listOf(alpha, beta)))
+    }
 }
