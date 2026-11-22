@@ -35,7 +35,19 @@ data class LayoutRead(
     /** The message as far as it has typed out: [message] without row breaks, first [shown] characters. */
     val onScreen: String? = null,
     val errors: Map<String, String> = emptyMap(),
-)
+) {
+    /**
+     * Waiting for a press on a line. Genkan's own rule, not the format's: a window can read as
+     * waiting for a frame or two as it opens, with nothing typed in it yet, and that waits on nothing.
+     */
+    val waitingOnLine: Boolean get() = waiting == true && !message.isNullOrBlank()
+
+    /**
+     * A question on screen. Genkan's own rule, not the format's: `choosing` can read true as any
+     * window opens, before its rows are typed, and with no answers to choose from it is no question.
+     */
+    val asking: Boolean get() = choosing == true && !choices.isNullOrEmpty()
+}
 
 /**
  * The Kotlin reader for an entry's `layouts` (Yomikata docs/format.md, Layouts): where a game
@@ -97,7 +109,8 @@ object Layouts {
 
     private fun numberOk(spec: JSONObject?, keys: Set<String>): Boolean =
         spec != null && spec.keySet().all { it in keys } && spec.optString("type", "u8") in SIZES &&
-            spec.optString("counts", "bytes") in setOf("bytes", "characters")
+            spec.optString("counts", "bytes") in setOf("bytes", "characters") &&
+            (!spec.has("mask") || spec.opt("mask").let { (it is Int && it >= 0) || (it is Long && it >= 0) })
 
     private fun textOk(spec: JSONObject): Boolean {
         if (!spec.keySet().all { it in TEXT_KEYS } || spec.optString("charset") !in CODECS.keys + "table") return false
@@ -126,7 +139,7 @@ object Layouts {
     }
 
     private val WHERE = setOf("address", "base", "offsets")
-    private val NUMBER_KEYS = WHERE + setOf("type", "equals")
+    private val NUMBER_KEYS = WHERE + setOf("type", "equals", "mask")
     private val LENGTH_KEYS = WHERE + setOf("type", "counts")
     private val TEXT_KEYS = WHERE + setOf("charset", "max_bytes", "terminator", "length", "rows", "pages", "codes", "when", "cleanup")
     private val LEAD = Regex("([0-9A-Fa-f]{2}){1,4}")
@@ -305,7 +318,8 @@ object Layouts {
         }
 
         fun flag(spec: JSONObject): Boolean {
-            val value = int(spec)
+            // A mask keeps only those bits, of the value as stored: an s8's -1 under 3 is 3.
+            val value = if (spec.has("mask")) int(spec) and spec.getLong("mask") else int(spec)
             return if (spec.has("equals")) value == spec.getLong("equals") else value != 0L
         }
 

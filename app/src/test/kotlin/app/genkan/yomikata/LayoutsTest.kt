@@ -141,7 +141,7 @@ class LayoutsTest {
     fun `a layout with anything unknown is passed over`() {
         val known = JSONObject("""{"poll": "frame", "message": {"address": "0x0", "charset": "utf16le", "max_bytes": 8,
             "rows": {"count": 2, "stride": 4, "lengths": {"address": "0x10", "counts": "characters"}},
-            "when": {"address": "0x20", "equals": 2}}, "waiting": {"address": "0x30"}}""")
+            "when": {"address": "0x20", "equals": 2, "mask": 3}}, "waiting": {"address": "0x30", "mask": 3}}""")
         assertTrue(Layouts.understood(known))
         val paged = JSONObject(known.toString()).also {
             it.getJSONObject("message").remove("rows")
@@ -156,6 +156,8 @@ class LayoutsTest {
             changed { it.getJSONObject("message").getJSONObject("rows").getJSONObject("lengths").put("counts", "glyphs") },
             changed { it.getJSONObject("message").put("charset", "big5") },
             changed { it.getJSONObject("waiting").put("type", "u64") },
+            // A mask is a whole number, not below zero.
+            *listOf("-1", "1.5", "\"3\"").map { mask -> changed { it.getJSONObject("waiting").put("mask", JSONObject("""{"m": $mask}""").get("m")) } }.toTypedArray(),
             // `counts` belongs to lengths, not to a flag.
             changed { it.getJSONObject("waiting").put("counts", "characters") },
             // Pages and rows never go together, and pages has exactly a break and a cursor.
@@ -183,6 +185,16 @@ class LayoutsTest {
         }
         // The next layout the reader knows is picked instead.
         assertEquals(known, Layouts.pick(listOf(unknown[0], known), null))
+    }
+
+    @Test
+    fun `a window waiting or choosing with nothing in it waits on nothing and asks nothing`() {
+        assertEquals(false, LayoutRead(message = "", waiting = true).waitingOnLine)
+        assertEquals(true, LayoutRead(message = "「はい」", waiting = true).waitingOnLine)
+        assertEquals(false, LayoutRead(choosing = true, choices = emptyList()).asking)
+        assertEquals(false, LayoutRead(choosing = true).asking)
+        assertEquals(true, LayoutRead(choosing = true, choices = listOf("はい", "いいえ")).asking)
+        assertEquals(false, LayoutRead(choosing = false, choices = listOf("はい")).asking)
     }
 
     @Test
