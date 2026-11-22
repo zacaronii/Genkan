@@ -52,9 +52,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -307,7 +307,10 @@ internal fun GameShelf(
                         val select = Modifier
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
                             // For accessibility (and device tests): each case is its game, the focused one selected.
-                            .semantics {
+                            // Cleared and set, not added to: the title and art under the case would
+                            // otherwise merge in, and Compose then hands the description to a node of
+                            // its own beside the clickable one.
+                            .clearAndSetSemantics {
                                 contentDescription = game.name
                                 selected = index == focused
                             }

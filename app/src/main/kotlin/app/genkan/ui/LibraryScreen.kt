@@ -40,9 +40,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -558,7 +558,9 @@ private fun GameCard(game: GameEntity, cover: Any?, download: DownloadEntity?, f
         Modifier
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             // For accessibility (and device tests): the card is its game, the focused one selected.
-            .semantics(mergeDescendants = true) {
+            // Cleared and set: the card's title and badges under it would otherwise merge in, and
+            // Compose then hands the description to a node of its own beside the clickable one.
+            .clearAndSetSemantics {
                 contentDescription = game.name
                 selected = focused
             },
