@@ -12,7 +12,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
@@ -71,8 +74,6 @@ private const val SHARP_ZOOM = 1.5f
 /** How far the manual is pulled down from its first page before letting go closes it. */
 private val PULL_CLOSE_DISTANCE = 96.dp
 
-/** Room above the first page for the Close button (about 36 dp) and its 12 dp margin. */
-private val CLOSE_CLEARANCE = 56.dp
 
 /**
  * Extra space under the last page while zoomed, in pixels. The list is scaled from its top
@@ -155,75 +156,81 @@ fun ManualViewer(
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF2A2A30))) {
-        val widthPx = constraints.maxWidth
-        val renderWidth = if (zoom > SHARP_ZOOM) widthPx * 2 else widthPx
-        val endPadding = with(LocalDensity.current) { zoomedEndPadding(constraints.maxHeight, zoom).toDp() }
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(top = CLOSE_CLEARANCE, bottom = 8.dp + endPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(pull)
-                .pointerInput(widthPx) {
-                    // Two fingers zoom and pan; while zoomed, one finger's sideways movement pans
-                    // too. Seen before the list, so a pinch never scrolls it; one finger's vertical
-                    // movement is left to the list.
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val pinch = event.changes.count { it.pressed } >= 2
-                            if (pinch) {
-                                // Zoom about the fingers: what is under them stays under them.
-                                val next = (zoom * event.calculateZoom()).coerceIn(1f, MAX_ZOOM)
-                                val focus = event.calculateCentroid()
-                                if (next != zoom && focus.isSpecified) {
-                                    shiftX = PinchFocus.shift(shiftX, zoom, next, focus.x, widthPx / 2f)
-                                    listState.dispatchRawDelta(PinchFocus.scroll(zoom, next, focus.y))
-                                }
-                                zoom = next
-                            }
-                            // A zoomed page can move sideways until its edge meets the screen's.
-                            val limit = widthPx * (zoom - 1f) / 2f
-                            val dx = if (pinch) event.calculatePan().x else event.changes.first().positionChange().x
-                            shiftX = (shiftX + dx).coerceIn(-limit, limit)
-                            if (pinch) event.changes.forEach { it.consume() }
-                        } while (event.changes.any { it.pressed })
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = {
-                        zoom = if (zoom > 1f) 1f else 2f
-                        shiftX = 0f
-                    })
-                }
-                .graphicsLayer {
-                    scaleX = zoom
-                    scaleY = zoom
-                    translationX = shiftX
-                    translationY = pulled
-                    transformOrigin = TransformOrigin(0.5f, 0f)
-                },
+    Column(Modifier.fillMaxSize().background(Color(0xFF2A2A30))) {
+        // A bar of its own, so where you are and the way out never sit over a page.
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(pages.pageSizes.size) { index ->
-                val size = pages.pageSizes[index]
-                ManualPage(pages, index, size.width.toFloat() / size.height.coerceAtLeast(1), renderWidth, recycler)
-            }
-        }
-        Text(
-            "page ${shownPage + 1} / ${pages.pageSizes.size}",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
-                .background(Color(0xCC000000), RoundedCornerShape(50))
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-        )
-        Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) {
+            Text(
+                "page ${shownPage + 1} / ${pages.pageSizes.size}",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                modifier = Modifier
+                    .background(Color(0xCC000000), RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
             Chip(closeLabel, onClose)
+        }
+        // Clipped, so a zoomed or pulled page stays under the bar.
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+            val widthPx = constraints.maxWidth
+            val renderWidth = if (zoom > SHARP_ZOOM) widthPx * 2 else widthPx
+            val endPadding = with(LocalDensity.current) { zoomedEndPadding(constraints.maxHeight, zoom).toDp() }
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + endPadding),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(pull)
+                    .pointerInput(widthPx) {
+                        // Two fingers zoom and pan; while zoomed, one finger's sideways movement pans
+                        // too. Seen before the list, so a pinch never scrolls it; one finger's vertical
+                        // movement is left to the list.
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val pinch = event.changes.count { it.pressed } >= 2
+                                if (pinch) {
+                                    // Zoom about the fingers: what is under them stays under them.
+                                    val next = (zoom * event.calculateZoom()).coerceIn(1f, MAX_ZOOM)
+                                    val focus = event.calculateCentroid()
+                                    if (next != zoom && focus.isSpecified) {
+                                        shiftX = PinchFocus.shift(shiftX, zoom, next, focus.x, widthPx / 2f)
+                                        listState.dispatchRawDelta(PinchFocus.scroll(zoom, next, focus.y))
+                                    }
+                                    zoom = next
+                                }
+                                // A zoomed page can move sideways until its edge meets the screen's.
+                                val limit = widthPx * (zoom - 1f) / 2f
+                                val dx = if (pinch) event.calculatePan().x else event.changes.first().positionChange().x
+                                shiftX = (shiftX + dx).coerceIn(-limit, limit)
+                                if (pinch) event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = {
+                            zoom = if (zoom > 1f) 1f else 2f
+                            shiftX = 0f
+                        })
+                    }
+                    .graphicsLayer {
+                        scaleX = zoom
+                        scaleY = zoom
+                        translationX = shiftX
+                        translationY = pulled
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                    },
+            ) {
+                items(pages.pageSizes.size) { index ->
+                    val size = pages.pageSizes[index]
+                    ManualPage(pages, index, size.width.toFloat() / size.height.coerceAtLeast(1), renderWidth, recycler)
+                }
+            }
         }
     }
 }
