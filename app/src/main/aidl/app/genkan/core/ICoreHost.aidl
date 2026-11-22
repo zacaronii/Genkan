@@ -15,4 +15,12 @@ interface ICoreHost {
 
     /** A tap on the overlay: [text] is the line tapped, [offset] the character in it. */
     oneway void overlayTap(String text, int offset) = 4;
+    /** Whether the playing game has a manual, which the stick click can bring to the bottom screen. */
+    boolean hasManual() = 5;
+    /** Whether the manual is open over the reader on the bottom screen. */
+    boolean manualOpen() = 6;
+    /** Opens the manual over the reader (fetched first when it isn't cached), or closes it. */
+    oneway void setManual(boolean open) = 7;
+    /** A Back in the player: closes what is open on the bottom screen first; whether it did. */
+    boolean bottomBack() = 8;
 }

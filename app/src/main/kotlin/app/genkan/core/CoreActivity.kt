@@ -34,6 +34,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -66,6 +67,10 @@ class CoreActivity : ComponentActivity() {
     }
 
     private var selectDown = false
+    /** Whether a Back closes something on the bottom screen first ([closedOnBottom]). */
+    private val backPress = BackPress(::closedOnBottom)
+    /** Whether the stick clicks step the bottom screen: on consoles whose own pad has none. */
+    private var stickCycles = false
     private var lowerScreen: LowerScreen? = null
     /**
      * A capture waiting for its frame (see captureTo), run on the emulation thread after each
@@ -81,6 +86,7 @@ class CoreActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val rom = intent.getStringExtra(EXTRA_ROM)?.let(::File)
         val platform = intent.getStringExtra(EXTRA_PLATFORM).orEmpty()
+        stickCycles = BottomCycle.takesStickClicks(platform)
         val def = CoreCatalog.forPlatform(platform)
         if (rom == null || !rom.isFile || def == null) {
             Log.w(TAG, "Nothing to play: $rom on $platform")
@@ -416,12 +422,71 @@ class CoreActivity : ComponentActivity() {
         finish()
     }
 
+    /**
+     * The system's Back closes what is open on the bottom screen (the manual, in the launcher's
+     * process) before it would quit the game: only a first press, never the Back the system makes
+     * from an unhandled pad button (FLAG_FALLBACK), and the release of a press that closed
+     * something is swallowed so it doesn't quit too. RestrictedApi is lint's false positive, as
+     * in HomeActivity.
+     */
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val fallback = event.flags and KeyEvent.FLAG_FALLBACK != 0
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && backPress.onKey(event.action, event.repeatCount, fallback)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Asks the launcher's process to close what is open on the bottom screen; true when it did.
+     * Waits at most [BOTTOM_BACK_WAIT_MS]: a slow or gone launcher counts as nothing closed, so
+     * Back still quits the game. A launcher that answers later may still close the manual, so that
+     * one press then both closes it and quits: accepted, as better than Back doing nothing.
+     */
+    private fun closedOnBottom(): Boolean {
+        val h = host ?: return false
+        val answer = AtomicBoolean(false)
+        val done = CountDownLatch(1)
+        Thread {
+            answer.set(runCatching { h.bottomBack() }.getOrDefault(false))
+            done.countDown()
+        }.start()
+        return done.await(BOTTOM_BACK_WAIT_MS, TimeUnit.MILLISECONDS) && answer.get()
+    }
+
     /** Select held while Start goes down: save and quit. Seen before the core gets the keys. */
     private fun onPadKey(event: KeyEvent): Boolean {
-        // Either stick's click swaps the DS's lower screen and the reader on the bottom display.
-        val lower = lowerScreen
-        if (lower != null && (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL || event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR)) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) lower.toggle()
+        // Either stick's click steps the bottom display through what it can show (see [BottomCycle]):
+        // on a DS its lower screen, the reader and the manual; elsewhere the reader and the manual.
+        // A game that isn't a DS and has no manual keeps its stick clicks.
+        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL || event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR) {
+            // A PlayStation game's pad has stick clicks of its own: they stay the game's.
+            if (!stickCycles) return false
+            val lower = lowerScreen
+            val h = host
+            val hasManual = h?.let { runCatching { it.hasManual() }.getOrDefault(false) } == true
+            if (lower == null && !hasManual) return false
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                val manualOpen = h?.let { runCatching { it.manualOpen() }.getOrDefault(false) } == true
+                val now = when {
+                    lower?.isShowing == true -> BottomCycle.GAME
+                    manualOpen -> BottomCycle.MANUAL
+                    else -> BottomCycle.READER
+                }
+                when (BottomCycle.next(now, ds = lower != null, hasManual = hasManual)) {
+                    BottomCycle.GAME -> {
+                        if (manualOpen) runCatching { h?.setManual(false) }
+                        lower?.show()
+                    }
+                    BottomCycle.READER -> {
+                        lower?.hide()
+                        if (manualOpen) runCatching { h?.setManual(false) }
+                    }
+                    BottomCycle.MANUAL -> {
+                        lower?.hide()
+                        runCatching { h?.setManual(true) }
+                    }
+                }
+            }
             return true
         }
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
@@ -457,6 +522,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_LOOK = "look"
         private const val MAX_READ = 64 * 1024
         private const val FRAME_WAIT_MS = 500L
+        /** How long Back waits for the launcher to say whether it closed something on the bottom screen. */
+        private const val BOTTOM_BACK_WAIT_MS = 300L
         private const val CAPTURE_WAIT_MS = 2_000L
         private const val CAPTURE_CHUNK = 1 shl 20
         private const val AUDIO_EVERY_MS = 100L
@@ -466,5 +533,59 @@ class CoreActivity : ComponentActivity() {
         private const val MIN_FRAME_SIDE = 720
         @SuppressLint("ClickableViewAccessibility")
         private val ignoreTouches = View.OnTouchListener { _, _ -> true }
+    }
+}
+
+/**
+ * What the bottom display shows during a game in the built-in player, as the stick click steps it
+ * (on consoles without stick clicks of their own, [takesStickClicks]).
+ */
+enum class BottomCycle {
+    /** A DS's lower screen, taking touches for the game. */
+    GAME,
+    READER,
+    MANUAL,
+    ;
+
+    companion object {
+        /** Consoles whose own pad has no stick clicks; a PlayStation's (DualShock) has. */
+        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "nds", "psp")
+
+        /** Whether the stick clicks step the bottom screen for [platform], rather than going to the game. */
+        fun takesStickClicks(platform: String): Boolean = platform in NO_STICK_CLICKS
+
+        /**
+         * After [now]: on a DS ([ds]), its lower screen, the reader, the manual (when the game has
+         * one), and round again; elsewhere the reader and the manual.
+         */
+        fun next(now: BottomCycle, ds: Boolean, hasManual: Boolean): BottomCycle = when (now) {
+            GAME -> READER
+            READER -> if (hasManual) MANUAL else if (ds) GAME else READER
+            MANUAL -> if (ds) GAME else READER
+        }
+    }
+}
+
+/**
+ * What the player does with a system Back: the first press asks [closedOnBottom] (the launcher
+ * closes what is open on the bottom screen); when it closed something, that press's repeats and
+ * release are taken too, so the same press doesn't also quit. A held press's repeats and the Back
+ * the system makes from an unhandled pad button (fallback) never ask.
+ */
+internal class BackPress(private val closedOnBottom: () -> Boolean) {
+    private var taken = false
+
+    /** Whether the Back event ([action], [repeatCount], [fallback]) is taken here; false passes it on (and Back quits). */
+    fun onKey(action: Int, repeatCount: Int, fallback: Boolean): Boolean {
+        if (fallback) return false
+        if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
+            taken = closedOnBottom()
+            return taken
+        }
+        if (action == KeyEvent.ACTION_UP && taken) {
+            taken = false
+            return true
+        }
+        return taken
     }
 }

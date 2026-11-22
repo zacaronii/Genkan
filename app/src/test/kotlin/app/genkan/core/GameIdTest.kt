@@ -22,4 +22,14 @@ class GameIdTest {
     fun `nothing in RAM and nothing stored is no id`() {
         assertNull(GameId.choose(ram = null, stored = null, attempt = 3))
     }
+
+    @Test
+    fun `the id found earlier in this run stands in only from the second try, and RAM's wins over it`() {
+        // The player passes this run's id (else the stored one) as the stand-in.
+        val thisRun = "SLPS-01100"
+        assertNull(GameId.choose(ram = null, stored = thisRun, attempt = 0))
+        assertEquals(thisRun, GameId.choose(ram = null, stored = thisRun, attempt = 1))
+        // Disc 2 started later in the same run.
+        assertEquals("SLPS-01101", GameId.choose(ram = "SLPS-01101", stored = thisRun, attempt = 0))
+    }
 }
