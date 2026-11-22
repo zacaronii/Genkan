@@ -42,23 +42,29 @@ enum class TextSource(val label: String) {
     LAYOUT("Text: layout"),
     /** The game's own character table (memory checked against OCR), with no layout to use. */
     TABLE("Text: table"),
-    /** A PSP hook in PPSSPP. */
+    /** The same, from a table the catalog marks as partial: some characters may not read. */
+    TABLE_PARTIAL("Text: table (partial)"),
+    /** A PSP hook in PPSSPP (the emulator app; the built-in player doesn't hook). */
     HOOK("Text: hook");
 
     companion object {
         /**
          * The source for a game known as [id] (null before it has run), with [entryFor] the
          * cached catalog's entry and [tablesHere] whether an entry's table files are on the
-         * device. Null, no chip, when nothing is known: then OCR reads it.
+         * device. [builtIn] is whether the game starts in the built-in player (the setting is on
+         * and Genkan has a core for its console): only there are layouts and tables read; in an
+         * emulator app only PPSSPP's hooks are. Null, no chip, when nothing applies: then OCR
+         * reads it.
          */
-        fun of(id: String?, entryFor: (String) -> CatalogEntry?, tablesHere: (CatalogEntry) -> Boolean): TextSource? {
+        fun of(id: String?, entryFor: (String) -> CatalogEntry?, tablesHere: (CatalogEntry) -> Boolean, builtIn: Boolean): TextSource? {
             val entry = id?.let(entryFor) ?: return null
+            if (!builtIn) return HOOK.takeIf { entry.platform == "psp" && entry.hooks.isNotEmpty() }
             return when {
                 // The layout the built-in player would pick for this release (and, with a reader
                 // that passes over layouts it doesn't understand, only one it does).
                 Layouts.pick(entry, id) != null -> LAYOUT
-                entry.encoding == "table" && entry.tables.isNotEmpty() && tablesHere(entry) -> TABLE
-                entry.platform == "psp" && entry.hooks.isNotEmpty() -> HOOK
+                entry.encoding == "table" && entry.tables.isNotEmpty() && tablesHere(entry) ->
+                    if (entry.status == "partial") TABLE_PARTIAL else TABLE
                 else -> null
             }
         }

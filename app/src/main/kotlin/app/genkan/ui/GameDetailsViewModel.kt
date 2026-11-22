@@ -3,6 +3,8 @@ package app.genkan.ui
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.genkan.core.CoreCatalog
+import app.genkan.core.PlayerSettings
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.home.LauncherPresence
@@ -96,6 +98,7 @@ class GameDetailsViewModel @Inject constructor(
     private val gameLookups: GameLookupDao,
     private val yomikataIds: YomikataIds,
     private val catalog: YomikataCatalog,
+    private val playerSettings: PlayerSettings,
     saveSync: SaveSync,
     private val session: RomMSession,
     httpClient: OkHttpClient,
@@ -252,9 +255,11 @@ class GameDetailsViewModel @Inject constructor(
         if (LocalShelves.isLocal(game)) {
             flowOf(null)
         } else {
-            yomikataIds.idFor(game.id).map { id ->
-                withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry) { catalog.table(it) != null } }
-            }
+            // The built-in player when it's on and has a core for the console, else the emulator app.
+            combine(yomikataIds.idFor(game.id), playerSettings.enabled) { id, on -> id to (on && CoreCatalog.forPlatform(game.platformSlug) != null) }
+                .map { (id, builtIn) ->
+                    withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn) }
+                }
         }
 
     private fun artFor(game: GameEntity): GameArt {
