@@ -38,6 +38,7 @@ import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Test
@@ -199,6 +200,28 @@ class ScreenshotTest {
             contentAlignment = androidx.compose.ui.Alignment.BottomCenter,
         ) {
             ChoiceList(listOf("もう一度、見てみる", "誰かに相談する", "そのまま帰る"), cursor = 1)
+        }
+    }
+
+    /** A long choice (made-up answers): the list capped at a third of the screen, scrolled to the cursor on the last. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun choiceListLong() = shoot("choice_list_long", BOTTOM_PIXELS) {
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background),
+            contentAlignment = androidx.compose.ui.Alignment.BottomCenter,
+        ) {
+            ChoiceList(
+                listOf(
+                    "もう一度だけ、あの場所に戻ってよく見てみる",
+                    "誰か相談できそうな人がいないか、思い出してみる",
+                    "今日はもう遅いから、いったん家に帰ることにする",
+                    "このまま朝まで、ここで待ってみることにする",
+                    "何も言わずに、その場を離れる",
+                ),
+                cursor = 4,
+                modifier = androidx.compose.ui.Modifier.heightIn(max = maxHeight * 0.33f),
+            )
         }
     }
 

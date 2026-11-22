@@ -45,6 +45,9 @@ import javax.inject.Inject
 data class LineMark(val start: Int, val end: Int, val state: WordMarkState)
 
 /** A word looked up in the backlog: where it starts, and what the dictionaries found there. */
+/** The lookup's line id for answer [index] of a choice on screen: below every backlog id and the overlay's. */
+fun answerLine(index: Int): Long = -100L - index
+
 data class Lookup(val lineId: Long, val start: Int, val result: LookupResult?, val lineText: String = "") {
     /** The characters the longest match covers, for the highlight. */
     val end: Int get() = start + (result?.matchedLength ?: 0)
@@ -169,6 +172,9 @@ class ReaderViewModel @Inject constructor(
         val line = session.lines.value.lastOrNull { text in it.text }
         if (line != null) lookUp(line.id, line.text, line.text.indexOf(text) + offset) else lookUp(SCREEN_LINE, text, offset)
     }
+
+    /** A tap at [offset] in answer [index] of the choice on screen: the answer is looked up as a line of its own. */
+    fun lookUpAnswer(index: Int, text: String, offset: Int) = lookUp(answerLine(index), text, offset)
 
     private fun lookUp(lineId: Long, text: String, offset: Int) {
         if (offset !in text.indices) return

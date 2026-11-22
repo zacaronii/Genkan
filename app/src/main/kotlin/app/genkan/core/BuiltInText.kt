@@ -84,7 +84,12 @@ class BuiltInText @Inject constructor(
     val sampling: kotlinx.coroutines.flow.Flow<Boolean> get() = samples.enabledFlow
 
     /** A choice a layout reads on screen now: its answers, and the row the cursor is on. */
-    data class Choice(val answers: List<String>, val cursor: Int?)
+    data class Choice(val answers: List<String>, val cursor: Int?) {
+        companion object {
+            /** The choice [read] shows, or null: none up, or the read failed (its `when` false, or an error). */
+            fun of(read: LayoutRead?): Choice? = read?.takeIf { it.asking }?.let { Choice(it.choices.orEmpty(), it.choiceCursor?.toInt()) }
+        }
+    }
 
     private val _choice = MutableStateFlow<Choice?>(null)
     /** The choice up now (null: none), while a layout gives the game's text. */
@@ -195,7 +200,7 @@ class BuiltInText @Inject constructor(
             return
         }
         lastRead = read
-        _choice.value = if (read.asking) Choice(read.choices.orEmpty(), read.choiceCursor?.toInt()) else null
+        _choice.value = Choice.of(read)
         settleJob?.cancel()
         val step = layoutLines.read(read)
         step.lines.forEach(::submitLayoutLine)

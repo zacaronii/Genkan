@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -167,6 +168,7 @@ fun ReaderScreen(
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val panelHeight = maxHeight * PANEL_FRACTION
+            val choiceHeight = maxHeight * CHOICE_FRACTION
             val needsChoice = threads.isNotEmpty() && chosen == null
             if (editing != null) {
                 OcrAreaEditor(editing, region, onSave = viewModel::saveArea, onReset = viewModel::resetArea, onCancel = viewModel::closeArea)
@@ -175,10 +177,23 @@ fun ReaderScreen(
             } else {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
-                        Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup, follow = choice != null)
+                        // With a choice's list under it, the lookup panel's room is kept below the list instead.
+                        Backlog(
+                            lines, lookup, if (choice == null) panelHeight else 0.dp, marks,
+                            onTap = viewModel::lookUp, onBackground = viewModel::closeLookup, follow = choice != null,
+                        )
                     }
-                    // A choice on screen: its answers under the backlog, until one is taken.
-                    choice?.let { ChoiceList(it.answers, it.cursor) }
+                    // A choice on screen: its answers under the backlog, until one is taken; a
+                    // word in one is looked up as in a line.
+                    choice?.let {
+                        ChoiceList(
+                            it.answers, it.cursor,
+                            lookup = lookup,
+                            onTapAt = viewModel::lookUpAnswer,
+                            modifier = Modifier.heightIn(max = choiceHeight),
+                        )
+                        if (lookup != null) androidx.compose.foundation.layout.Spacer(Modifier.height(panelHeight))
+                    }
                 }
             }
             lookup?.let { current ->
@@ -194,24 +209,58 @@ fun ReaderScreen(
     }
 }
 
-/** A choice's [answers] as the game lists them, the row the game's cursor is on ([cursor]) marked. */
+/**
+ * A choice's [answers] as the game lists them, the row the game's cursor is on ([cursor]) marked
+ * and kept in view. A tap on a word in an answer looks it up ([onTapAt]: the answer's index and
+ * the offset); the looked-up span ([lookup], on [answerLine]) is highlighted.
+ */
 @Composable
-fun ChoiceList(answers: List<String>, cursor: Int?, modifier: Modifier = Modifier) {
+fun ChoiceList(
+    answers: List<String>,
+    cursor: Int?,
+    modifier: Modifier = Modifier,
+    lookup: Lookup? = null,
+    onTapAt: (Int, String, Int) -> Unit = { _, _, _ -> },
+) {
     val colors = MaterialTheme.colorScheme
-    Column(
-        modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 20.dp, vertical = 12.dp),
+    val listState = rememberLazyListState()
+    LaunchedEffect(cursor, answers.size) {
+        cursor?.takeIf { it in answers.indices }?.let { listState.animateScrollToItem(it) }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxWidth().background(colors.surface),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        answers.forEachIndexed { i, answer ->
+        itemsIndexed(answers) { i, answer ->
             val on = i == cursor
-            Text(
-                answer,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (on) colors.onPrimaryContainer else colors.onSurface,
+            val span = lookup?.takeIf { it.lineId == answerLine(i) && it.lineText == answer }
+            val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
+            val text = buildAnnotatedString {
+                val start = span?.start
+                val end = span?.end?.coerceAtMost(answer.length)
+                if (start == null || end == null || end <= start) {
+                    append(answer)
+                } else {
+                    append(answer.substring(0, start))
+                    withStyle(SpanStyle(background = colors.primary.copy(alpha = 0.35f))) { append(answer.substring(start, end)) }
+                    append(answer.substring(end))
+                }
+            }
+            BasicText(
+                text,
+                style = MaterialTheme.typography.titleMedium.copy(color = if (on) colors.onPrimaryContainer else colors.onSurface),
+                onTextLayout = { layout.value = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) colors.primaryContainer else Color.Transparent)
+                    .pointerInput(answer) {
+                        detectTapGestures { position ->
+                            layout.value?.let { onTapAt(i, answer, it.getOffsetForPosition(position).coerceAtMost(answer.length - 1)) }
+                        }
+                    }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
@@ -411,3 +460,6 @@ private fun LookupPanel(lookup: Lookup, popup: PopupContent?, viewModel: ReaderV
 
 /** Share of the reader the lookup panel takes. */
 private const val PANEL_FRACTION = 0.55f
+
+/** The most of the reader's height a choice's list takes; past that it scrolls. */
+private const val CHOICE_FRACTION = 0.33f

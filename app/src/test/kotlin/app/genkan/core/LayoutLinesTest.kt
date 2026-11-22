@@ -159,4 +159,23 @@ class LayoutLinesTest {
         // The next page is a line again.
         assertEquals(listOf("はい"), texts(lines.read(LayoutRead(message = "はい", waiting = true, choosing = false, choices = emptyList()))))
     }
+
+    @Test
+    fun `a question typed out with its answers goes once, the answers never`() {
+        val answers = listOf("右へ行く", "左へ行く")
+        val sent = mutableListOf<String>()
+        fun step(message: String, waiting: Boolean, choosing: Boolean) {
+            sent += texts(lines.read(LayoutRead(message = message, waiting = waiting, choosing = choosing, choices = if (choosing) answers else emptyList())))
+        }
+        // Typing: the question, then the answers, all before the game says it's a choice.
+        for (typed in listOf("どう", "どうする？", "どうする？\n：右へ", "どうする？\n：右へ行く\n：左へ行く")) step(typed, waiting = false, choosing = false)
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true)
+        lines.settled()?.let { sent += it.text }
+        // The cursor moves (nothing changes in the message), then A: a frame waiting, then cleared.
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = false, choosing = true)
+        step("どうする？\n：右へ行く\n：左へ行く", waiting = true, choosing = false)
+        step("", waiting = false, choosing = false)
+        lines.settled()?.let { sent += it.text }
+        assertEquals(listOf("どうする？"), sent)
+    }
 }
