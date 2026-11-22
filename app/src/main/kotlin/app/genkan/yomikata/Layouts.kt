@@ -152,7 +152,8 @@ object Layouts {
             val script = spec.optJSONObject("script") ?: return false
             if (spec.optString("charset") != "table" || listOf("rows", "pages", "terminator", "length").any(spec::has)) return false
             // open and offset, and optionally texts, whose only value is "rows".
-            if (!script.keySet().containsAll(setOf("open", "offset")) || !setOf("open", "offset", "texts").containsAll(script.keySet())) return false
+            if (!script.keySet().containsAll(setOf("open", "offset")) || !setOf("open", "offset", "texts", "rest").containsAll(script.keySet())) return false
+            if (script.has("rest") && script.opt("rest").let { it !is Int || it !in 1..16 }) return false
             if (script.has("texts") && script.opt("texts") != "rows") return false
             if ((script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
             // The offset counts bytes, or codes of the entry's unit.
@@ -453,7 +454,11 @@ object Layouts {
             }
             val rows = script.optString("texts") == "rows"
             // At or before the script's start there is nothing to read.
-            val texts = if (size > 0) scriptPage(read(start + at - size, size + mark.size), size, mark, { t.isEnd(it) || it in ends }, breaks, rows) else emptyList()
+            val texts = if (size > 0) {
+                scriptPage(read(start + at - size, size + mark.size), size, mark, { t.isEnd(it) || it in ends }, breaks, rows, script.optInt("rest"))
+            } else {
+                emptyList()
+            }
             var text = texts.joinToString("\n") { t.decode(it, unit, controls, codes).trimEnd('\n') }
             for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
             return text
@@ -464,9 +469,30 @@ object Layouts {
          * in one piece, or with [rows] a piece for each of its texts: a text starts after a mark
          * and stops at an end code; a mark right after an end code with no page break before it
          * carries the page on. Nothing when the position isn't in a text, or a text is about to
-         * start a new page. A port of the reference's `_script`.
+         * start a new page. With [rest], a position up to that many codes past an end code is read
+         * as just past it. A port of the reference's `_script`.
          */
-        private fun scriptPage(both: ByteArray, size: Int, mark: ByteArray, isEnd: (String) -> Boolean, breaks: Set<String>, rows: Boolean): List<ByteArray> {
+        private fun scriptPage(
+            read: ByteArray,
+            readSize: Int,
+            mark: ByteArray,
+            isEnd: (String) -> Boolean,
+            breaks: Set<String>,
+            rows: Boolean,
+            /** How many codes past an end code the game may rest while its text stays up (0: none). */
+            rest: Int = 0,
+        ): List<ByteArray> {
+            var both = read
+            var size = readSize
+            // The nearest end code behind the position, k codes back: the position is read as just past it.
+            for (k in 0..(if (rest > 0) rest else -1)) {
+                val at = size - (k + 1) * unit
+                if (at >= 0 && isEnd(hexOf(both, at, unit))) {
+                    size -= k * unit
+                    both = both.copyOf(size + mark.size)
+                    break
+                }
+            }
             val data = both.copyOf(size)
             val ahead = both.copyOfRange(size, both.size)
             fun code(i: Int): String = if (i >= 0 && i + unit <= data.size) hexOf(data, i, unit) else ""

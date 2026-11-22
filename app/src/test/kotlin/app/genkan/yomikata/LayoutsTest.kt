@@ -2,6 +2,7 @@ package app.genkan.yomikata
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -162,6 +163,10 @@ class LayoutsTest {
             it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
         }
         assertTrue(Layouts.understood(scripted))
+        // A script's `rest` is a whole number of codes from 1 to 16.
+        fun rested(rest: Any) = JSONObject(scripted.toString()).also { it.getJSONObject("message").getJSONObject("script").put("rest", rest) }
+        assertTrue(Layouts.understood(rested(1)) && Layouts.understood(rested(16)))
+        for (rest in listOf<Any>(0, 17, -1, 2.5, "2")) assertFalse("rest $rest", Layouts.understood(rested(rest)))
         fun changed(edit: (JSONObject) -> Unit) = JSONObject(known.toString()).also(edit)
         val unknown = listOf(
             changed { it.put("typing_speed", JSONObject()) },
