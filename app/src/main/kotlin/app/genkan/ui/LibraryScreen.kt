@@ -624,7 +624,7 @@ private fun NothingDownloaded() {
  * focused row ([row]) marked. Taps work too: a row is changed by tapping it, Close shuts it.
  */
 @Composable
-private fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrder) -> Unit, onClose: () -> Unit, modifier: Modifier) {
+internal fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrder) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(12.dp)
     Column(
@@ -652,7 +652,28 @@ private fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrder
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
-                Text(if (index == 0) "‹  $value  ›" else value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                if (index == 0) {
+                    // Each arrow steps its own way (the rest of the row steps on, as A does).
+                    Text(
+                        "‹",
+                        Modifier
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, -1)) }
+                            .padding(horizontal = 8.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.onSurface,
+                    )
+                    Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                    Text(
+                        "›",
+                        Modifier
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, 1)) }
+                            .padding(start = 8.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.onSurface,
+                    )
+                } else {
+                    Text(value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
