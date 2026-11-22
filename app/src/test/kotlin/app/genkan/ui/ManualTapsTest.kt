@@ -119,4 +119,27 @@ class ManualTapsTest {
         advanceTimeBy(ManualTaps.STATUS_MS + 1)
         assertEquals(ManualTaps.READING, s.taps.status.value)
     }
+
+    @Test
+    fun `the panel's side is the tap's that started the lookup, not a later miss's`() = runTest {
+        val s = Setup(this)
+        // A word in the lower half: the panel goes on top.
+        s.taps.tap(file, Pages, 0, 225f / 600, 220f / 800, 600, tapY = 0.8f)
+        runCurrent()
+        assertEquals(true, s.taps.onTop.value)
+        // A miss in the upper half leaves it there, over the word it isn't covering.
+        s.taps.tap(file, Pages, 0, 0.5f, 0.9f, 600, tapY = 0.2f)
+        runCurrent()
+        assertEquals(true, s.taps.onTop.value)
+        // So does a page that can't be read.
+        s.engine.fail = true
+        s.taps.tap(file, Pages, 1, 225f / 600, 220f / 800, 600, tapY = 0.2f)
+        runCurrent()
+        assertEquals(true, s.taps.onTop.value)
+        // A word in the upper half: the panel goes below.
+        s.engine.fail = false
+        s.taps.tap(file, Pages, 0, 125f / 600, 220f / 800, 600, tapY = 0.2f)
+        runCurrent()
+        assertEquals(false, s.taps.onTop.value)
+    }
 }

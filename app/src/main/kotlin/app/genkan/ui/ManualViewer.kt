@@ -398,7 +398,7 @@ fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
     val hit by reader.manualTaps.hit.collectAsStateWithLifecycle()
     val lookup by reader.lookup.collectAsStateWithLifecycle()
     val popup by reader.popup.collectAsStateWithLifecycle()
-    var onTop by remember(file) { mutableStateOf(false) }
+    val onTop by reader.manualTaps.onTop.collectAsStateWithLifecycle()
     DisposableEffect(file) {
         onDispose {
             manual.keepPage(file, listState.firstVisibleItemIndex)
@@ -410,16 +410,14 @@ fun PlayManualLayer(manual: PlayManual, reader: ReaderViewModel) {
         onTop = onTop,
         onCloseLookup = reader::closeLookup,
         popup = { DictionaryPopup(popup, reader.dictionaries, reader, Modifier.fillMaxSize()) },
+        status = status,
     ) {
         ManualFile(
             file,
             onClose = manual::closed,
             listState = listState,
             closeLabel = "Back to reader",
-            onTapText = { f, pages, page, x, y, width, tapY ->
-                onTop = panelOnTop(tapY)
-                reader.manualTaps.tap(f, pages, page, x, y, width)
-            },
+            onTapText = reader.manualTaps::tap,
             status = status,
             mark = manualMark(hit, lookup),
         )

@@ -1,12 +1,19 @@
 package app.genkan.ui
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import app.genkan.manual.ManualText
 import app.genkan.ocr.ScreenText
 import kotlinx.coroutines.CoroutineScope
@@ -39,14 +46,24 @@ class ManualTaps(
     /** What a tap is doing, for the manual's bar: reading the page, or why nothing was looked up. */
     val status: StateFlow<String?> = _status.asStateFlow()
 
+    private val _onTop = MutableStateFlow(false)
+    /**
+     * Whether the lookup's panel opens at the top: decided by the tap that started the lookup
+     * ([panelOnTop]), so a tap that misses leaves an open panel where it is.
+     */
+    val onTop: StateFlow<Boolean> = _onTop.asStateFlow()
+
     private val _hit = MutableStateFlow<ManualHit?>(null)
     /** Where the word being looked up is, to box it there; null once that lookup is gone. */
     val hit: StateFlow<ManualHit?> = _hit.asStateFlow()
 
     private var job: Job? = null
 
-    /** A tap on [page] of [file] at ([x], [y]), fractions of the page, rendered [widthPx] wide to read it. */
-    fun tap(file: File, pages: ManualPages, page: Int, x: Float, y: Float, widthPx: Int) {
+    /**
+     * A tap on [page] of [file] at ([x], [y]), fractions of the page, rendered [widthPx] wide to
+     * read it; [tapY] is how far down the manual it was on screen, for the panel's side.
+     */
+    fun tap(file: File, pages: ManualPages, page: Int, x: Float, y: Float, widthPx: Int, tapY: Float = 0f) {
         job?.cancel()
         job = scope.launch {
             if (!text.isRead(file.path, page)) _status.value = READING
@@ -60,7 +77,10 @@ class ManualTaps(
             }
             if (hit == null) return@launch show(NO_TEXT)
             _status.value = null
-            if (lookUp(hit.text, hit.offset)) _hit.value = ManualHit(page, hit)
+            if (lookUp(hit.text, hit.offset)) {
+                _onTop.value = panelOnTop(tapY)
+                _hit.value = ManualHit(page, hit)
+            }
         }
     }
 
@@ -121,7 +141,8 @@ fun panelOnTop(tapY: Float): Boolean = tapY >= 0.5f
 /**
  * The manual with a word's lookup over it: [manual] fills the screen, and while [lookup] is open
  * its panel takes [MANUAL_PANEL_FRACTION] of the height at the top or the bottom ([onTop]), with
- * [popup] inside. Back closes the panel first, then (the manual's own) the manual.
+ * [popup] inside. A panel at the top covers the manual's bar, so its [status] shows just below
+ * the panel instead. Back closes the panel first, then (the manual's own) the manual.
  */
 @Composable
 fun ManualWithLookup(
@@ -129,6 +150,7 @@ fun ManualWithLookup(
     onTop: Boolean,
     onCloseLookup: () -> Unit,
     popup: @Composable () -> Unit,
+    status: String? = null,
     manual: @Composable () -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -145,6 +167,19 @@ fun ManualWithLookup(
                 atTop = onTop,
                 popup = popup,
             )
+            if (onTop && status != null) {
+                Text(
+                    status,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = maxHeight * MANUAL_PANEL_FRACTION + 8.dp)
+                        .background(Color(0xCC000000), RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                )
+            }
         }
     }
 }
