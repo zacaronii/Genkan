@@ -26,7 +26,7 @@ class ScreenTextTest {
 
     @Test
     fun `a tap's share of the box is its share of the line`() {
-        assertEquals(ScreenText.Hit("あいうえおかきくけこ", 0), screen.hit(0.151f, 0.7f))
+        assertEquals(ScreenText.Hit("あいうえおかきくけこ", 0, screen.lines.single()), screen.hit(0.151f, 0.7f))
         // 0.15 + 0.4 * 0.35: the fourth character.
         assertEquals(3, screen.hit(0.29f, 0.7f)?.offset)
         assertEquals(9, screen.hit(0.55f, 0.7f)?.offset)
@@ -69,5 +69,22 @@ class ScreenTextTest {
     fun `it goes to the player and back as JSON`() {
         assertEquals(screen, ScreenText.fromJson(screen.toJson()))
         assertEquals(ScreenText.EMPTY, ScreenText.fromJson(""))
+    }
+
+    @Test
+    fun `a span's box runs between character edges, or an even share without them`() {
+        // Even shares: 0.15 to 0.55 across ten characters, so 0.04 each.
+        val even = screen.lines.single().span(2, 5)
+        assertEquals(0.23f, even.left, 1e-6f)
+        assertEquals(0.35f, even.right, 1e-6f)
+        assertEquals(0.64f, even.top, 1e-6f)
+        assertEquals(0.72f, even.bottom, 1e-6f)
+        // Boxed characters: from the end of the one before to the end of the last.
+        val boxed = ScreenText.Line("あいう", 0.1f, 0.2f, 0.4f, 0.3f, ends = listOf(0 to 0.18f, 1 to 0.29f, 2 to 0.4f))
+        assertEquals(ScreenText.Box(0.18f, 0.2f, 0.29f, 0.3f), boxed.span(1, 2))
+        assertEquals(ScreenText.Box(0.1f, 0.2f, 0.4f, 0.3f), boxed.span(0, 3))
+        // Vertical: along y, across the line's width.
+        val down = ScreenText.Line("あいう", 0.5f, 0.1f, 0.6f, 0.4f, vertical = true, ends = listOf(0 to 0.2f, 1 to 0.3f, 2 to 0.4f))
+        assertEquals(ScreenText.Box(0.5f, 0.2f, 0.6f, 0.3f), down.span(1, 2))
     }
 }

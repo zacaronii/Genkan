@@ -22,10 +22,34 @@ data class ScreenText(val lines: List<Line>) {
         val bottom: Float,
         val vertical: Boolean = false,
         val ends: List<Pair<Int, Float>> = emptyList(),
-    )
+    ) {
+        /**
+         * The box around characters [start] until [end] of [text], as fractions of the frame:
+         * from the end of the character before [start] (the line's start for the first) to the end
+         * of the last one, across the line's whole width. Without character boxes, an even share
+         * of the line per character.
+         */
+        fun span(start: Int, end: Int): Box {
+            val from = start.coerceIn(0, text.length)
+            val to = end.coerceIn(from, text.length)
+            val first = if (vertical) top else left
+            val last = if (vertical) bottom else right
+            fun edgeAfter(count: Int): Float = when {
+                count <= 0 -> first
+                ends.isNotEmpty() -> ends.lastOrNull { it.first < count }?.second ?: first
+                else -> first + (last - first) * count / text.length.coerceAtLeast(1)
+            }
+            val a = edgeAfter(from)
+            val b = if (to >= text.length) last else edgeAfter(to)
+            return if (vertical) Box(left, a, right, b) else Box(a, top, b, bottom)
+        }
+    }
 
-    /** A tap on [text] at character [offset]. */
-    data class Hit(val text: String, val offset: Int)
+    /** A box as fractions of the frame. */
+    data class Box(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+    /** A tap on [text] at character [offset], on [line]. */
+    data class Hit(val text: String, val offset: Int, val line: Line? = null)
 
     /**
      * The character at ([x], [y]), fractions of the frame, or null off every line: the first
@@ -37,11 +61,11 @@ data class ScreenText(val lines: List<Line>) {
         if (line.text.isEmpty()) return null
         val along = if (line.vertical) y else x
         if (line.ends.isNotEmpty()) {
-            return Hit(line.text, (line.ends.firstOrNull { it.second >= along } ?: line.ends.last()).first)
+            return Hit(line.text, (line.ends.firstOrNull { it.second >= along } ?: line.ends.last()).first, line)
         }
         val share = if (line.vertical) (y - line.top) / (line.bottom - line.top) else (x - line.left) / (line.right - line.left)
         val offset = (share * line.text.length).toInt().coerceIn(0, line.text.length - 1)
-        return Hit(line.text, offset)
+        return Hit(line.text, offset, line)
     }
 
     fun toJson(): String = JSONArray(

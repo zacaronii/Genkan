@@ -80,6 +80,8 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.FULL_BOX -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false] [--ei angle 28]
  * (the full-box prototype: the shelf's focused game as a box from its scans, turned that many degrees; past 90 shows the back.
  *  On/off is stored, as Settings > Playing > Full box does; the angle lasts until the app restarts)
+ *   adb shell am broadcast -a app.genkan.debug.MANUAL_OCR -n app.genkan/.debug.DictionaryDebugReceiver --es file cache/manuals/<name>.pdf [--ei page 0] [--ei width 1240]
+ * (times one manual page read as a tap would: render, then ML Kit; logs sizes and timings at info, never the text)
  *   adb shell am broadcast -a app.genkan.debug.PANEL -n app.genkan/.debug.DictionaryDebugReceiver --es items 'Yes|No' [--ei cursor 0]
  * (draws a choice panel with those rows over the built-in player's game, as a layout's choice would; no items clears it)
  *   adb shell am broadcast -a app.genkan.debug.LOOK -n app.genkan/.debug.DictionaryDebugReceiver --es look CRT
@@ -105,6 +107,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var database: LibraryDatabase
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var privileged: Privileged
+    @Inject lateinit var mlKitOcr: app.genkan.ocr.MlKitJapaneseOcr
     @Inject lateinit var librarySettings: app.genkan.library.LibraryViewSettings
     @Inject lateinit var azahar: AzaharText
     @Inject lateinit var downloadQueue: DownloadQueue
@@ -212,6 +215,34 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         // Stored, as the debug Settings row does, so it survives a restart.
                         librarySettings.setFullBox(intent.getBooleanExtra("on", true))
                         if (intent.hasExtra("angle")) FullBoxPrototype.angle.value = intent.getIntExtra("angle", 28).toFloat()
+                    }
+                    "app.genkan.debug.MANUAL_OCR" -> {
+                        // Times reading one manual page as a tap would: a render at the given width, then ML Kit.
+                        // Logs numbers only, never the text; nothing is looked up.
+                        val file = File(context.dataDir, intent.getStringExtra("file").orEmpty())
+                        val page = intent.getIntExtra("page", 0)
+                        val width = intent.getIntExtra("width", 1240)
+                        val pages = app.genkan.ui.PdfManualPages.open(file)
+                        try {
+                            val runtime = Runtime.getRuntime()
+                            val nativeBefore = android.os.Debug.getNativeHeapAllocatedSize()
+                            val t0 = System.nanoTime()
+                            val bitmap = pages.render(page, width)
+                            val t1 = System.nanoTime()
+                            val lines = bitmap?.let { mlKitOcr.read(it) }.orEmpty()
+                            val t2 = System.nanoTime()
+                            val nativePeak = android.os.Debug.getNativeHeapAllocatedSize()
+                            Log.i(
+                                TAG,
+                                "Manual OCR: page ${page + 1} ${bitmap?.width}x${bitmap?.height} (${(bitmap?.allocationByteCount ?: 0) / 1024} KB), " +
+                                    "render ${(t1 - t0) / 1_000_000} ms, read ${(t2 - t1) / 1_000_000} ms, ${lines.size} lines, " +
+                                    "${lines.sumOf { it.text.length }} chars, native heap +${(nativePeak - nativeBefore) / 1024} KB, " +
+                                    "java heap ${(runtime.totalMemory() - runtime.freeMemory()) / 1024} KB",
+                            )
+                            bitmap?.recycle()
+                        } finally {
+                            pages.close()
+                        }
                     }
                     "app.genkan.debug.PANEL" -> {
                         val items = intent.getStringExtra("items").orEmpty().split('|').filter { it.isNotBlank() }

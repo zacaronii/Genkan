@@ -91,8 +91,8 @@ class LowerActivity : ComponentActivity() {
                             onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
                             onShowGame = details::showDetails.takeIf { canShowDetails },
                         )
-                        // The playing game's manual, over the reader.
-                        PlayManualLayer(reader.manual)
+                        // The playing game's manual, over the reader; its words look up through it.
+                        PlayManualLayer(reader.manual, reader)
                         // The looks to try while playing, over the reader.
                         ReaderLookPicker(reader)
                     }

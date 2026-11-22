@@ -402,6 +402,21 @@ class ScreenshotTest {
         ManualViewer(FakeManual(pages = 12), onClose = {})
     }
 
+    /** A word looked up on a page while playing: boxed on the page, the bar saying a page is being read. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualViewerLookup() = shoot("manual_viewer_lookup", BOTTOM_PIXELS) {
+        ManualViewer(
+            FakeManual(pages = 12),
+            onClose = {},
+            closeLabel = "Back to reader",
+            onTapText = { _, _, _, _ -> },
+            status = "Reading this page…",
+            // Over the third grey line beside the picture box.
+            mark = ManualMark(0, app.genkan.ocr.ScreenText.Box(0.52f, 0.29f / 1.294f, 0.70f, 0.306f / 1.294f)),
+        )
+    }
+
     /** The same manual scrolled to where page 4 ends and page 5 begins. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
@@ -957,7 +972,7 @@ private fun FakeCovers.disc(model: String): Bitmap {
  * A manual of US letter pages drawn on the spot, standing in for [PdfManualPages] (Robolectric
  * has no PDF renderer): a title band, a picture box and grey bars for lines of text.
  */
-private class FakeManual(pages: Int) : ManualPages {
+internal class FakeManual(pages: Int) : ManualPages {
     override val pageSizes: List<IntSize> = List(pages) { IntSize(612, 792) }
 
     override suspend fun render(index: Int, widthPx: Int): Bitmap {
