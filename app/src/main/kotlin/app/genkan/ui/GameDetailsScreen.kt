@@ -59,6 +59,7 @@ import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import app.genkan.library.Favourites
 import coil3.compose.AsyncImage
+import java.io.File
 import kotlinx.coroutines.delay
 
 /**
@@ -75,7 +76,12 @@ private const val DELETE_ARMED_MS = 4_000L
 
 /** The bottom screen while browsing: the focused game's artwork, details, history and actions. */
 @Composable
-fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit) {
+fun GameDetailsScreen(
+    viewModel: GameDetailsViewModel,
+    onShowReader: () -> Unit,
+    /** How the game's manual shows once opened: plainly, unless the screen's host looks its words up. */
+    manualView: @Composable (file: File, onClose: (File, String?) -> Unit) -> Unit = { file, close -> ManualFile(file, onClose = close) },
+) {
     val details by viewModel.details.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     // Each game's details start at the top.
@@ -104,7 +110,7 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
         )
     }
     val manual by viewModel.manual.collectAsStateWithLifecycle()
-    manual?.let { file -> ManualFile(file, onClose = viewModel::closeManual) }
+    manual?.let { file -> manualView(file, viewModel::closeManual) }
 }
 
 

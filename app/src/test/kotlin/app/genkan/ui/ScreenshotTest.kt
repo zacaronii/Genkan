@@ -465,6 +465,26 @@ class ScreenshotTest {
         }
     }
 
+    /** A word looked up on the manual opened from a game's details: as during play, with Close for the way out. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun manualLookupFromDetails() = shoot("manual_lookup_details", BOTTOM_PIXELS) {
+        val word = app.genkan.dictionary.TermHit(matched = "はり", deinflected = "はり", expression = "針", reading = "はり")
+        ManualWithLookup(
+            lookup = Lookup(MANUAL_LINE, 0, app.genkan.dictionary.LookupResult("はりを", listOf(word), "[]"), "はりをまわす"),
+            onTop = false,
+            onCloseLookup = {},
+            popup = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF34343C))) },
+        ) {
+            ManualViewer(
+                FakeManual(pages = 12),
+                onClose = {},
+                onTapText = { _, _, _, _, _ -> },
+                mark = ManualMark(0, app.genkan.ocr.ScreenText.Box(0.52f, 0.33f / 1.294f, 0.66f, 0.346f / 1.294f)),
+            )
+        }
+    }
+
     /** The same manual scrolled to where page 4 ends and page 5 begins. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
