@@ -24,11 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +52,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,9 +73,9 @@ import app.genkan.library.GameCase
 import app.genkan.library.GameEntity
 import app.genkan.library.MediaKind
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sign
+import kotlinx.coroutines.delay
 
 /**
  * The shelf's tunable numbers, the reviewer's defaults kept in one place. Distances are in
@@ -301,7 +304,13 @@ internal fun GameShelf(
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             cameraDistance = 14f * density.density
                         }
-                        val select = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                        val select = Modifier
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                            // For accessibility (and device tests): each case is its game, the focused one selected.
+                            .semantics {
+                                contentDescription = game.name
+                                selected = index == focused
+                            }
                         // The models are built once per game. Coil's models are plain Any, which
                         // Compose compares by identity, so a fresh URL string on each step would
                         // recompose every case in the window.
@@ -387,7 +396,8 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
         if (cover != null) {
             AsyncImage(
                 model = cover,
-                contentDescription = game.name,
+                // The tile is titled (GameShelf's semantics): its cover is decoration.
+                contentDescription = null,
                 contentScale = if (isApp) ContentScale.Fit else ContentScale.Crop,
                 modifier = if (isApp) Modifier.fillMaxSize().padding(36.dp) else Modifier.fillMaxSize(),
             )
@@ -495,7 +505,8 @@ private fun ShelfCase(
                         // second request for every case as it passes through the focus.
                         AsyncImage(
                             model = art.cover,
-                            contentDescription = game.name,
+                            // The case is titled (GameShelf's semantics): its cover is decoration.
+                            contentDescription = null,
                             contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 val image = state.result.image
@@ -839,7 +850,8 @@ private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.c
         if (logo != null) {
             AsyncImage(
                 model = logo,
-                contentDescription = title,
+                // Always part of a titled case: decoration.
+                contentDescription = null,
                 contentScale = ContentScale.Fit,
                 onSuccess = { logoShown = true },
                 onError = { logoShown = false },
