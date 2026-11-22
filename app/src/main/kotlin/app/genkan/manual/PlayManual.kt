@@ -26,12 +26,15 @@ import javax.inject.Singleton
  * it. The page it was left at is kept for the next time, until another game starts.
  */
 @Singleton
-class PlayManual @Inject constructor(
+class PlayManual internal constructor(
     nowPlaying: NowPlaying,
     private val library: LibraryDao,
     private val manuals: ManualSource,
+    /** Where it follows the game being played: the app's lasts as long as the app; a test's ends with the test. */
+    private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    @Inject constructor(nowPlaying: NowPlaying, library: LibraryDao, manuals: ManualSource) :
+        this(nowPlaying, library, manuals, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
 
     /** The game being played, when it has a manual on the server. */
     val game: StateFlow<GameEntity?> = nowPlaying.game
