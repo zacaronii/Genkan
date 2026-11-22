@@ -78,7 +78,8 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
  *   adb shell am broadcast -a app.genkan.debug.FULL_BOX -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false] [--ei angle 28]
- * (the full-box prototype: the shelf's focused game as a box from its scans, turned that many degrees; past 90 shows the back)
+ * (the full-box prototype: the shelf's focused game as a box from its scans, turned that many degrees; past 90 shows the back.
+ *  On/off is stored, as Settings > Playing > Full box does; the angle lasts until the app restarts)
  *   adb shell am broadcast -a app.genkan.debug.PANEL -n app.genkan/.debug.DictionaryDebugReceiver --es items 'Yes|No' [--ei cursor 0]
  * (draws a choice panel with those rows over the built-in player's game, as a layout's choice would; no items clears it)
  *   adb shell am broadcast -a app.genkan.debug.LOOK -n app.genkan/.debug.DictionaryDebugReceiver --es look CRT
@@ -104,6 +105,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var database: LibraryDatabase
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var privileged: Privileged
+    @Inject lateinit var librarySettings: app.genkan.library.LibraryViewSettings
     @Inject lateinit var azahar: AzaharText
     @Inject lateinit var downloadQueue: DownloadQueue
     @Inject lateinit var gameLauncher: GameLauncher
@@ -207,7 +209,8 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
                     "app.genkan.debug.FULL_BOX" -> {
-                        FullBoxPrototype.on.value = intent.getBooleanExtra("on", true)
+                        // Stored, as the debug Settings row does, so it survives a restart.
+                        librarySettings.setFullBox(intent.getBooleanExtra("on", true))
                         if (intent.hasExtra("angle")) FullBoxPrototype.angle.value = intent.getIntExtra("angle", 28).toFloat()
                     }
                     "app.genkan.debug.PANEL" -> {

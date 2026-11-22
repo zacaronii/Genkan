@@ -19,7 +19,7 @@ data class SettingsGroup(
 enum class SettingsInfo { ROMM_ACCOUNT, YOMIKATA_SAMPLES, SECOND_SCREEN, COMPANION }
 
 /** The on/off settings a switch row can show. */
-enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT }
+enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, FULL_BOX }
 
 /** A row of a group, the only things the gamepad lands on. */
 sealed interface SettingsRow {
@@ -107,6 +107,12 @@ object SettingsGroups {
             ),
         ),
     )
+
+    /** [DEFAULT] with the rows only debug builds show: prototypes to look at on the device. */
+    val DEBUG: List<SettingsGroup> = DEFAULT.map { group ->
+        if (group.id != "playing") group
+        else group.copy(rows = group.rows + SettingsRow.Switch("Full box (prototype)", SwitchKey.FULL_BOX, SetupAction.FULL_BOX))
+    }
 }
 
 enum class SettingsPane { GROUPS, ROWS }

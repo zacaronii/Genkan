@@ -334,36 +334,43 @@ internal fun GameShelf(
                         // Decided per game: "Continue playing" mixes PC games with consoles'.
                         if (LocalShelves.isLocal(game)) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
-                        } else if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
-                            // Debug builds' full-box prototype: the focused game as a box from its scans.
-                            FullBox(
-                                front = art.front,
-                                spine = art.spine,
-                                back = art.back,
-                                maxWidth = maxCaseWidth,
-                                maxHeight = maxCaseHeight,
-                                angle = fullBoxAngle,
-                                modifier = transform.then(select),
-                            )
                         } else {
-                            ShelfCase(
-                                game = game,
-                                // Each its own console's case, for a shelf of several consoles.
-                                spec = GameCase.specFor(game.platformSlug),
-                                maxWidth = maxCaseWidth,
-                                maxHeight = maxCaseHeight,
-                                art = art,
-                                download = downloads[game.id],
-                                coverAspect = coverAspects[game.id],
-                                onCoverAspect = onCoverAspect,
-                                showMedia = index == focused && active,
-                                badgeOnLeft = index < focused,
-                                raised = index == focused,
-                                mediaOut = mediaNow,
-                                shade = { ShelfGeometry.shade(index - positionNow()) },
-                                modifier = transform.then(select),
-                                trace = trace,
-                            )
+                            val case = @Composable { caseModifier: Modifier ->
+                                ShelfCase(
+                                    game = game,
+                                    // Each its own console's case, for a shelf of several consoles.
+                                    spec = GameCase.specFor(game.platformSlug),
+                                    maxWidth = maxCaseWidth,
+                                    maxHeight = maxCaseHeight,
+                                    art = art,
+                                    download = downloads[game.id],
+                                    coverAspect = coverAspects[game.id],
+                                    onCoverAspect = onCoverAspect,
+                                    showMedia = index == focused && active,
+                                    badgeOnLeft = index < focused,
+                                    raised = index == focused,
+                                    mediaOut = mediaNow,
+                                    shade = { ShelfGeometry.shade(index - positionNow()) },
+                                    modifier = caseModifier,
+                                    trace = trace,
+                                )
+                            }
+                            if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
+                                // Debug builds' full-box prototype: the focused game as a box from its
+                                // scans, its case in the meantime.
+                                FullBox(
+                                    front = art.front,
+                                    spine = art.spine,
+                                    back = art.back,
+                                    maxWidth = maxCaseWidth,
+                                    maxHeight = maxCaseHeight,
+                                    angle = fullBoxAngle,
+                                    modifier = transform.then(select),
+                                    fallback = { case(Modifier) },
+                                )
+                            } else {
+                                case(transform.then(select))
+                            }
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package app.genkan.library
 
+import app.genkan.BuildConfig
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
@@ -52,6 +53,16 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         context.libraryStore.edit { it[INSERT_ANIMATION] = on }
     }
 
+    /**
+     * Debug builds' full-box prototype on the shelf (off until switched on). A release build
+     * always reads off, whatever is stored, and nothing in it stores the key.
+     */
+    val fullBox: Flow<Boolean> = context.libraryStore.data.map { BuildConfig.DEBUG && it[FULL_BOX] == true }
+
+    suspend fun setFullBox(on: Boolean) {
+        if (BuildConfig.DEBUG) context.libraryStore.edit { it[FULL_BOX] = on }
+    }
+
     /** The sort and filter for consoles' games (not "Continue playing" or "Favourites"). */
     val order: Flow<LibraryOrder> = context.libraryStore.data.map(::orderOf)
 
@@ -73,5 +84,6 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         private val DOWNLOADED_ONLY = booleanPreferencesKey("downloaded_only")
         private val VIEW = stringPreferencesKey("view")
         private val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
+        private val FULL_BOX = booleanPreferencesKey("debug_full_box")
     }
 }

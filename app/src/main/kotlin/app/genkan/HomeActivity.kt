@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import androidx.core.net.toUri
 import android.os.Environment
+import app.genkan.ui.FullBoxPrototype
 import app.genkan.ui.LibraryEvent
 import android.app.ActivityOptions
 import android.app.role.RoleManager
@@ -106,6 +107,8 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         libraryViewModel.hasStorageAccess = { Environment.isExternalStorageManager() }
+        // The full-box prototype's stored switch (debug builds; always off otherwise) drives the shelf's.
+        lifecycleScope.launch { viewModel.librarySettings.fullBox.collect { FullBoxPrototype.on.value = it } }
         lifecycleScope.launch {
             libraryViewModel.events.collect { event ->
                 when (event) {
@@ -320,6 +323,9 @@ class HomeActivity : ComponentActivity() {
             }
             SetupAction.INSERT_ANIMATION -> lifecycleScope.launch {
                 viewModel.librarySettings.setInsertAnimation(!viewModel.librarySettings.insertAnimation.first())
+            }
+            SetupAction.FULL_BOX -> lifecycleScope.launch {
+                viewModel.librarySettings.setFullBox(!viewModel.librarySettings.fullBox.first())
             }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()

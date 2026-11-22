@@ -1,5 +1,6 @@
 package app.genkan.ui
 
+import app.genkan.BuildConfig
 import androidx.lifecycle.ViewModel
 import app.genkan.dictionary.Dictionaries
 import app.genkan.home.DualScreenState
@@ -26,7 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-/** Everything the settings page can do. Each one has exactly one row in [SettingsGroups.DEFAULT]. */
+/** Everything the settings page can do. Each one has exactly one row in [SettingsGroups.DEBUG]; all but FULL_BOX in [SettingsGroups.DEFAULT]. */
 enum class SetupAction {
     ENABLE_HOME,
     DISABLE_HOME,
@@ -41,6 +42,8 @@ enum class SetupAction {
     BUILT_IN_PLAYER,
     SCREEN_LOOK,
     INSERT_ANIMATION,
+    /** Debug builds only: the shelf's full-box prototype. */
+    FULL_BOX,
     WORDS,
     YOMIKATA,
     SIGN_OUT,
@@ -80,7 +83,7 @@ class SetupViewModel @Inject constructor(
     val state: StateFlow<SetupState> = combine(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
-        librarySettings.insertAnimation,
+        librarySettings.insertAnimation, librarySettings.fullBox,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -94,6 +97,7 @@ class SetupViewModel @Inject constructor(
             textSamples = v[8] as Boolean,
             dictionaries = v[9] as List<DictionaryEntity>,
             insertAnimation = v[10] as Boolean,
+            fullBox = v[11] as Boolean,
         )
     }.stateIn(
         viewModelScope,
@@ -112,7 +116,7 @@ class SetupViewModel @Inject constructor(
         ),
     )
 
-    val groups: List<SettingsGroup> = SettingsGroups.DEFAULT
+    val groups: List<SettingsGroup> = if (BuildConfig.DEBUG) SettingsGroups.DEBUG else SettingsGroups.DEFAULT
 
     private val _focus = MutableStateFlow(SettingsFocus())
     val focus: StateFlow<SettingsFocus> = _focus.asStateFlow()

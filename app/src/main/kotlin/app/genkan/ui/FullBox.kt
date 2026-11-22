@@ -76,17 +76,30 @@ internal data class BoxView(
  * A game box drawn from its scans: [front] (or [back], seen past 90 degrees) and [spine] at a
  * right angle, as tall as [maxHeight] and no wider than [maxWidth], turned [angle] degrees about
  * its vertical axis. The faces keep the scans' own proportions once they load; a spine scanned
- * lying down (wider than tall, as some consoles' are) is stood up. A prototype: no lighting or
- * thickness beyond the spine.
+ * lying down (wider than tall, as some consoles' are) is stood up. With a [fallback] (the game's
+ * case), that is drawn instead until both faces have loaded, so the slot is never empty; a face
+ * that fails to load leaves the fallback. A prototype: no lighting or thickness beyond the spine.
  */
 @Composable
-fun FullBox(front: Any?, spine: Any?, back: Any?, maxWidth: Dp, maxHeight: Dp, angle: Float, modifier: Modifier = Modifier) {
+fun FullBox(
+    front: Any?,
+    spine: Any?,
+    back: Any?,
+    maxWidth: Dp,
+    maxHeight: Dp,
+    angle: Float,
+    modifier: Modifier = Modifier,
+    fallback: (@Composable () -> Unit)? = null,
+) {
     val density = LocalDensity.current
     var frontAspect by remember(front) { mutableFloatStateOf(0.72f) }
     var spineAspect by remember(spine) { mutableFloatStateOf(0.1f) }
     var spineLying by remember(spine) { mutableStateOf(false) }
     val view = BoxView.of(angle)
     val face = if (view.back) back ?: front else front
+    var faceLoaded by remember(face) { mutableStateOf(false) }
+    var spineLoaded by remember(spine) { mutableStateOf(false) }
+    val ready = fallback == null || (faceLoaded && spineLoaded)
     // As tall as allowed, unless the turned box would then be wider than its slot.
     val shownPerHeight = frontAspect * view.faceShown + spineAspect * view.spineShown
     val height = if (maxHeight * shownPerHeight > maxWidth) maxWidth / shownPerHeight else maxHeight
@@ -95,51 +108,59 @@ fun FullBox(front: Any?, spine: Any?, back: Any?, maxWidth: Dp, maxHeight: Dp, a
     val faceShown = faceWidth * view.faceShown
     val spineShown = spineWidth * view.spineShown
     val camera = 12f * density.density
-    Box(modifier.size(faceShown + spineShown, height)) {
-        // The spine meets the face along one edge, turned a right angle further.
-        val spineX: Dp = if (view.spineOnLeft) 0.dp else faceShown
-        Box(
-            Modifier
-                .offset(x = spineX)
-                .size(spineWidth, height)
-                .graphicsLayer {
-                    transformOrigin = TransformOrigin(0f, 0.5f)
-                    scaleX = view.spineShown.coerceAtLeast(0.001f)
-                    rotationY = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * 0.25f else (90f - abs(view.faceTurn)) * 0.25f
-                    cameraDistance = camera
-                },
-            contentAlignment = Alignment.Center,
-        ) {
+    Box(modifier, contentAlignment = Alignment.BottomCenter) {
+        if (!ready) fallback?.invoke()
+        // Composed from the start, so the scans load, but unseen until both have.
+        Box(Modifier.size(faceShown + spineShown, height).graphicsLayer { alpha = if (ready) 1f else 0f }) {
+            // The spine meets the face along one edge, turned a right angle further.
+            val spineX: Dp = if (view.spineOnLeft) 0.dp else faceShown
+            Box(
+                Modifier
+                    .offset(x = spineX)
+                    .size(spineWidth, height)
+                    .graphicsLayer {
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        scaleX = view.spineShown.coerceAtLeast(0.001f)
+                        rotationY = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * 0.25f else (90f - abs(view.faceTurn)) * 0.25f
+                        cameraDistance = camera
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = spine,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    onSuccess = { s ->
+                        spineLoaded = true
+                        s.painter.intrinsicSize.let {
+                            if (it.height > 0f && it.width > 0f) {
+                                spineLying = it.width > it.height
+                                spineAspect = minOf(it.width, it.height) / maxOf(it.width, it.height)
+                            }
+                        }
+                    },
+                    // A spine scanned lying down is drawn lying, then turned upright.
+                    modifier = if (spineLying) Modifier.requiredSize(height, spineWidth).rotate(90f) else Modifier.size(spineWidth, height),
+                )
+            }
             AsyncImage(
-                model = spine,
+                model = face,
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
                 onSuccess = { s ->
-                    s.painter.intrinsicSize.let {
-                        if (it.height > 0f && it.width > 0f) {
-                            spineLying = it.width > it.height
-                            spineAspect = minOf(it.width, it.height) / maxOf(it.width, it.height)
-                        }
-                    }
+                    faceLoaded = true
+                    s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height }
                 },
-                // A spine scanned lying down is drawn lying, then turned upright.
-                modifier = if (spineLying) Modifier.requiredSize(height, spineWidth).rotate(90f) else Modifier.size(spineWidth, height),
+                modifier = Modifier
+                    .offset(x = if (view.spineOnLeft) spineShown else 0.dp)
+                    .size(faceWidth, height)
+                    .graphicsLayer {
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        scaleX = view.faceShown.coerceAtLeast(0.001f)
+                        rotationY = view.faceTurn * 0.25f
+                        cameraDistance = camera
+                    },
             )
         }
-        AsyncImage(
-            model = face,
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            onSuccess = { s -> s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height } },
-            modifier = Modifier
-                .offset(x = if (view.spineOnLeft) spineShown else 0.dp)
-                .size(faceWidth, height)
-                .graphicsLayer {
-                    transformOrigin = TransformOrigin(0f, 0.5f)
-                    scaleX = view.faceShown.coerceAtLeast(0.001f)
-                    rotationY = view.faceTurn * 0.25f
-                    cameraDistance = camera
-                },
-        )
     }
 }
