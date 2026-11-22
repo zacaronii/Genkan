@@ -60,16 +60,27 @@ class Manuals @Inject constructor(
      */
     override suspend fun file(game: GameEntity): File = lock.withLock {
         cached(game)?.let { return@withLock it }
-        val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) }
-            ?: throw IOException("no manual on the server")
         val file = File(folder, fileName(game))
         withContext(Dispatchers.IO) {
-            fetch(url, file)
+            try {
+                val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) }
+                    ?: throw IOException("no manual on the server")
+                fetch(url, file)
+            } catch (e: IOException) {
+                // This version can't be had (offline, say): an earlier one of the game's manual
+                // still opens, until a fetch succeeds.
+                return@withContext earlier(game) ?: throw e
+            }
             // Earlier versions of this game's manual are no longer wanted.
             folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name != file.name }?.forEach { it.delete() }
+            file
         }
-        file
     }
+
+    /** The newest earlier version of [game]'s manual in the folder, whole (not a part, not empty), if any. */
+    private fun earlier(game: GameEntity): File? =
+        folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name.endsWith(".pdf") && old.length() > 0L }
+            ?.maxByOrNull { it.lastModified() }
 
     /** Downloads [url] to [file] through a .part file, so a cut-off download is never opened. */
     private fun fetch(url: String, file: File) {
