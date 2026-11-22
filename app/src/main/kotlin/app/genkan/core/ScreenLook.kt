@@ -92,6 +92,26 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
 
         fun defaultFor(platform: String): ScreenLook = DEFAULTS[platform] ?: DEFAULT
 
+        private fun family(family: Family): Set<ScreenLook> = entries.filter { it.family == family }.toSet()
+
+        /** The LCD looks for any handheld; the DS's and PSP's own variants go to those consoles alone. */
+        private val HANDHELD_LCD = setOf(LCD, LCD3X, LCD1X, ZFAST_LCD)
+
+        /**
+         * The looks that suit [platform]'s games, which the picker lists first; null for a console
+         * not in the table (every look suits it). Plain ones suit every console. CRT ones suit what
+         * was played on a television (PlayStation); LCD ones the handhelds, each LCD 1x variant
+         * its own console, Dot the Game Boys' matrix screens. Smoothing suits 2D pixel art scaled
+         * a long way (PlayStation, Game Boys, DS), not the PSP, already drawn at 3x.
+         */
+        fun suiting(platform: String?): Set<ScreenLook>? = when (platform) {
+            "psx" -> family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
+            "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
+            "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)
+            "psp" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_PSP
+            else -> null
+        }
+
         /** What a game is drawn with: its own look if it has one, else its console's. */
         fun resolve(game: ScreenLook?, console: ScreenLook): ScreenLook = game ?: console
     }

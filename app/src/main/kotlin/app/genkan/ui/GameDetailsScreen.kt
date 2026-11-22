@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.core.ScreenLook
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
 import app.genkan.library.Favourites
@@ -96,6 +97,7 @@ fun GameDetailsScreen(viewModel: GameDetailsViewModel, onShowReader: () -> Unit)
             title = "${details!!.focus.game.name}: look",
             selected = look.own,
             console = look.console,
+            suits = ScreenLook.suiting(details!!.focus.game.platformSlug),
             onPick = viewModel::pickLook,
             onClose = viewModel::closeLookPicker,
         )
