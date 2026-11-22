@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,6 +37,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -74,6 +76,20 @@ private val CLOSE_CLEARANCE = 56.dp
  */
 fun zoomedEndPadding(viewportHeightPx: Int, zoom: Float): Float =
     viewportHeightPx * (1f - 1f / zoom.coerceAtLeast(1f))
+
+/**
+ * Keeps what is under the fingers there while a pinch changes the zoom. The pages are scaled
+ * about the middle of their top edge, so sideways the page moves with [shift], and up and down
+ * the list scrolls.
+ */
+internal object PinchFocus {
+    /** The sideways shift that keeps screen x [focusX] over the same point when the zoom goes from [zoom] to [next]. */
+    fun shift(shift: Float, zoom: Float, next: Float, focusX: Float, centreX: Float): Float =
+        focusX - centreX - (focusX - centreX - shift) * next / zoom
+
+    /** How far to scroll the list (in its own, unscaled pixels) to keep screen y [focusY] over the same point. */
+    fun scroll(zoom: Float, next: Float, focusY: Float): Float = focusY / zoom - focusY / next
+}
 
 /**
  * A game's manual over the whole bottom screen: its pages one under the other, as wide as the
@@ -148,7 +164,16 @@ fun ManualViewer(pages: ManualPages, onClose: () -> Unit, listState: LazyListSta
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val pinch = event.changes.count { it.pressed } >= 2
-                            if (pinch) zoom = (zoom * event.calculateZoom()).coerceIn(1f, MAX_ZOOM)
+                            if (pinch) {
+                                // Zoom about the fingers: what is under them stays under them.
+                                val next = (zoom * event.calculateZoom()).coerceIn(1f, MAX_ZOOM)
+                                val focus = event.calculateCentroid()
+                                if (next != zoom && focus.isSpecified) {
+                                    shiftX = PinchFocus.shift(shiftX, zoom, next, focus.x, widthPx / 2f)
+                                    listState.dispatchRawDelta(PinchFocus.scroll(zoom, next, focus.y))
+                                }
+                                zoom = next
+                            }
                             // A zoomed page can move sideways until its edge meets the screen's.
                             val limit = widthPx * (zoom - 1f) / 2f
                             val dx = if (pinch) event.calculatePan().x else event.changes.first().positionChange().x

@@ -18,7 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** Foreground service that keeps the queue running with the screen off and Genkan in the back. */
@@ -42,28 +41,22 @@ class DownloadService : Service() {
         if (runner?.isActive != true) {
             acquireLocks()
             runner = scope.launch {
-                do {
-                    queue.runQueue { row ->
-                        val percent = if (row.bytesTotal > 0) (row.bytesDone * 100 / row.bytesTotal).toInt() else null
-                        getSystemService(NotificationManager::class.java)
-                            .notify(NOTIFICATION_ID, notification(row.name, percent))
-                    }
-                } while (!stopIfIdle())
+                DownloadLoop(
+                    runQueue = {
+                        queue.runQueue { row ->
+                            val percent = if (row.bytesTotal > 0) (row.bytesDone * 100 / row.bytesTotal).toInt() else null
+                            getSystemService(NotificationManager::class.java)
+                                .notify(NOTIFICATION_ID, notification(row.name, percent))
+                        }
+                    },
+                    hasWork = queue::hasWork,
+                    latestStart = { latestStartId },
+                    stop = ::stopSelfResult,
+                    main = Dispatchers.Main,
+                ).run()
             }
         }
         return START_STICKY
-    }
-
-    /**
-     * Stops the service unless more work came in. A game queued just as the queue ran dry asks
-     * for a start while this runner still looks busy, so that start launches nothing; stopping
-     * anyway left it QUEUED until Genkan restarted. Here a start newer than the one this check
-     * began with keeps the service (stopSelfResult refuses), and the runner goes round again.
-     */
-    private suspend fun stopIfIdle(): Boolean = withContext(Dispatchers.Main) {
-        val startId = latestStartId
-        if (queue.hasWork()) return@withContext false
-        stopSelfResult(startId)
     }
 
     override fun onDestroy() {

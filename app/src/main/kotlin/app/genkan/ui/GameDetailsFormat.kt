@@ -7,6 +7,7 @@ import app.genkan.library.GameEntity
 import app.genkan.play.PlayTotals
 import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.words.GameLookupTotals
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -86,10 +87,26 @@ object GameDetailsFormat {
     }
 
     /** "Main story about 32 h", when HowLongToBeat has a main story time. */
-    fun hltbLine(mainStorySec: Int?): String? {
-        val seconds = mainStorySec?.takeIf { it > 0 } ?: return null
-        val estimate = if (seconds >= 3600) "${(seconds + 1800) / 3600}${NBSP}h" else "${seconds / 60}${NBSP}min"
-        return "Main story about $estimate"
+    fun hltbLine(mainStorySec: Int?): String? = estimate(mainStorySec)?.let { "Main story about $it" }
+
+    /**
+     * HowLongToBeat's longer times under the main story's: "Main + extras about 45 h · everything
+     * about 80 h", either alone when the other is missing, or null without both.
+     */
+    fun hltbMoreLine(mainPlusExtraSec: Int?, completionistSec: Int?): String? {
+        val parts = listOfNotNull(
+            estimate(mainPlusExtraSec)?.let { "Main + extras about $it" },
+            estimate(completionistSec)?.let { if (mainPlusExtraSec.isPositive()) "everything about $it" else "Everything about $it" },
+        )
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
+    }
+
+    private fun Int?.isPositive() = this != null && this > 0
+
+    /** A HowLongToBeat time in round hours, or minutes under an hour; null when there is none. */
+    private fun estimate(seconds: Int?): String? {
+        val s = seconds?.takeIf { it > 0 } ?: return null
+        return if (s >= 3600) "${(s + 1800) / 3600}${NBSP}h" else "${s / 60}${NBSP}min"
     }
 
     /**
@@ -133,6 +150,14 @@ object GameDetailsFormat {
         if (reading.characters <= 0) return null
         val lines = reading.lines.takeIf { it > 0 }?.let { " (${"%,d".format(it)} lines)" }.orEmpty()
         return "Read ${"%,d".format(reading.characters)} characters$lines in ${duration(reading.activeMs)}"
+    }
+
+    /** "Looked up 120 words (153 lookups)" while reading the game; null before the first lookup. */
+    fun lookupLine(lookups: GameLookupTotals): String? {
+        if (lookups.words <= 0) return null
+        val words = if (lookups.words == 1) "1 word" else "${"%,d".format(lookups.words)} words"
+        val visits = lookups.lookups.takeIf { it > lookups.words }?.let { " (${"%,d".format(it)} lookups)" }.orEmpty()
+        return "Looked up $words$visits"
     }
 
     /** Where the save stands with RomM; [time] formats the moment it was last in step. */

@@ -24,11 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +52,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,9 +73,9 @@ import app.genkan.library.GameCase
 import app.genkan.library.GameEntity
 import app.genkan.library.MediaKind
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sign
+import kotlinx.coroutines.delay
 
 /**
  * The shelf's tunable numbers, the reviewer's defaults kept in one place. Distances are in
@@ -123,6 +126,17 @@ internal object ShelfDefaults {
  * 0 is focused, negative is to the left, and fractions happen mid-move.
  */
 internal object ShelfGeometry {
+
+    /**
+     * The proportions the shelf's slots are sized for: those of the focused case's console (a
+     * plain tile's, 1, for an app or PC game). On a shelf of one console that is every case's, so
+     * the gaps stay as they were; on one of several the gap around the focus fits the case in it,
+     * whichever case comes first.
+     */
+    fun slotAspect(games: List<GameEntity>, focused: Int): Float {
+        val game = games.getOrNull(focused) ?: games.firstOrNull() ?: return 1f
+        return if (LocalShelves.isLocal(game)) 1f else GameCase.specFor(game.platformSlug).aspect
+    }
 
     /** Horizontal offset of the case's centre from the shelf's middle, in case widths. */
     fun offset(d: Float): Float {
@@ -181,11 +195,11 @@ internal fun GameShelf(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     staticMedia: Boolean? = null,
+    /** Which shelf this is, for what it remembers; "Continue playing" mixes consoles. */
+    shelfId: Long = games.firstOrNull()?.platformId ?: 0L,
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
-    val shelfId = games.first().platformId
-    val spec = GameCase.specFor(games.first().platformSlug)
     val local = LocalShelves.isLocal(games.first())
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
@@ -207,6 +221,16 @@ internal fun GameShelf(
         settled.intValue++
     }
     val positionNow = remember(position) { { position.value } }
+
+    // The slots are sized for the focused case's console, so on a shelf of several ("Continue
+    // playing") the gap fits the case in view; it moves with the focus. One console's shelf keeps
+    // one size, and nothing animates. Read only in placement, so a change costs a layout pass.
+    val slotAspect = ShelfGeometry.slotAspect(games, focused)
+    val slot = remember(shelfId) { Animatable(slotAspect) }
+    LaunchedEffect(shelfId, slotAspect) {
+        slot.animateTo(slotAspect, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+    }
+    val slotNow = remember(slot) { { slot.value } }
     val onCoverAspect = remember(coverAspects, position) {
         { id: Long, aspect: Float ->
             val old = coverAspects.put(id, aspect)
@@ -252,9 +276,6 @@ internal fun GameShelf(
         val density = LocalDensity.current
         val maxCaseHeight = maxHeight * ShelfDefaults.CASE_HEIGHT
         val maxCaseWidth = maxWidth * ShelfDefaults.CASE_WIDTH
-        val nominalWidth = with(density) {
-            GameCase.fit(if (local) 1f else spec.aspect, maxCaseWidth.toPx(), maxCaseHeight.toPx()).first
-        }
         // The cases stand on a shelf edge a little above the bottom, leaving room for their shadows.
         val floorFromBottom = 22.dp
         val stepPx = with(density) { ShelfDefaults.STEP_FORWARD.toPx() }
@@ -283,7 +304,16 @@ internal fun GameShelf(
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             cameraDistance = 14f * density.density
                         }
-                        val select = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                        val select = Modifier
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                            // For accessibility (and device tests): each case is its game, the focused one selected.
+                            // Cleared and set, not added to: the title and art under the case would
+                            // otherwise merge in, and Compose then hands the description to a node of
+                            // its own beside the clickable one.
+                            .clearAndSetSemantics {
+                                contentDescription = game.name
+                                selected = index == focused
+                            }
                         // The models are built once per game. Coil's models are plain Any, which
                         // Compose compares by identity, so a fresh URL string on each step would
                         // recompose every case in the window.
@@ -300,7 +330,8 @@ internal fun GameShelf(
                         } else {
                             ShelfCase(
                                 game = game,
-                                spec = spec,
+                                // Each its own console's case, for a shelf of several consoles.
+                                spec = GameCase.specFor(game.platformSlug),
                                 maxWidth = maxCaseWidth,
                                 maxHeight = maxCaseHeight,
                                 art = art,
@@ -325,6 +356,7 @@ internal fun GameShelf(
                 // Read here, the position re-places the cases each frame without recomposing them.
                 val p = positionNow()
                 val centre = constraints.maxWidth / 2f
+                val nominalWidth = GameCase.fit(slotNow(), maxCaseWidth.toPx(), maxCaseHeight.toPx()).first
                 val floor = constraints.maxHeight - floorFromBottom.roundToPx()
                 placeables.forEachIndexed { i, placeable ->
                     val d = range.first + i - p
@@ -367,7 +399,8 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
         if (cover != null) {
             AsyncImage(
                 model = cover,
-                contentDescription = game.name,
+                // The tile is titled (GameShelf's semantics): its cover is decoration.
+                contentDescription = null,
                 contentScale = if (isApp) ContentScale.Fit else ContentScale.Crop,
                 modifier = if (isApp) Modifier.fillMaxSize().padding(36.dp) else Modifier.fillMaxSize(),
             )
@@ -475,7 +508,8 @@ private fun ShelfCase(
                         // second request for every case as it passes through the focus.
                         AsyncImage(
                             model = art.cover,
-                            contentDescription = game.name,
+                            // The case is titled (GameShelf's semantics): its cover is decoration.
+                            contentDescription = null,
                             contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 val image = state.result.image
@@ -771,7 +805,8 @@ private fun DrawnMedia(kind: MediaKind, logo: Any?, title: String, caseColor: Co
                 drawCircle(Color(0xFF2A2B30), radius = size.minDimension * 0.08f)
             }
             // Below the hub, on the lower part of the disc window.
-            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, 0.62f)).fillMaxWidth(0.56f).fillMaxHeight(0.2f))
+            // One line: the band under the hub is narrow, and a second line runs over the frame.
+            MediaLabel(logo, title, Color(0xFF1C1C21), Modifier.align(BiasAlignment(0f, 0.62f)).fillMaxWidth(0.56f).fillMaxHeight(0.2f), maxLines = 1)
         }
         MediaKind.CARD, MediaKind.CARTRIDGE, MediaKind.DISK_CARD -> {
             val shell = when (kind) {
@@ -804,21 +839,22 @@ private fun DrawnMedia(kind: MediaKind, logo: Any?, title: String, caseColor: Co
 }
 
 @Composable
-private fun MediaLabel(logo: Any?, title: String, ink: Color, modifier: Modifier) =
-    LogoOrTitle(logo, title, ink, MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), modifier)
+private fun MediaLabel(logo: Any?, title: String, ink: Color, modifier: Modifier, maxLines: Int = 4) =
+    LogoOrTitle(logo, title, ink, MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), modifier, maxLines)
 
 /** The title logo once it has loaded; the title in text before that, or without a logo. */
 @Composable
-private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.compose.ui.text.TextStyle, modifier: Modifier) {
+private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.compose.ui.text.TextStyle, modifier: Modifier, maxLines: Int = 4) {
     var logoShown by remember(logo) { mutableStateOf(false) }
     Box(modifier, contentAlignment = Alignment.Center) {
         if (!logoShown) {
-            Text(title, style = style, color = ink, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Text(title, style = style, color = ink, textAlign = TextAlign.Center, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
         }
         if (logo != null) {
             AsyncImage(
                 model = logo,
-                contentDescription = title,
+                // Always part of a titled case: decoration.
+                contentDescription = null,
                 contentScale = ContentScale.Fit,
                 onSuccess = { logoShown = true },
                 onError = { logoShown = false },

@@ -10,6 +10,7 @@ import app.genkan.memory.RamSnapshots
 import app.genkan.memory.TableText
 import app.genkan.memory.TextSamples
 import app.genkan.yomikata.YomikataCatalog
+import app.genkan.yomikata.YomikataIds
 import android.util.Log
 import app.genkan.ocr.OcrReader
 import app.genkan.reader.ReaderSession
@@ -45,6 +46,7 @@ class BuiltInText @Inject constructor(
     private val samples: TextSamples,
     private val snapshots: RamSnapshots,
     private val catalog: YomikataCatalog,
+    private val yomikataIds: YomikataIds,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val text = MemoryText(session, ocr, TAG, ::missing)
@@ -99,6 +101,7 @@ class BuiltInText @Inject constructor(
             }
             if (id != null) {
                 ids[game.key] = id
+                yomikataIds.learned(game.rommRomId, id)
                 val entry = runCatching { catalog.entry(id) }.getOrNull() ?: return
                 // Genkan can't hash the executable: the release id's only listed version stands in.
                 // A version may have several layouts (one per chapter's program); the watch reads
@@ -155,6 +158,7 @@ class BuiltInText @Inject constructor(
             val id = ids[game.key] ?: RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) }
                 ?: return@withContext "This game's id isn't in its memory yet"
             ids[game.key] = id
+            yomikataIds.learned(game.rommRomId, id)
             // The line as far as anything has read it: the layout's, else OCR's last.
             val read = lastRead
             val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }

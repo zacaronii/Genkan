@@ -14,6 +14,7 @@ import app.genkan.reader.HookMessage
 import app.genkan.reader.NowPlaying
 import app.genkan.yomikata.CatalogEntry
 import app.genkan.yomikata.YomikataCatalog
+import app.genkan.yomikata.YomikataIds
 import app.genkan.reader.ReaderSession
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -63,6 +64,7 @@ class PpssppText @Inject constructor(
     private val session: ReaderSession,
     private val nowPlaying: NowPlaying,
     private val catalog: YomikataCatalog,
+    private val yomikataIds: YomikataIds,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Moshi.Builder().build()
@@ -164,6 +166,7 @@ class PpssppText @Inject constructor(
                     val id = (event["game"] as? Map<*, *>)?.get("id") as? String ?: return@collect
                     if (id == gameId) return@collect
                     gameId = id
+                    yomikataIds.learned(nowPlaying.game.value.rommRomId, id)
                     hooks.clear()
                     // The Yomikata catalog first, then a hook found on this device, then Genkan's own profiles.
                     hooks += catalogHooks(id) ?: foundHooks(id) ?: PspHooks.byGameId[id].orEmpty()

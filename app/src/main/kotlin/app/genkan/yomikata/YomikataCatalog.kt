@@ -114,6 +114,16 @@ class YomikataCatalog @Inject constructor(
     fun files(paths: Collection<String>): Map<String, String> =
         paths.mapNotNull { path -> File(dir, path).takeIf(File::isFile)?.let { path to it.readText() } }.toMap()
 
+    /**
+     * The entry for [id] as cached on the device, or null: never the network, so the details
+     * screen can ask. It may be older than the catalog; that's fine for saying how text is read.
+     */
+    fun cachedEntry(id: String): CatalogEntry? = runCatching {
+        val entries = JSONObject(File(dir, INDEX).readText()).getJSONObject("entries")
+        val path = entries.optJSONObject(id)?.getString("path") ?: return null
+        CatalogEntry.parse(File(dir, path).takeIf(File::isFile)?.readText() ?: return null)
+    }.getOrNull()
+
     /** An entry's table files as one text (later files win, as parsing them in order does), or null. */
     fun tableText(entry: CatalogEntry): String? {
         if (entry.tables.isEmpty()) return null
