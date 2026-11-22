@@ -163,6 +163,7 @@ class BuiltInText @Inject constructor(
         _choice.value = null
         settleJob?.cancel()
         layoutLines.reset()
+        chosen.reset()
     }
 
     private var lastRead: LayoutRead? = null
@@ -200,6 +201,8 @@ class BuiltInText @Inject constructor(
     }
 
     private val layoutLines = LayoutLines()
+    /** The answer taken at a choice, for the backlog once the choice closes. */
+    private val chosen = ChosenAnswer()
     private var settleJob: kotlinx.coroutines.Job? = null
 
     /** A layout read: the lines [LayoutLines] says are complete go to the backlog; null: the player stopped reading it. */
@@ -215,6 +218,8 @@ class BuiltInText @Inject constructor(
         settleJob?.cancel()
         val step = layoutLines.read(read)
         step.lines.forEach(::submitLayoutLine)
+        // After the question's line: the answer taken, when the cursor's row was known as the choice closed.
+        chosen.read(read)?.let { session.submit(HookMessage(ChosenAnswer.line(it), whole = true)) }
         if (step.settle) {
             settleJob = scope.launch {
                 delay(LAYOUT_SETTLE_MS)
