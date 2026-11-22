@@ -429,6 +429,21 @@ class ScreenshotTest {
         )
     }
 
+    /** The PlayStation's look list on the pad, one Right from the look in use: the "Show all" chip focused. */
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun screenLookPickerChipFocused() = shoot("screen_look_picker_chip_focused", TOP_PIXELS) {
+        androidx.compose.ui.platform.LocalInputModeManager.current.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
+        ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
+        val focus = androidx.compose.ui.platform.LocalFocusManager.current
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            // The list focuses the look in use a frame after it opens; Right then goes to the chip.
+            repeat(3) { androidx.compose.runtime.withFrameNanos {} }
+            focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+        }
+    }
+
     /** The screen look page: the defaults, with the GBA and PSP chosen. */
     @Test
     @Config(qualifiers = TOP_SCREEN)

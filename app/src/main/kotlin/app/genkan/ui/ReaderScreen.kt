@@ -1,8 +1,12 @@
 package app.genkan.ui
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -282,14 +286,19 @@ fun ChoiceList(
 @Composable
 internal fun Chip(label: String, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    val interaction = remember { MutableInteractionSource() }
+    // Marked as the look list's rows are, so the pad shows where it is; touch never focuses it.
+    val focused by interaction.collectIsFocusedAsState()
     Text(
         label,
         style = MaterialTheme.typography.labelLarge,
         color = colors.onSecondaryContainer,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
+            .clip(shape)
             .background(colors.secondaryContainer)
-            .clickable(onClick = onClick)
+            .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
