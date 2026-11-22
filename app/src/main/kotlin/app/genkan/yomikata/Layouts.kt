@@ -131,7 +131,9 @@ object Layouts {
             // hex bytes and offset a number.
             val script = spec.optJSONObject("script") ?: return false
             if (spec.optString("charset") != "table" || listOf("rows", "pages", "terminator", "length").any(spec::has)) return false
-            if (script.keySet() != setOf("open", "offset")) return false
+            // open and offset, and optionally texts, whose only value is "rows".
+            if (!script.keySet().containsAll(setOf("open", "offset")) || !setOf("open", "offset", "texts").containsAll(script.keySet())) return false
+            if (script.has("texts") && script.opt("texts") != "rows") return false
             if ((script.opt("open") as? String)?.let { HEX_BYTES.matches(it) } != true) return false
             if (!numberOk(script.optJSONObject("offset"), WHERE + "type")) return false
         }
@@ -427,20 +429,22 @@ object Layouts {
                 if (what == "end") ends += code
                 if (what == "page" || what == "clear") breaks += code
             }
+            val rows = script.optString("texts") == "rows"
             // At or before the script's start there is nothing to read.
-            val raw = if (size > 0) scriptPage(read(start + at - size, size + mark.size), size, mark, { t.isEnd(it) || it in ends }, breaks) else ByteArray(0)
-            var text = t.decode(raw, unit, controls, codes).trimEnd('\n')
+            val texts = if (size > 0) scriptPage(read(start + at - size, size + mark.size), size, mark, { t.isEnd(it) || it in ends }, breaks, rows) else emptyList()
+            var text = texts.joinToString("\n") { t.decode(it, unit, controls, codes).trimEnd('\n') }
             for (step in cleanupOf(spec) + entryCleanup) text = step.apply(text)
             return text
         }
 
         /**
-         * The page in [both] ([size] bytes of script up to the position, then as many as [mark]):
-         * a text starts after a mark and stops at an end code; a mark right after an end code with
-         * no page break before it carries the page on. Nothing when the position isn't in a text,
-         * or a text is about to start a new page. A port of the reference's `_script`.
+         * The page in [both] ([size] bytes of script up to the position, then as many as [mark]),
+         * in one piece, or with [rows] a piece for each of its texts: a text starts after a mark
+         * and stops at an end code; a mark right after an end code with no page break before it
+         * carries the page on. Nothing when the position isn't in a text, or a text is about to
+         * start a new page. A port of the reference's `_script`.
          */
-        private fun scriptPage(both: ByteArray, size: Int, mark: ByteArray, isEnd: (String) -> Boolean, breaks: Set<String>): ByteArray {
+        private fun scriptPage(both: ByteArray, size: Int, mark: ByteArray, isEnd: (String) -> Boolean, breaks: Set<String>, rows: Boolean): List<ByteArray> {
             val data = both.copyOf(size)
             val ahead = both.copyOfRange(size, both.size)
             fun code(i: Int): String = if (i >= 0 && i + unit <= data.size) hexOf(data, i, unit) else ""
@@ -450,7 +454,7 @@ object Layouts {
             fun joins(q: Int) = ends(q - unit) && code(q - 2 * unit) !in breaks
             var p = data.size
             var start = -1
-            if (ahead.contentEquals(mark) && !joins(p)) return ByteArray(0)
+            if (ahead.contentEquals(mark) && !joins(p)) return emptyList()
             // The text has just ended.
             if (ends(p - unit)) p -= unit
             while (true) {
@@ -463,21 +467,22 @@ object Layouts {
                 // On through the text before.
                 p = q - unit
             }
-            if (start < 0) return ByteArray(0)
-            val out = java.io.ByteArrayOutputStream()
+            if (start < 0) return emptyList()
+            val pieces = mutableListOf(java.io.ByteArrayOutputStream())
             var i = start
             while (i + unit <= data.size) {
                 val n = codeLength(data, i)
                 if (n == 0 && ends(i) && i + unit + mark.size <= data.size && mark.indices.all { data[i + unit + it] == mark[it] }) {
-                    // Where two texts of the page join.
+                    // Where two texts of the page join: with rows, the next text is a row of its own.
                     i += unit + mark.size
+                    if (rows) pieces += java.io.ByteArrayOutputStream()
                     continue
                 }
                 val take = if (n > 0) n else unit
-                out.write(data, i, minOf(take, data.size - i))
+                pieces.last().write(data, i, minOf(take, data.size - i))
                 i += take
             }
-            return out.toByteArray()
+            return pieces.map { it.toByteArray() }
         }
 
         private fun hexOf(data: ByteArray, i: Int, n: Int) = (i until i + n).joinToString("") { "%02X".format(data[it].toInt() and 0xFF) }

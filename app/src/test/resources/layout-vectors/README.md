@@ -1,4 +1,4 @@
-Copied unmodified from Yomikata, commit 8cc42c2 (branch script-pages, Yomikata PR #37 on text-codes, not merged
+Copied unmodified from Yomikata, commit 1d91473 (branch moonlight-choices, Yomikata PR #39 on #37 on text-codes, not merged
 yet), tools/tests/layout-vectors/, and flag-mask.json from commit a925743 (branch suikoden2-table). Its README
 follows.
 

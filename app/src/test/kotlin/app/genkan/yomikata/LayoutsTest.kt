@@ -155,7 +155,7 @@ class LayoutsTest {
         val scripted = JSONObject(known.toString()).also {
             it.getJSONObject("message").put("charset", "table").remove("rows")
             it.getJSONObject("message").put("codes", JSONObject("""{"FFF9": 4}"""))
-            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32"}}"""))
+            it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "type": "s32"}, "texts": "rows"}"""))
             it.put("tables", JSONObject("""{"by": {"address": "0x50", "type": "u32"}, "sets": {"36": ["a.tbl"], "-1": ["b.tbl", "c.tbl"]}}"""))
         }
         assertTrue(Layouts.understood(scripted))
@@ -197,6 +197,11 @@ class LayoutsTest {
             changed {
                 it.getJSONObject("message").put("charset", "table").remove("rows")
                 it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40", "counts": "bytes"}}"""))
+            },
+            // texts, when given, is "rows".
+            changed {
+                it.getJSONObject("message").put("charset", "table").remove("rows")
+                it.getJSONObject("message").put("script", JSONObject("""{"open": "8000", "offset": {"address": "0x40"}, "texts": "columns"}"""))
             },
             // A layout's tables: a number and at least one set of files, by decimal values.
             changed { it.put("tables", JSONObject("""{"by": {"address": "0x50"}, "sets": {}}""")) },
