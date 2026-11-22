@@ -116,4 +116,21 @@ class LayoutLinesTest {
         val step = read("こんにちは", waiting = true)
         assertEquals("苗木", step.lines.single().speaker)
     }
+
+    @Test
+    fun `while a choice is up, only the question goes, not the answers`() {
+        val asking = LayoutRead(message = "どうする？\n：右へ行く\n：左へ行く", waiting = true, choosing = true, choices = listOf("右へ行く", "左へ行く"))
+        assertEquals(listOf("どうする？"), texts(lines.read(asking)))
+        // Answers alone (no question): nothing goes.
+        lines.reset()
+        assertEquals(emptyList<String>(), texts(lines.read(asking.copy(message = "：右へ行く\n：左へ行く"))))
+        // Not choosing: the rows are the message, as before.
+        lines.reset()
+        assertEquals(listOf("：右へ行く：左へ行く"), texts(lines.read(asking.copy(message = "：右へ行く\n：左へ行く", choosing = false))))
+    }
+
+    @Test
+    fun `an answer row is the answer, or it with a short mark before it`() {
+        assertEquals("問い\n長い前置きの右へ行く", LayoutLines.withoutAnswers("問い\n：右へ行く\n長い前置きの右へ行く\n右へ行く", listOf("右へ行く")))
+    }
 }

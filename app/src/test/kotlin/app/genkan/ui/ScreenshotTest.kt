@@ -36,6 +36,8 @@ import coil3.annotation.ExperimentalCoilApi
 import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Test
@@ -186,6 +188,18 @@ class ScreenshotTest {
             insert = insert,
             staticInsertProgress = insertProgress,
         )
+    }
+
+    /** A choice a layout reads (made-up answers), the cursor on the second, under the backlog. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun choiceList() = shoot("choice_list", BOTTOM_PIXELS) {
+        androidx.compose.foundation.layout.Box(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background),
+            contentAlignment = androidx.compose.ui.Alignment.BottomCenter,
+        ) {
+            ChoiceList(listOf("もう一度、見てみる", "誰かに相談する", "そのまま帰る"), cursor = 1)
+        }
     }
 
     /** A game with everything: artwork, RomM's details, your play, reading and save. */

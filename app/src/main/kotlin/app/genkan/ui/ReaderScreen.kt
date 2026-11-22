@@ -92,6 +92,7 @@ fun ReaderScreen(
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val overlayOn by viewModel.overlay.enabled.collectAsStateWithLifecycle()
     val overlayAvailable by viewModel.overlay.available.collectAsStateWithLifecycle()
+    val choice by viewModel.builtIn.choice.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -172,7 +173,13 @@ fun ReaderScreen(
             } else if (picking || needsChoice) {
                 ThreadPicker(threads, chosen?.thread, onChoose = viewModel::choose, onClose = viewModel::closePicker.takeIf { !needsChoice })
             } else {
-                Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        Backlog(lines, lookup, panelHeight, marks, onTap = viewModel::lookUp, onBackground = viewModel::closeLookup)
+                    }
+                    // A choice on screen: its answers under the backlog, until one is taken.
+                    choice?.let { ChoiceList(it.answers, it.cursor) }
+                }
             }
             lookup?.let { current ->
                 LookupPanel(
@@ -183,6 +190,30 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.BottomCenter).height(panelHeight),
                 )
             }
+        }
+    }
+}
+
+/** A choice's [answers] as the game lists them, the row the game's cursor is on ([cursor]) marked. */
+@Composable
+fun ChoiceList(answers: List<String>, cursor: Int?, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        answers.forEachIndexed { i, answer ->
+            val on = i == cursor
+            Text(
+                answer,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (on) colors.onPrimaryContainer else colors.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (on) colors.primaryContainer else Color.Transparent)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
         }
     }
 }

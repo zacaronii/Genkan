@@ -51,8 +51,10 @@ class LayoutLines {
 
     fun read(read: LayoutRead): Step {
         // A message with a character no script has (U+FFFD, a control other than a row break)
-        // is memory that isn't the message: nothing is shown then.
-        val text = read.message?.takeIf { shown(it) }?.replace("\n", "")?.takeIf { it.isNotBlank() }
+        // is memory that isn't the message: nothing is shown then. While a choice is up its
+        // answers are shown as a list of their own, not as a line: only the question goes.
+        val message = if (read.asking) read.message?.let { withoutAnswers(it, read.choices.orEmpty()) } else read.message
+        val text = message?.takeIf { shown(it) }?.replace("\n", "")?.takeIf { it.isNotBlank() }
         val speaker = read.speakerName?.takeIf { it.isNotBlank() } ?: read.speakerNumber?.let { "#$it" }
         val out = mutableListOf<Line>()
         val before = current
@@ -95,6 +97,19 @@ class LayoutLines {
     }
 
     companion object {
+        /**
+         * [message] without its rows that are one of [answers] (a game may put a mark of its own
+         * before each, such as a colon): what's left is the question, if any.
+         */
+        fun withoutAnswers(message: String, answers: List<String>): String {
+            val shown = answers.map { it.trim() }.filter { it.isNotEmpty() }
+            return message.split("\n").filterNot { row -> row.trim().let { r -> shown.any { r == it || (r.endsWith(it) && r.length - it.length <= ANSWER_MARK) } } }
+                .joinToString("\n")
+        }
+
+        /** How many characters a game's mark before an answer row may take. */
+        private const val ANSWER_MARK = 2
+
         /** Whether [message] can be what the game shows: no U+FFFD, no control but newlines. */
         fun shown(message: String): Boolean = message.none { it == '\uFFFD' || (it.isISOControl() && it != '\n') }
     }
