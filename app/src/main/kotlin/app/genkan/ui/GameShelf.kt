@@ -3,6 +3,7 @@ package app.genkan.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -27,18 +28,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -94,6 +99,16 @@ internal object ShelfDefaults {
     const val WINDOW = 7
     /** Cases this far out start to fade, and are gone at [WINDOW]. */
     const val FADE_FROM = 5f
+    /**
+     * How far out cases are drawn while a direction is held: they fade from one case nearer and are
+     * gone here. The rest stay composed but at alpha 0, which costs the GPU nothing, and come back
+     * when the shelf rests.
+     */
+    const val HOLD_REACH = 5f
+    /** Steps closer together than this count as a held D-pad (key repeats are about 50 ms apart). */
+    const val HOLD_GAP_MS = 110L
+    /** How long the drawn reach takes to shrink or grow back. */
+    const val REACH_MS = 180
     /** How far the focused case steps toward the viewer, down from the shelf's edge. */
     val STEP_FORWARD = 10.dp
     /** The tallest a case may be, as a share of the shelf's height (the rest is media and shadow). */
@@ -125,9 +140,13 @@ internal object ShelfGeometry {
      */
     fun rotationY(d: Float): Float = -d.coerceIn(-1f, 1f) * ShelfDefaults.NEIGHBOUR_ANGLE
 
-    /** Fully opaque near the focus, fading out between [ShelfDefaults.FADE_FROM] and [ShelfDefaults.WINDOW]. */
-    fun alpha(d: Float): Float =
-        (1f - (abs(d) - ShelfDefaults.FADE_FROM) / (ShelfDefaults.WINDOW - ShelfDefaults.FADE_FROM)).coerceIn(0f, 1f)
+    /**
+     * Fully opaque near the focus, fading out over the last two cases before [reach]: at rest that
+     * is between [ShelfDefaults.FADE_FROM] and [ShelfDefaults.WINDOW], and while a direction is
+     * held it ends at [ShelfDefaults.HOLD_REACH].
+     */
+    fun alpha(d: Float, reach: Float = ShelfDefaults.WINDOW.toFloat()): Float =
+        ((reach - abs(d)) / (ShelfDefaults.WINDOW - ShelfDefaults.FADE_FROM)).coerceIn(0f, 1f)
 
     /** How much black lies over the case, for depth: none on the focused one. */
     fun shade(d: Float): Float = ShelfDefaults.NEIGHBOUR_SHADE * (abs(d) / ShelfDefaults.FADE_FROM).coerceAtMost(1f)
@@ -169,12 +188,34 @@ internal fun GameShelf(
     val spec = GameCase.specFor(games.first().platformSlug)
     val local = LocalShelves.isLocal(games.first())
 
+    // Read once per shelf: whether to log what each step costs (see ShelfTrace).
+    val trace = remember { ShelfTrace.enabled() }
+    if (trace) SideEffect { ShelfTrace.shelfComposed(focused) }
+
+    // Each cover's measured proportions, by game id, for the console's whole shelf, so a case
+    // that leaves the window and comes back is the right width from its first frame. A plain map:
+    // a cover loading mid-flight writes no state. The next step's recomposition, which happens
+    // anyway, passes the new proportions down; [settled] picks up the ones that load once the shelf
+    // stands still.
+    val coverAspects = remember(shelfId) { HashMap<Long, Float>() }
+    val settled = remember(shelfId) { mutableIntStateOf(0) }
+
     // A new console starts on its first case without sliding across from the old one's position.
     val position = remember(shelfId) { Animatable(focused.toFloat()) }
     LaunchedEffect(shelfId, focused) {
         position.animateTo(focused.toFloat(), spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+        settled.intValue++
     }
     val positionNow = remember(position) { { position.value } }
+    val onCoverAspect = remember(coverAspects, position) {
+        { id: Long, aspect: Float ->
+            val old = coverAspects.put(id, aspect)
+            val changed = old == null || abs(old - aspect) > 0.005f
+            if (trace && changed) ShelfTrace.aspectMeasured(stateWrite = !position.isRunning)
+            // At rest nothing else recomposes the shelf, so ask for it; mid-flight the next step will.
+            if (changed && !position.isRunning) settled.intValue++
+        }
+    }
 
     val media = remember(shelfId) { Animatable(0f) }
     LaunchedEffect(shelfId, focused, active, staticMedia) {
@@ -189,9 +230,23 @@ internal fun GameShelf(
     }
     val mediaNow = remember(media) { { media.value } }
 
-    // Each cover's measured proportions, by game id, kept for the console's whole shelf: a case
-    // that leaves the window and comes back is the right width from its first frame.
-    val coverAspects = remember(shelfId) { mutableStateMapOf<Long, Float>() }
+    // While a direction is held, only the cases near the focus are drawn: the far ones, mostly
+    // hidden under their neighbours anyway, cost the GPU a turned layer each on every frame. A tap
+    // never counts as holding, so the edges don't flicker on single steps.
+    var holding by remember(shelfId) { mutableStateOf(false) }
+    val lastStep = remember(shelfId) { longArrayOf(0L) }
+    LaunchedEffect(shelfId, focused) {
+        val now = System.nanoTime()
+        if (now - lastStep[0] < ShelfDefaults.HOLD_GAP_MS * 1_000_000) holding = true
+        lastStep[0] = now
+        delay(ShelfDefaults.HOLD_GAP_MS)
+        holding = false
+    }
+    val reach = animateFloatAsState(
+        if (holding) ShelfDefaults.HOLD_REACH else ShelfDefaults.WINDOW.toFloat(),
+        tween(ShelfDefaults.REACH_MS),
+        label = "shelf reach",
+    )
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -209,6 +264,8 @@ internal fun GameShelf(
         Layout(
             modifier = Modifier.fillMaxSize(),
             content = {
+                // Read here so a bump re-runs only this loop, where the proportions are passed down.
+                settled.intValue
                 for (index in range) {
                     val game = games[index]
                     key(game.id) {
@@ -219,11 +276,25 @@ internal fun GameShelf(
                             scaleY = s
                             rotationY = ShelfGeometry.rotationY(d)
                             translationY = ShelfGeometry.forward(d) * stepPx
-                            alpha = ShelfGeometry.alpha(d)
+                            alpha = ShelfGeometry.alpha(d, reach.value)
+                            // Fade by scaling each draw's alpha instead of compositing the case in an
+                            // offscreen buffer first, which the default does for any alpha below 1.
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             cameraDistance = 14f * density.density
                         }
                         val select = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
+                        // The models are built once per game. Coil's models are plain Any, which
+                        // Compose compares by identity, so a fresh URL string on each step would
+                        // recompose every case in the window.
+                        val art = remember(game, coverModel, artModel) {
+                            CaseArt(
+                                cover = artModel(game.coverLargePath) ?: coverModel(game),
+                                spine = artModel(game.box2dSidePath),
+                                logo = artModel(game.logoPath),
+                                physical = artModel(game.physicalPath),
+                            )
+                        }
                         if (local) {
                             ShelfTile(game, coverModel(game), maxCaseWidth, maxCaseHeight, transform.then(select))
                         } else {
@@ -232,18 +303,17 @@ internal fun GameShelf(
                                 spec = spec,
                                 maxWidth = maxCaseWidth,
                                 maxHeight = maxCaseHeight,
-                                cover = artModel(game.coverLargePath) ?: coverModel(game),
-                                spine = artModel(game.box2dSidePath),
-                                logo = artModel(game.logoPath),
-                                physical = artModel(game.physicalPath),
+                                art = art,
                                 download = downloads[game.id],
                                 coverAspect = coverAspects[game.id],
-                                onCoverAspect = { coverAspects[game.id] = it },
+                                onCoverAspect = onCoverAspect,
                                 showMedia = index == focused && active,
                                 badgeOnLeft = index < focused,
+                                raised = index == focused,
                                 mediaOut = mediaNow,
                                 shade = { ShelfGeometry.shade(index - positionNow()) },
                                 modifier = transform.then(select),
+                                trace = trace,
                             )
                         }
                     }
@@ -305,6 +375,14 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
     }
 }
 
+/**
+ * What Coil loads for one case: the cover, the spine, the title logo and the disc or cartridge
+ * cut-out, each null when the game has none. Compared by value, so a case whose art hasn't
+ * changed skips recomposition.
+ */
+@Immutable
+private data class CaseArt(val cover: Any?, val spine: Any?, val logo: Any?, val physical: Any?)
+
 /** The proportions of a case's parts, as shares of its width, per [CaseStyle]. */
 private class CaseParts(val corner: Float, val spine: Float, val frame: Float, val plastic: Boolean)
 
@@ -328,19 +406,19 @@ private fun ShelfCase(
     spec: CaseSpec,
     maxWidth: Dp,
     maxHeight: Dp,
-    cover: Any?,
-    spine: Any?,
-    logo: Any?,
-    physical: Any?,
+    art: CaseArt,
     download: DownloadEntity?,
     coverAspect: Float?,
-    onCoverAspect: (Float) -> Unit,
+    onCoverAspect: (Long, Float) -> Unit,
     showMedia: Boolean,
     badgeOnLeft: Boolean,
+    raised: Boolean,
     mediaOut: () -> Float,
     shade: () -> Float,
     modifier: Modifier,
+    trace: Boolean = false,
 ) {
+    if (trace) SideEffect { ShelfTrace.caseComposed() }
     val density = LocalDensity.current
     val aspect = GameCase.aspectFor(spec, coverAspect)
     val (width, height) = with(density) {
@@ -356,19 +434,21 @@ private fun ShelfCase(
             .size(width, height)
             .drawBehind { drawFloorShadow() },
     ) {
-        if (showMedia) PhysicalMedia(MediaKind.forSlug(game.platformSlug), physical, logo, game.name, caseColor, width, height, mediaOut)
+        if (showMedia) PhysicalMedia(MediaKind.forSlug(game.platformSlug), art.physical, art.logo, game.name, caseColor, width, height, mediaOut)
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
                     this.shape = shape
-                    shadowElevation = 6.dp.toPx()
+                    // A real shadow only under the focused case: one per rotated layer cost the GPU
+                    // on every frame of a move. The others stand on their drawn floor shadow.
+                    shadowElevation = if (raised) 6.dp.toPx() else 0f
                     clip = true
                 }
                 .background(caseColor),
         ) {
             Row(Modifier.fillMaxSize()) {
-                Spine(spec.style, spine, caseColor, Modifier.width(width * parts.spine).fillMaxHeight())
+                Spine(spec.style, art.spine, caseColor, Modifier.width(width * parts.spine).fillMaxHeight())
                 Box(
                     Modifier
                         .weight(1f)
@@ -379,23 +459,33 @@ private fun ShelfCase(
                             top = if (spec.style == CaseStyle.CARD_CASE) height * 0.06f else width * parts.frame,
                             bottom = width * parts.frame,
                         )
-                        .clip(RoundedCornerShape(width * parts.corner * 0.5f))
+                        // A plain rectangle clip: a rounded one is a path clip, redone for every
+                        // turned case on every frame, for corners a few pixels across.
+                        .clipToBounds()
                         .background(caseColor),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (cover != null) {
+                    if (art.cover != null) {
+                        // The title shows until the cover has loaded, and stays if it never does.
+                        // Plain text under the image: no request, no state to flip on load.
+                        CaseTitle(game.name, caseColor)
+                        // Coil decodes at this box's laid-out size, the cover as the focused case
+                        // draws it, never the full-size file. The neighbours draw the same bitmap
+                        // at 0.8 through their graphics layer: decoding them smaller would mean a
+                        // second request for every case as it passes through the focus.
                         AsyncImage(
-                            model = cover,
+                            model = art.cover,
                             contentDescription = game.name,
                             contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 val image = state.result.image
-                                if (image.width > 0 && image.height > 0) onCoverAspect(image.width.toFloat() / image.height)
+                                if (trace) ShelfTrace.coverLoaded(state.result.dataSource.name)
+                                if (image.width > 0 && image.height > 0) onCoverAspect(game.id, image.width.toFloat() / image.height)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        BlankCover(game.name, logo, caseColor)
+                        BlankCover(game.name, art.logo, caseColor)
                     }
                 }
             }
@@ -403,7 +493,16 @@ private fun ShelfCase(
             else CardboardEdge()
             DownloadMark(game, download, badgeOnLeft)
             // Depth: the further from the focus, the darker. Its own layer, so only its alpha changes per frame.
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = shade() }.background(Color.Black))
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = shade()
+                        // One flat rectangle: nothing overlaps, so no offscreen buffer is needed.
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    }
+                    .background(Color.Black),
+            )
         }
     }
 }
@@ -470,6 +569,20 @@ private fun CardboardEdge() {
     }
 }
 
+/** The title on a case whose cover hasn't loaded, in ink that reads on the case's colour. */
+@Composable
+private fun CaseTitle(title: String, caseColor: Color) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        color = if (caseColor.luminance() > 0.5f) Color(0xFF1C1C21) else Color(0xFFEDEDED),
+        textAlign = TextAlign.Center,
+        maxLines = 4,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(10.dp),
+    )
+}
+
 /** No cover: the case's own colour with the title logo, or failing that the title. */
 @Composable
 private fun BlankCover(title: String, logo: Any?, caseColor: Color) {
@@ -531,7 +644,7 @@ private fun DownloadMark(game: GameEntity, download: DownloadEntity?, onLeft: Bo
 private fun Badge(background: Color, onLeft: Boolean, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = if (onLeft) Alignment.BottomStart else Alignment.BottomEnd) {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(background).border(1.dp, Color(0x40FFFFFF), CircleShape),
+            Modifier.size(28.dp).background(background, CircleShape).border(1.dp, Color(0x40FFFFFF), CircleShape),
             contentAlignment = Alignment.Center,
         ) { content() }
     }

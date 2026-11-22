@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -133,21 +134,32 @@ class LibraryViewModel @Inject constructor(
     init {
         viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
         refreshLocal()
-        // The bottom screen shows the focused game while the launcher is in front.
+        // The bottom screen shows the focused game while the launcher is in front. It follows once
+        // the focus pauses: both screens draw on this one main thread, and redrawing the details
+        // (their queries, cover and summary) on every step of a held D-pad costs the shelf frames.
         viewModelScope.launch {
             combine(_focus, games, platforms) { focus, list, shelves ->
                 val game = list.getOrNull(focus.gameIndex) ?: list.firstOrNull()
                 game?.let { FocusedGame.Focus(it, shelves.getOrNull(focus.platformIndex)?.name.orEmpty(), coverModel(it)) }
-            }.distinctUntilChanged().collect(focusedGame::set)
+            }.distinctUntilChanged().collectLatest { focus ->
+                if (focusedGame.focus.value != null) delay(DETAILS_FOLLOW_MS)
+                focusedGame.set(focus)
+            }
         }
         // The bottom screen's Play / Download button does what A does on that game.
         viewModelScope.launch {
             focusedGame.playRequests.collect { id -> games.value.firstOrNull { it.id == id }?.let(::primaryAction) }
         }
-        // The artwork of the games around the focused one, so the next few are already here.
+        // The artwork around the focused game: ahead of it while it moves, all the shelf shows
+        // once it rests.
         viewModelScope.launch {
             combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }
-                .collect { (list, index) -> artworkWarmer.warmAround(list, index.coerceIn(0, (list.size - 1).coerceAtLeast(0))) }
+                .collectLatest { (list, index) ->
+                    val at = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                    artworkWarmer.warmAround(list, at, moving = true)
+                    delay(WARM_REST_MS)
+                    artworkWarmer.warmAround(list, at, moving = false)
+                }
         }
     }
 
@@ -316,6 +328,10 @@ class LibraryViewModel @Inject constructor(
 
     private companion object {
         const val NOTICE_MS = 4_000L
+        /** How long the focus rests before the bottom screen follows it. */
+        const val DETAILS_FOLLOW_MS = 120L
+        /** How long the focus rests before the artwork warmer stops looking ahead. */
+        const val WARM_REST_MS = 250L
         const val SAVE_SYNC_TIMEOUT_MS = 15_000L
     }
 
