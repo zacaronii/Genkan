@@ -15,6 +15,8 @@ import app.genkan.stats.ReadingStats
 import app.genkan.azahar.AzaharText
 import app.genkan.core.GameOverlay
 import app.genkan.core.BuiltInText
+import app.genkan.core.BuiltInPlayer
+import app.genkan.core.ScreenLook
 import app.genkan.ppsspp.HookFinder
 import app.genkan.ppsspp.PpssppText
 import app.genkan.dictionary.Dictionaries
@@ -40,6 +42,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -75,7 +80,16 @@ class ReaderViewModel @Inject constructor(
     private val wordMarks: WordMarks,
     private val popupPrefs: PopupPrefsSource,
     val overlay: GameOverlay,
+    private val player: BuiltInPlayer,
 ) : ViewModel(), PopupActions {
+
+    /** The look the built-in player draws its game with now, or null when no game runs there. */
+    val look: StateFlow<ScreenLook?> = player.game.map { it?.look }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Draws the game with the next look, for this play only, to compare. */
+    fun stepLook() {
+        look.value?.let { player.setLook(it.next()) }
+    }
 
     /** Each backlog line's words, as scanned for its text (scanning is the slow part, done once). */
     private val scanned = HashMap<Long, Pair<String, List<ScannedWord>>>()

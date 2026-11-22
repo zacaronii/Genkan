@@ -39,6 +39,7 @@ enum class SetupAction {
     PSP_DEBUGGER,
     AZAHAR_RPC,
     BUILT_IN_PLAYER,
+    SCREEN_LOOK,
     INSERT_ANIMATION,
     WORDS,
     YOMIKATA,

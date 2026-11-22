@@ -25,7 +25,6 @@ import androidx.lifecycle.lifecycleScope
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.GenkanTap
-import com.swordfish.libretrodroid.ShaderConfig
 import com.swordfish.libretrodroid.Variable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -49,6 +48,8 @@ class CoreActivity : ComponentActivity() {
     private lateinit var core: CoreDef
     private lateinit var saveFile: File
     private var romId = 0L
+    /** What the game is drawn with: the launcher's choice, or the reader's while it plays. */
+    private var look = ScreenLook.DEFAULT
     private var host: ICoreHost? = null
     private var lastSaved: ByteArray? = null
     @Volatile private var quitting = false
@@ -88,6 +89,7 @@ class CoreActivity : ComponentActivity() {
         }
         core = def
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
+        look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -109,7 +111,7 @@ class CoreActivity : ComponentActivity() {
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()?.also { lastSaved = it }
-            shader = ShaderConfig.Default
+            shader = look.shader
             preferLowLatencyAudio = true
             rumbleEventsEnabled = false
         }
@@ -166,7 +168,7 @@ class CoreActivity : ComponentActivity() {
             val h = ICoreHost.Stub.asInterface(binder)
             host = h
             try {
-                h.attach(session, romId, core.id)
+                h.attach(session, romId, core.id, look.name)
             } catch (e: RemoteException) {
                 Log.w(TAG, "Reader unreachable: $e")
             }
@@ -224,6 +226,14 @@ class CoreActivity : ComponentActivity() {
 
         override fun quit() {
             runOnUiThread { quit() }
+        }
+
+        override fun setLook(name: String) {
+            val next = ScreenLook.of(name)
+            runOnUiThread {
+                look = next
+                if (::retroView.isInitialized) retroView.shader = next.shader
+            }
         }
 
         override fun showOverlay(screenTextJson: String) {
@@ -438,6 +448,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_ROM = "rom"
         const val EXTRA_ROM_ID = "rom_id"
         const val EXTRA_PLATFORM = "platform"
+        /** The [ScreenLook] to draw the game with, by name. */
+        const val EXTRA_LOOK = "look"
         private const val MAX_READ = 64 * 1024
         private const val FRAME_WAIT_MS = 500L
         private const val CAPTURE_WAIT_MS = 2_000L

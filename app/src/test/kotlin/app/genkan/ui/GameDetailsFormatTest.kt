@@ -7,6 +7,7 @@ import app.genkan.library.GameEntity
 import app.genkan.play.PlayTotals
 import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.core.ScreenLook
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -203,6 +204,13 @@ class GameDetailsFormatTest {
     fun `durations and separators never break inside`() {
         assertEquals("5 h 42 min", GameDetailsFormat.duration(5 * 3_600_000L + 42 * 60_000L))
         assertEquals("2011  ·  RPG", GameDetailsFormat.detailLine(game().copy(releaseYear = 2011, genres = "RPG")))
+    }
+
+    @Test
+    fun `the look button names the game's own look, or its console's`() {
+        assertEquals("Look: console's (Default)", GameDetailsFormat.lookLabel(GameLook(null, ScreenLook.DEFAULT)))
+        assertEquals("Look: console's (Sharp)", GameDetailsFormat.lookLabel(GameLook(null, ScreenLook.SHARP)))
+        assertEquals("Look: CRT", GameDetailsFormat.lookLabel(GameLook(ScreenLook.CRT, ScreenLook.SHARP)))
     }
 
     private fun download(state: DownloadState, done: Long = 0, total: Long = 0, error: String? = null) = DownloadEntity(
