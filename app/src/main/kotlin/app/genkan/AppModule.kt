@@ -13,6 +13,8 @@ import app.genkan.download.DownloadService
 import app.genkan.download.DownloadStarter
 import app.genkan.library.FavouriteDao
 import app.genkan.library.LibraryDao
+import app.genkan.manual.ManualSource
+import app.genkan.manual.Manuals
 import app.genkan.library.LibraryDatabase
 import app.genkan.words.AnkiWordDao
 import app.genkan.words.GameLookupDao
@@ -43,6 +45,9 @@ object AppModule {
 
     @Provides
     fun libraryDao(db: LibraryDatabase): LibraryDao = db.library()
+
+    @Provides
+    fun manualSource(manuals: Manuals): ManualSource = manuals
 
     @Provides
     fun downloadDao(db: LibraryDatabase): DownloadDao = db.downloads()

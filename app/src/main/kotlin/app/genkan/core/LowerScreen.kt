@@ -20,7 +20,8 @@ import java.nio.ByteBuffer
 
 /**
  * A DS's lower (touch) screen on the bottom display, over the reader. Hidden, it shows the reader
- * beneath; shown again, it takes touches for the game. The frames come from the core's stacked
+ * (or the manual) beneath; shown again, it takes touches for the game. The stick click steps it
+ * ([BottomCycle]). The frames come from the core's stacked
  * frame, whose bottom half this draws at each vsync.
  */
 class LowerScreen(context: Context, display: Display) : Presentation(context, display) {
@@ -44,11 +45,6 @@ class LowerScreen(context: Context, display: Display) : Presentation(context, di
         screen.running = false
         GenkanTap.touchLowerScreen(-1f, -1f)
         super.onStop()
-    }
-
-    /** Shows the reader instead, or the game's screen again. */
-    fun toggle() {
-        if (isShowing) hide() else show()
     }
 
     private class ScreenView(context: Context) : View(context), Choreographer.FrameCallback {
