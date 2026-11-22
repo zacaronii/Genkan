@@ -101,6 +101,8 @@ fun ScreenLookContent(
                 selected = consoles[platform] ?: ScreenLook.defaultFor(platform),
                 onPick = { look -> look?.let { onPick(platform, it) } },
                 onClose = onClose,
+                suits = ScreenLook.suiting(platform),
+                consoleName = name,
                 focusSelected = true,
             )
         }

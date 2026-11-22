@@ -356,6 +356,37 @@ class ScreenshotTest {
         ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
     }
 
+    /** A PSP game's list, filtered to the looks that suit a PSP, the show-all row first. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameLookPickerFiltered() = shoot("game_look_picker_filtered", BOTTOM_PIXELS) {
+        LookPicker(
+            title = "The Clockmaker's Apprentice: look",
+            selected = null,
+            console = app.genkan.core.ScreenLook.DEFAULT,
+            suits = app.genkan.core.ScreenLook.suiting("psp"),
+            consoleName = "PlayStation Portable",
+            onPick = {},
+            onClose = {},
+        )
+    }
+
+    /** The same list with every look shown. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameLookPickerAll() = shoot("game_look_picker_all", BOTTOM_PIXELS) {
+        LookPicker(
+            title = "The Clockmaker's Apprentice: look",
+            selected = null,
+            console = app.genkan.core.ScreenLook.DEFAULT,
+            suits = app.genkan.core.ScreenLook.suiting("psp"),
+            consoleName = "PlayStation Portable",
+            onPick = {},
+            onClose = {},
+            showAllAtFirst = true,
+        )
+    }
+
     /** The list of looks for one game, on the bottom screen: "Console's" first and in use. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)

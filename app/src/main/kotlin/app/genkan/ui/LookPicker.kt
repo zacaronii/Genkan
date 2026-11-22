@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -37,14 +39,25 @@ data class LookChoice(val look: ScreenLook?, val label: String, val description:
 object LookPickerEntries {
     /**
      * The picker's entries under their headings: with [console] (a game's override), "Console's"
-     * first, then each family's looks in the order [ScreenLook] lists them.
+     * first, then each family's looks in the order [ScreenLook] lists them. With [suits] (the
+     * console's looks, [ScreenLook.suiting]) only those, and [selected] wherever it is, unless
+     * [showAll]; a family left with none has no heading.
      */
-    fun of(console: ScreenLook? = null): List<Pair<String?, List<LookChoice>>> = buildList {
+    fun of(
+        console: ScreenLook? = null,
+        suits: Set<ScreenLook>? = null,
+        selected: ScreenLook? = null,
+        showAll: Boolean = false,
+    ): List<Pair<String?, List<LookChoice>>> = buildList {
         console?.let { add(null to listOf(LookChoice(null, "Console's (${it.label})", "Whatever its console uses: ${it.description}"))) }
-        ScreenLook.entries.groupBy { it.family }.forEach { (family, looks) ->
+        val shown = ScreenLook.entries.filter { showAll || suits == null || it in suits || it == selected }
+        shown.groupBy { it.family }.forEach { (family, looks) ->
             add(family.title to looks.map { LookChoice(it, it.label, it.description) })
         }
     }
+
+    /** Whether a list for [suits] leaves looks out, so it offers "show all". */
+    fun filters(suits: Set<ScreenLook>?): Boolean = suits != null && suits.size < ScreenLook.entries.size
 }
 
 /**
@@ -61,15 +74,23 @@ fun LookPicker(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     console: ScreenLook? = null,
+    /** The looks that suit the console ([ScreenLook.suiting]), listed unless "show all"; null lists every look. */
+    suits: Set<ScreenLook>? = null,
+    /** The console's name, for the "show all" row. */
+    consoleName: String? = null,
     focusSelected: Boolean = false,
     closeLabel: String = "Close",
+    /** Whether the list opens showing every look; off in the app, so the console's come first. */
+    showAllAtFirst: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
-    val groups = remember(console) { LookPickerEntries.of(console) }
+    var showAll by remember { mutableStateOf(showAllAtFirst) }
+    val filters = LookPickerEntries.filters(suits)
+    val groups = remember(console, suits, selected, showAll) { LookPickerEntries.of(console, suits, selected, showAll) }
     val focus = remember { FocusRequester() }
-    // The selected row's place in the list (headings take a row each), to start there.
+    // The selected row's place in the list (headings take a row each, and the "show all" row one), to start there.
     val selectedIndex = remember(groups, selected) {
-        var index = 0
+        var index = if (filters) 1 else 0
         var found = 0
         for ((heading, choices) in groups) {
             if (heading != null) index++
@@ -93,6 +114,11 @@ fun LookPicker(
             Chip(closeLabel, onClose)
         }
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+            if (filters) {
+                item(key = "show-all") {
+                    ShowAllRow(showAll, consoleName, total = ScreenLook.entries.size, onClick = { showAll = !showAll })
+                }
+            }
             groups.forEach { (heading, choices) ->
                 heading?.let { item(key = "h-$it") { Text(it, style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) } }
                 choices.forEach { choice ->
@@ -108,6 +134,35 @@ fun LookPicker(
                 }
             }
         }
+    }
+}
+
+/** The row that lists every look, or only the console's again. */
+@Composable
+private fun ShowAllRow(showAll: Boolean, consoleName: String?, total: Int, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val console = consoleName ?: "this console"
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(2.dp, if (focused) colors.primary else colors.onSurface.copy(alpha = 0.25f), shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(
+            if (showAll) "Show only the looks for $console" else "Show all $total looks",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.primary,
+        )
+        Text(
+            if (showAll) "Every look is listed; the ones that suit $console are listed first by default."
+            else "Listed: the looks that suit $console. The others can still be picked.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
     }
 }
 
@@ -147,9 +202,13 @@ fun ReaderLookPicker(viewModel: ReaderViewModel) {
     val now = look?.first ?: return
     if (!picking) return
     BottomBackHandler(onBack = viewModel::closeLookPicker)
+    val game by viewModel.session.game.collectAsStateWithLifecycle()
+    val platform = game.platform
     LookPicker(
         title = "Look for this play",
         selected = now,
+        suits = ScreenLook.suiting(platform),
+        consoleName = LOOK_CONSOLES.firstOrNull { it.first == platform }?.second,
         onPick = { it?.let(viewModel::tryLook) },
         onClose = viewModel::closeLookPicker,
     )
