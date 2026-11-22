@@ -8,6 +8,7 @@ import app.genkan.play.PlayTotals
 import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
 import app.genkan.core.ScreenLook
+import app.genkan.manual.Manuals
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -177,11 +178,11 @@ class GameDetailsFormatTest {
     @Test
     fun `a cached manual's name changes with the manual`() {
         val first = game().copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf")
-        val name = GameDetailsViewModel.manualFileName(first)
+        val name = Manuals.fileName(first)
         assertTrue(name, name.startsWith("1-") && name.endsWith(".pdf"))
-        assertEquals(name, GameDetailsViewModel.manualFileName(first.copy(name = "Renamed")))
-        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
-        assertNotEquals(name, GameDetailsViewModel.manualFileName(first.copy(fsSizeBytes = 42)))
+        assertEquals(name, Manuals.fileName(first.copy(name = "Renamed")))
+        assertNotEquals(name, Manuals.fileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
+        assertNotEquals(name, Manuals.fileName(first.copy(fsSizeBytes = 42)))
     }
 
     @Test
