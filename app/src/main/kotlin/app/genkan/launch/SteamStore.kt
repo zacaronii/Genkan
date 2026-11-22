@@ -62,11 +62,15 @@ class SteamStore internal constructor(
     suspend fun details(appId: Int): SteamDetails? = withContext(Dispatchers.IO) {
         known[appId]?.let { return@withContext it.getOrNull() }
         val result = runCatching {
-            val japanese = cached(appId, JAPANESE) ?: return@runCatching null
-            val parsed = parse(japanese, appId) ?: return@runCatching null
+            // Only the store's own "no such app" is an answer; anything else that isn't one (a
+            // rate limit's `null`, an error page) is a failed fetch, tried again on the next focus.
+            val japanese = cached(appId, JAPANESE)
+            val parsed = parse(japanese, appId) ?: if (unknownApp(japanese, appId)) return@runCatching null else throw notAnAnswer(appId)
             // The default language only fills what the Japanese leaves empty.
             if (parsed.needsDefault()) {
-                cached(appId, null)?.let { parse(it, appId) }?.let { parsed.filledFrom(it) } ?: parsed
+                val default = cached(appId, null)
+                parse(default, appId)?.let { parsed.filledFrom(it) }
+                    ?: if (unknownApp(default, appId)) parsed else throw notAnAnswer(appId)
             } else parsed
         }
         // A failed fetch isn't remembered, so the next focus tries again.
@@ -75,7 +79,7 @@ class SteamStore internal constructor(
     }
 
     /** The store's answer for [appId] in [language] (null: its default), from the files or fetched and kept. */
-    private fun cached(appId: Int, language: String?): String? {
+    private fun cached(appId: Int, language: String?): String {
         val file = File(dir, if (language == null) "$appId.json" else "$appId.$language.json")
         if (file.isFile) return file.readText()
         val url = base.newBuilder()
@@ -118,6 +122,13 @@ class SteamStore internal constructor(
                 screenshots = data.optJSONArray("screenshots").objects().mapNotNull { it.text("path_full") },
             )
         }
+
+        /** Whether [json] is the store saying it doesn't know [appId] (`success: false`), as opposed to no answer at all. */
+        internal fun unknownApp(json: String, appId: Int): Boolean = runCatching {
+            JSONObject(json).optJSONObject(appId.toString())?.let { it.has("success") && !it.optBoolean("success") }
+        }.getOrNull() == true
+
+        private fun notAnAnswer(appId: Int) = java.io.IOException("Steam's answer wasn't one for app $appId")
 
         private fun SteamDetails.needsDefault() = name == null || summary == null || genres.isEmpty()
 

@@ -141,4 +141,26 @@ class SteamStoreTest {
         assertTrue(shown.summary!!.startsWith("止まった時計"))
         assertEquals(game.id, shown.id)
     }
+
+    @Test
+    fun `a 200 that isn't an answer for the app is a failed fetch, asked again on the next focus`() = runTest {
+        // What the store can send while it's limiting requests, then an error page, then the answer.
+        server.enqueue(body("null"))
+        server.enqueue(body("<html>Error</html>"))
+        server.enqueue(body(answer()))
+        val store = store()
+        assertNull(store.details(4242))
+        assertNull(store.details(4242))
+        assertEquals("時計塔の弟子", store.details(4242)!!.name)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `only the store's success false says the app is unknown`() {
+        assertTrue(SteamStore.unknownApp("""{"4242":{"success":false}}""", 4242))
+        assertFalse(SteamStore.unknownApp("null", 4242))
+        assertFalse(SteamStore.unknownApp("<html>", 4242))
+        assertFalse(SteamStore.unknownApp("""{"7":{"success":false}}""", 4242))
+        assertFalse(SteamStore.unknownApp(answer(), 4242))
+    }
 }
