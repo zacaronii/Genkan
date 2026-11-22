@@ -18,8 +18,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** A game running in the built-in player, as the reader's process sees it. */
-/** [look]: what the player draws the game with now. */
-data class CoreGame(val session: ICoreSession, val romId: Long, val core: CoreDef, val look: ScreenLook = ScreenLook.DEFAULT)
+/** [look]: what the player draws the game with now; [kept]: the look the game would start with next time. */
+data class CoreGame(
+    val session: ICoreSession,
+    val romId: Long,
+    val core: CoreDef,
+    val look: ScreenLook = ScreenLook.DEFAULT,
+    val kept: ScreenLook = look,
+)
 
 /**
  * The reader's link to the built-in player, which runs in its own process (cores aren't made to
@@ -101,6 +107,11 @@ class BuiltInPlayer @Inject constructor() {
         } catch (e: RemoteException) {
             Log.w(TAG, "Player unreachable: $e")
         }
+    }
+
+    /** The look on screen is now the game's own ([ScreenLooks.setGame] saved it). */
+    fun lookKept() {
+        _game.update { it?.copy(kept = it.look) }
     }
 
     /** Asks the player to save and close its game. */

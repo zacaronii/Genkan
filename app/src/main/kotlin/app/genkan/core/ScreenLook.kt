@@ -14,15 +14,18 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** How the built-in player draws a game's picture onto the screen: the player library's own shaders. */
-enum class ScreenLook(val label: String) {
-    DEFAULT("Default"),
-    SHARP("Sharp"),
-    CRT("CRT"),
-    LCD("LCD"),
-    CUT("CUT"),
-    CUT2("CUT2"),
-    CUT3("CUT3"),
+/**
+ * How the built-in player draws a game's picture onto the screen: the player library's own
+ * shaders. [label] is the short name (chip, button); [description] says what it does.
+ */
+enum class ScreenLook(val label: String, val description: String) {
+    DEFAULT("Default", "Smoothed as it's scaled up: soft edges, no pixels visible."),
+    SHARP("Sharp", "Square, crisp pixels; only their edges are blended."),
+    CRT("CRT", "Dark lines between the rows, like an old television."),
+    LCD("LCD", "A faint grid between the pixels, like a handheld's screen."),
+    CUT("CUT", "Smooths along edges so slopes and curves lose their steps; light."),
+    CUT2("CUT2", "Like CUT, a little smoother, and sharpens soft edges."),
+    CUT3("CUT3", "The smoothest of the three, in three passes; the most work for the GPU."),
     ;
 
     /** The next look, round to the first. */

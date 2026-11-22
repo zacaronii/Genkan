@@ -17,6 +17,7 @@ import app.genkan.core.GameOverlay
 import app.genkan.core.BuiltInText
 import app.genkan.core.BuiltInPlayer
 import app.genkan.core.ScreenLook
+import app.genkan.core.ScreenLooks
 import app.genkan.ppsspp.HookFinder
 import app.genkan.ppsspp.PpssppText
 import app.genkan.dictionary.Dictionaries
@@ -81,14 +82,25 @@ class ReaderViewModel @Inject constructor(
     private val popupPrefs: PopupPrefsSource,
     val overlay: GameOverlay,
     private val player: BuiltInPlayer,
+    private val screenLooks: ScreenLooks,
 ) : ViewModel(), PopupActions {
 
-    /** The look the built-in player draws its game with now, or null when no game runs there. */
-    val look: StateFlow<ScreenLook?> = player.game.map { it?.look }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /** The look the built-in player draws its game with now and whether it's the one kept, or null with no game there. */
+    val look: StateFlow<Pair<ScreenLook, Boolean>?> =
+        player.game.map { game -> game?.let { it.look to (it.look == it.kept) } }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Draws the game with the next look, for this play only, to compare. */
     fun stepLook() {
-        look.value?.let { player.setLook(it.next()) }
+        look.value?.let { (now, _) -> player.setLook(now.next()) }
+    }
+
+    /** Makes the look on screen the game's own, as its details' Look button would. */
+    fun keepLook() {
+        val game = player.game.value ?: return
+        viewModelScope.launch {
+            screenLooks.setGame(game.romId, game.look)
+            player.lookKept()
+        }
     }
 
     /** Each backlog line's words, as scanned for its text (scanning is the slow part, done once). */

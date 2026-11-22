@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -78,27 +77,32 @@ fun ScreenLookContent(consoles: Map<String, ScreenLook>, onStep: (String) -> Uni
         Text(
             "How the built-in player draws each console's picture on the top screen. A press steps to the next look. " +
                 "Until you choose, PlayStation and DS are Sharp, the Game Boys LCD and the PSP Default. " +
-                "A game can have its own in its details, and the reader's Look chip tries others while playing " +
-                "without keeping them.",
+                "A game can have its own in its details, and the reader's Look chip tries others while playing; " +
+                "Keep then makes the one on screen that game's own.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
         )
-        Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LOOK_CONSOLES.forEachIndexed { index, (platform, name) ->
+                val look = consoles[platform] ?: ScreenLook.defaultFor(platform)
                 ActionRow(
-                    "$name: ${(consoles[platform] ?: ScreenLook.defaultFor(platform)).label}",
+                    "$name: ${look.label}  ·  ${look.description}",
                     focused = null,
                     onClick = { onStep(platform) },
                     modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
                 )
             }
         }
-        Text(
-            "Default smooths the picture as it's scaled up. Sharp keeps the pixels square and blends only their edges. " +
-                "CRT draws scanlines, LCD a pixel grid. CUT, CUT2 and CUT3 smooth along edges, in one, two or three passes.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceVariant,
-        )
+        Text("The looks", style = MaterialTheme.typography.titleMedium, color = colors.onBackground)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ScreenLook.entries.forEach { look ->
+                Text(
+                    "${look.label}: ${look.description}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+        }
         HintRow(Hints.form())
     }
 }

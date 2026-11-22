@@ -160,8 +160,11 @@ fun ReaderScreen(
                 }
                 // Boxes over the game's text, to tap there (the built-in player's games).
                 if (overlayAvailable) Chip(if (overlayOn) "Overlay on" else "Overlay") { viewModel.overlay.toggle() }
-                // The next screen look, to compare while playing; settings and the game's details keep one.
-                look?.let { Chip("Look: ${it.label}") { viewModel.stepLook() } }
+                // The next screen look, to compare while playing; Keep makes the one on screen the game's own.
+                look?.let { (now, kept) ->
+                    Chip("Look: ${now.label}") { viewModel.stepLook() }
+                    if (!kept) Chip("Keep ${now.label}") { viewModel.keepLook() }
+                }
                 // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
                 if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
                 if (threads.isNotEmpty() || chosen != null) {
