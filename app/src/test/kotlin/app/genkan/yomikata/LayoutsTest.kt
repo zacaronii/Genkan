@@ -237,8 +237,9 @@ class LayoutsTest {
         val unknown = JSONObject("""{"message": {"address": "0x30", "charset": "utf8", "max_bytes": 4}, "typing_speed": {}}""")
         assertEquals(listOf(a, b), Layouts.layoutsFor(listOf(a, unknown, mine, b), null))
         assertEquals(listOf(mine), Layouts.layoutsFor(listOf(a, mine, b), "aa"))
-        assertEquals(listOf(a, b), Layouts.parseLayouts(org.json.JSONArray(listOf(a, b)).toString()))
-        assertEquals(listOf(a), Layouts.parseLayouts(a.toString()))
+        // Parsed anew: compared as text (JSONObject compares by identity).
+        assertEquals(listOf(a, b).map { it.toString() }, Layouts.parseLayouts(org.json.JSONArray(listOf(a, b)).toString()).map { it.toString() })
+        assertEquals(listOf(a.toString()), Layouts.parseLayouts(a.toString()).map { it.toString() })
     }
 
     @Test
