@@ -16,6 +16,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** A system's main RAM: where it is in the memory a [MemorySource] reads, and where the game sees it. */
+/** A capture file older than this belongs to no snapshot being written. */
+private const val STALE_CAPTURE_MS = 60_000L
+
 data class MainRam(val range: LongRange, val baseAddress: Long) {
     companion object {
         /** By RomM platform slug; null for systems Yomikata takes no snapshots of. */
@@ -44,7 +47,12 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     private val seen = HashSet<String>()
 
     /** Snapshots waiting to be sent: each one's meta file (its RAM beside it, `.ram.gz`). */
-    fun pending(): List<File> = dir.listFiles { f -> f.name.endsWith(".meta.json") }.orEmpty().sortedBy { it.name }
+    fun pending(): List<File> {
+        // A capture's memory left behind by a process that died mid-snapshot.
+        dir.listFiles { f -> f.name.endsWith(".capture") && f.lastModified() < System.currentTimeMillis() - STALE_CAPTURE_MS }
+            ?.forEach { it.delete() }
+        return dir.listFiles { f -> f.name.endsWith(".meta.json") }.orEmpty().sortedBy { it.name }
+    }
 
     fun ramOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".ram.gz")
 
@@ -68,6 +76,11 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         fun state(file: File): Long? = null
         /** The frame on screen. */
         fun screen(): Bitmap? = null
+        /**
+         * The frame and [ram]'s bytes from the same moment, the game held still between them,
+         * through [scratch]; null when the emulator can't, and [screen] and a plain read are used.
+         */
+        fun moment(ram: MainRam, scratch: File): Pair<Bitmap?, ByteArray>? = null
     }
 
     /** Sent or refused for good: gone from the device. */
@@ -124,24 +137,30 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         extras: Extras?,
         note: String?,
     ): Boolean {
-        // The picture first, then the memory at once, so both are of the same moment: the
-        // state and the gzipping after take seconds, while a line types out.
-        val frame = extras?.screen()
-        // What can't be read stays zeros: the dump keeps its addresses.
-        val bytes = readRam(memory, ram) ?: return false
         dir.mkdirs()
         val name = "$id-${System.currentTimeMillis()}".replace(Regex("[^A-Za-z0-9_.-]"), "_")
+        // The frame and the memory of one moment, where the emulator can hold the game still
+        // between them. Else the picture first, then the memory at once, as close as reads get:
+        // the game runs meanwhile, so a line typing out can be ahead in memory.
+        val moment = extras?.moment(ram, File(dir, "$name.capture"))
+        // A moment without its frame goes without a picture: a later one would claim the
+        // memory's moment and not be it.
+        val frame = if (moment != null) moment.first else extras?.screen()
+        // What can't be read stays zeros: the dump keeps its addresses.
+        val bytes = moment?.second ?: readRam(memory, ram) ?: return false
         GZIPOutputStream(File(dir, "$name.ram.gz").outputStream()).use { it.write(bytes) }
         val meta = JSONObject()
             .put("id", id)
             .put("platform", TextSamples.yomikataPlatform(game.platform!!))
             .put("base_address", "0x%08X".format(ram.baseAddress))
-            .put("ocr", JSONArray(listOf(line)))
+            // No text on screen (a scene change, no window): said so, as the inbox asks.
+            .put("ocr", JSONArray(listOfNotNull(line.takeIf { it.isNotBlank() })))
             .put("title", game.title)
             .put("app", "Genkan ${BuildConfig.VERSION_NAME}")
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
+        if (line.isBlank()) meta.put("no_text", true)
         extras?.vram()?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
