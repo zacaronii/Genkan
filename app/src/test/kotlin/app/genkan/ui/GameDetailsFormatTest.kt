@@ -179,10 +179,15 @@ class GameDetailsFormatTest {
     }
 
     @Test
-    fun `no PDF viewer means a notice and no manual`() {
-        assertEquals("No app on this device opens PDFs", GameDetailsViewModel.pdfNotice(0))
-        assertNull(GameDetailsViewModel.pdfNotice(1))
-        assertNull(GameDetailsViewModel.pdfNotice(3))
+    fun `manual pages are drawn at the asked width, within the pixel cap`() {
+        // A US letter page (612 x 792 points) at the bottom screen's width.
+        assertEquals(1080 to 1397, PdfManualPages.renderSize(612, 792, 1080))
+        // A long poster page is scaled down as a whole to stay under the cap.
+        val (w, h) = PdfManualPages.renderSize(600, 12_000, 2160)
+        assertTrue(w.toLong() * h <= PdfManualPages.MAX_PAGE_PIXELS)
+        assertEquals(20.0, h.toDouble() / w, 0.05)
+        // Degenerate sizes never give an empty bitmap.
+        assertEquals(1 to 1, PdfManualPages.renderSize(0, 0, 0))
     }
 
     /** Compares with no-break spaces read as plain ones, so the expected text stays legible. */

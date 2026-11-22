@@ -3,9 +3,7 @@
 package app.genkan
 
 import android.Manifest
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,10 +15,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import app.genkan.capture.CaptureConsentActivity
 import app.genkan.hardware.FocusDirectorActivity
@@ -33,7 +28,6 @@ import app.genkan.ui.GameDetailsViewModel
 import app.genkan.ui.ReaderScreen
 import app.genkan.ui.ReaderViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val TAG = "LowerActivity"
@@ -78,10 +72,6 @@ class LowerActivity : ComponentActivity() {
         // screen no longer pulls the pad away from the top one. Handing focus back after each
         // tap launched a window over the game instead, and PPSSPP paused and redrew for it.
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-        // A manual fetched while the details were up opens once it is here.
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) { details.manualReady.collect(::openPdf) }
-        }
 
         setContent {
             GenkanTheme {
@@ -97,20 +87,6 @@ class LowerActivity : ComponentActivity() {
                     )
                 }
             }
-        }
-    }
-
-    /**
-     * Opens a game's manual in the system's PDF viewer. Started from here, the viewer comes up
-     * on the bottom screen, beside the game it belongs to.
-     */
-    private fun openPdf(uri: Uri) {
-        // Asked again here: a viewer may have gone while the manual downloaded.
-        GameDetailsViewModel.pdfNotice(GameDetailsViewModel.pdfViewers(this, uri))?.let { details.show(it); return }
-        try {
-            startActivity(GameDetailsViewModel.pdfViewIntent(uri))
-        } catch (_: ActivityNotFoundException) {
-            details.show(GameDetailsViewModel.NO_PDF_VIEWER)
         }
     }
 
