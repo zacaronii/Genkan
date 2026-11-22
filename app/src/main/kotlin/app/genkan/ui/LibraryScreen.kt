@@ -50,6 +50,8 @@ import app.genkan.launch.LocalShelves
 import app.genkan.library.ContinuePlaying
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
+import app.genkan.library.LibraryOrder
+import app.genkan.library.OrderPanel
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
 import app.genkan.library.PlatformEntity
@@ -70,8 +72,14 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
     val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
+    val order by viewModel.order.collectAsStateWithLifecycle()
+    val orderPanel by viewModel.orderPanel.collectAsStateWithLifecycle()
     LibraryContent(
         favourites = favourites,
+        order = order,
+        orderPanel = orderPanel,
+        onToggleOrderPanel = viewModel::toggleOrderPanel,
+        onOrder = viewModel::setOrder,
         view = view,
         platforms = platforms,
         games = games,
@@ -121,6 +129,11 @@ fun LibraryContent(
     staticInsertProgress: Float? = null,
     /** The games marked as favourites, for what R2 says. */
     favourites: Set<Long> = emptySet(),
+    /** The consoles' sort and filter, and the panel's focused row while it is open. */
+    order: LibraryOrder = LibraryOrder(),
+    orderPanel: Int? = null,
+    onToggleOrderPanel: () -> Unit = {},
+    onOrder: (LibraryOrder) -> Unit = {},
 ) {
     Box(Modifier.fillMaxSize()) {
         // While the insert animation has the disc or cartridge, the shelf's own goes back in its case.
@@ -128,6 +141,7 @@ fun LibraryContent(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
             onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
         )
+        if (orderPanel != null) OrderPanelCard(order, orderPanel, onOrder, onToggleOrderPanel, Modifier.align(Alignment.TopEnd))
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
     }
 }
@@ -181,6 +195,8 @@ private fun LibraryBody(
             Box(Modifier.weight(1f)) {
                 if (platforms.isEmpty()) {
                     EmptyLibrary(sync)
+                } else if (games.isEmpty() && (platforms.getOrNull(focus.platformIndex)?.id ?: 0) > 0) {
+                    NothingDownloaded()
                 } else {
                     GameGrid(
                         games = games,
@@ -270,7 +286,8 @@ private fun ShelfLibrary(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 platforms.isEmpty() -> EmptyLibrary(sync)
-                games.isEmpty() -> Unit
+                // A console with nothing shown has nothing downloaded under "downloaded only".
+                games.isEmpty() -> platforms.getOrNull(focus.platformIndex)?.takeIf { it.id > 0 }?.let { NothingDownloaded() }
                 else -> GameShelf(
                     games = games,
                     focusedIndex = focus.gameIndex,
@@ -583,6 +600,67 @@ private fun gameLine(game: GameEntity, download: DownloadEntity?, emulatorFor: (
         DownloadState.FAILED -> "failed: ${download.error ?: "unknown error"}"
     }
     return "${game.name}  ·  $state"
+}
+
+/** What a console shows when "downloaded only" leaves nothing of it. */
+@Composable
+private fun NothingDownloaded() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            "Nothing from this console is on the device.\nL2: sort & filter",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * The "Sort & filter" panel over the library's top right: the sort and "downloaded only", the
+ * focused row ([row]) marked. Taps work too: a row is changed by tapping it, Close shuts it.
+ */
+@Composable
+private fun OrderPanelCard(order: LibraryOrder, row: Int, onOrder: (LibraryOrder) -> Unit, onClose: () -> Unit, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier
+            .padding(top = 64.dp, end = 24.dp)
+            .width(360.dp)
+            .clip(shape)
+            .background(colors.surface)
+            .border(1.dp, colors.onSurface.copy(alpha = 0.12f), shape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Sort & filter", style = MaterialTheme.typography.titleMedium, color = colors.primary)
+        val rows = listOf("Sort" to order.sort.label, "Downloaded only" to if (order.downloadedOnly) "On" else "Off")
+        rows.forEachIndexed { index, (name, value) ->
+            val focused = index == row
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (focused) colors.primary.copy(alpha = 0.18f) else Color.Transparent)
+                    .border(2.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOrder(OrderPanel.change(order, index, 1)) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+                Text(if (index == 0) "‹  $value  ›" else value, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HintRow(Hints.orderPanel, Modifier.weight(1f))
+            Text(
+                "Close",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.primary,
+                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
+            )
+        }
+    }
 }
 
 @Composable

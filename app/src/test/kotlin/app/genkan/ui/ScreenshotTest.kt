@@ -22,6 +22,8 @@ import app.genkan.library.GameCase
 import app.genkan.library.MediaKind
 import app.genkan.library.GameEntity
 import app.genkan.library.LibraryFocus
+import app.genkan.library.LibraryOrder
+import app.genkan.library.LibrarySort
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
 import app.genkan.library.PlatformEntity
@@ -119,6 +121,23 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 8, staticMedia = false)
     }
 
+    /** The "Sort & filter" panel open over the shelf (L2), on the sort. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfOrderPanel() = shoot("shelf_order_panel", TOP_PIXELS) {
+        library(
+            LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = false,
+            order = LibraryOrder(LibrarySort.LAST_PLAYED, downloadedOnly = true), orderPanel = 0,
+        )
+    }
+
+    /** "Downloaded only" with nothing of the console on the device. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfNothingDownloaded() = shoot("shelf_nothing_downloaded", TOP_PIXELS) {
+        library(LibraryView.SHELF, platformIndex = 1, emptyList(), gameIndex = 0, order = LibraryOrder(downloadedOnly = true))
+    }
+
     /** A PlayStation game's disc (the server's cut-out) dropped onto the spindle and spinning up. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -166,6 +185,8 @@ class ScreenshotTest {
         staticMedia: Boolean? = null,
         insert: InsertState? = null,
         insertProgress: Float? = null,
+        order: LibraryOrder = LibraryOrder(),
+        orderPanel: Int? = null,
     ) {
         LibraryContent(
             view = view,
@@ -185,6 +206,8 @@ class ScreenshotTest {
             staticMedia = staticMedia,
             insert = insert,
             staticInsertProgress = insertProgress,
+            order = order,
+            orderPanel = orderPanel,
         )
     }
 

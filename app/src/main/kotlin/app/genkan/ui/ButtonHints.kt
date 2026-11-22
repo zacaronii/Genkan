@@ -35,6 +35,7 @@ enum class PadButton(val label: String, val face: Boolean = false) {
     Y("Y", face = true),
     L1("L1"),
     R1("R1"),
+    L2("L2"),
     R2("R2"),
     START("Start"),
     SELECT("Select"),
@@ -113,8 +114,17 @@ object Hints {
      * What works anywhere in the library, whatever is focused. After a sync that [failed], Y
      * retries it (and Settings is where the server's address is fixed).
      */
-    fun libraryAnywhere(failed: Boolean = false): List<ButtonHint> =
-        listOf(ButtonHint(PadButton.Y, if (failed) "Retry" else "Sync"), ButtonHint(PadButton.START, "Settings"))
+    fun libraryAnywhere(failed: Boolean = false): List<ButtonHint> = listOf(
+        ButtonHint(PadButton.L2, "Sort"),
+        ButtonHint(PadButton.Y, if (failed) "Retry" else "Sync"),
+        ButtonHint(PadButton.START, "Settings"),
+    )
+
+    /** The "Sort & filter" panel: A and right step the focused row, left steps back, B or L2 closes. */
+    val orderPanel: List<ButtonHint> = listOf(
+        ButtonHint(PadButton.A, "Change"),
+        ButtonHint(listOf(PadButton.B, PadButton.L2), "Close"),
+    )
 
     /** What A does on [game], or null when it can't start it (no emulator for its console). */
     fun primary(game: GameEntity, download: DownloadEntity?, emulatorFor: (String) -> String?): String? {

@@ -44,6 +44,8 @@ import app.genkan.library.GameEntity
 import app.genkan.library.LibraryDao
 import app.genkan.library.LibraryFocus
 import app.genkan.library.LibraryNavigator
+import app.genkan.library.LibraryOrder
+import app.genkan.library.OrderPanel
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibrarySync
 import app.genkan.library.LibraryView
@@ -179,6 +181,24 @@ class LibraryViewModel @Inject constructor(
                 shelves.platforms.filter { it.id == LocalShelves.PC_ID } + romm + shelves.platforms.filter { it.id == LocalShelves.APPS_ID }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** The sort and filter for consoles' games, as last left. */
+    val order: StateFlow<LibraryOrder> = viewSettings.order.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryOrder())
+
+    /** The games on this device, for "downloaded only". */
+    private val installed = downloadQueue.downloads
+        .map { rows -> rows.filterValues { it.state == DownloadState.INSTALLED }.keys }
+        .distinctUntilChanged()
+
+    /** Each game's latest play here, for "last played". */
+    private val lastPlayed = playSessions.lastPlayedByGame().map { rows -> rows.associate { it.romId to it.lastPlayed } }
+
+    private val _orderPanel = MutableStateFlow<Int?>(null)
+    /** The "Sort & filter" panel's focused row while it is open (0 the sort, 1 the filter), else null. */
+    val orderPanel: StateFlow<Int?> = _orderPanel.asStateFlow()
+
+    /** The game the focus stays on while a new order rearranges the shelf. */
+    private var keepFocusOn: Long? = null
+
     val games: StateFlow<List<GameEntity>> =
         combine(platforms, _focus.map { it.platformIndex }.distinctUntilChanged()) { list, index -> list.getOrNull(index) }
             .map { it?.id }
@@ -189,13 +209,23 @@ class LibraryViewModel @Inject constructor(
                     id == ContinuePlaying.ID -> recent
                     id == Favourites.ID -> favourites
                     id < 0 -> local.map { it.games[id].orEmpty() }
-                    else -> dao.games(id)
+                    // A console's games in the chosen order; the other shelves keep their own.
+                    else -> combine(dao.games(id), order, installed, lastPlayed) { list, o, here, played -> o.arrange(list, here, played) }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch { sessionTracker.ended.collect(::onPlayEnded) }
+        // A new sort or filter moves the games: the focus stays on the one it was on, if shown.
+        viewModelScope.launch {
+            games.collect { list ->
+                val id = keepFocusOn ?: return@collect
+                keepFocusOn = null
+                val index = list.indexOfFirst { it.id == id }
+                _focus.update { it.copy(gameIndex = if (index >= 0) index else 0) }
+            }
+        }
         // The strip changes under the focus: "Continue playing" appears, a local shelf loads.
         viewModelScope.launch {
             var before = emptyList<PlatformEntity>()
@@ -275,6 +305,12 @@ class LibraryViewModel @Inject constructor(
     fun onKey(key: PadKey, repeatCount: Int = 0): Boolean {
         // The activity decides what a key does to the insert animation; nothing else moves under it.
         if (_insert.value != null) return true
+        // The "Sort & filter" panel has the pad while it is open.
+        _orderPanel.value?.let { row -> return onOrderPanelKey(row, key) }
+        if (key == PadKey.L2) {
+            if (repeatCount == 0) _orderPanel.value = 0
+            return true
+        }
         if (key == PadKey.Y) {
             sync(); return true
         }
@@ -442,6 +478,29 @@ class LibraryViewModel @Inject constructor(
             val seen = skippedAt.value
             withTimeoutOrNull(wait) { skippedAt.first { it != seen } }
         }
+    }
+
+    /** Up and down pick a row, left, right and A change it, B or L2 closes; every other key waits. */
+    private fun onOrderPanelKey(row: Int, key: PadKey): Boolean {
+        when (key) {
+            PadKey.UP -> _orderPanel.value = (row - 1).coerceAtLeast(0)
+            PadKey.DOWN -> _orderPanel.value = (row + 1).coerceAtMost(OrderPanel.ROWS - 1)
+            PadKey.LEFT -> setOrder(OrderPanel.change(order.value, row, -1))
+            PadKey.RIGHT, PadKey.A -> setOrder(OrderPanel.change(order.value, row, 1))
+            PadKey.B, PadKey.L2 -> _orderPanel.value = null
+            else -> Unit
+        }
+        return true
+    }
+
+    /** Opens or closes the "Sort & filter" panel (a tap on its chip). */
+    fun toggleOrderPanel() {
+        _orderPanel.value = if (_orderPanel.value == null) 0 else null
+    }
+
+    fun setOrder(next: LibraryOrder) {
+        keepFocusOn = games.value.getOrNull(_focus.value.gameIndex)?.id
+        viewModelScope.launch { viewSettings.setOrder(next) }
     }
 
     /** Marks [game] as a favourite, or unmarks it. */
