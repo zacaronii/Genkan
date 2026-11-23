@@ -174,6 +174,22 @@ class LayoutsTest {
         assertEquals("general", notes(cart, "AXXJ")) // no executable hash to name
     }
 
+    @Test
+    fun `a cartridge's version is the one with its header's CRC, which its layouts name`() {
+        val entry = CatalogEntry.parse(
+            """{"id": "SHVC-ZZ", "platform": "sfc", "title": "t", "encoding": "table",
+                "versions": [{"header_crc32": "0badf00d"}, {"header_crc32": "12345678", "note": "rev 1"}],
+                "layouts": [{"notes": "general"}, {"versions": ["0badf00d"], "notes": "rev 0"}, {"versions": ["12345678"], "notes": "rev 1"}]}""",
+        )
+        fun notes(crc: String?) = Layouts.layoutsFor(entry, "SHVC-ZZ", crc).map { it.optString("notes") }
+        assertEquals(listOf("rev 0"), notes("0badf00d"))
+        assertEquals(listOf("rev 1"), notes("12345678"))
+        // A dump the entry doesn't list: only the general layout. Without a CRC two versions are no single one.
+        assertEquals(listOf("general"), notes("ffffffff"))
+        assertEquals(listOf("general"), notes(null))
+        assertEquals("0badf00d", Layouts.versionFor(entry, "SHVC-ZZ", "0BADF00D"))
+    }
+
     /** Yomikata's `understood`: a layout with a key or named value this reader doesn't know is not there. */
     @Test
     fun `a layout with anything unknown is passed over`() {

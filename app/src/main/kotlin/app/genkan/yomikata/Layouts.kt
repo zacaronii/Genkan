@@ -81,8 +81,9 @@ object Layouts {
         return if (text.startsWith("[")) JSONArray(text).let { a -> List(a.length()) { a.getJSONObject(it) } } else listOf(JSONObject(text))
     }
 
-    /** [layoutsFor] for a release, as [pick] does with an entry. */
-    fun layoutsFor(entry: CatalogEntry, releaseId: String?): List<JSONObject> = layoutsFor(entry.layouts, versionFor(entry, releaseId))
+    /** [layoutsFor] for a release, as [pick] does with an entry; [headerCrc32]: a cartridge's, which names its version. */
+    fun layoutsFor(entry: CatalogEntry, releaseId: String?, headerCrc32: String? = null): List<JSONObject> =
+        layoutsFor(entry.layouts, versionFor(entry, releaseId, headerCrc32))
 
     /**
      * Which of a version's [layouts] to read now: the first whose own `when` is true, or that has
@@ -218,9 +219,14 @@ object Layouts {
     fun pick(entry: CatalogEntry, releaseId: String?, exeSha1: String? = null): JSONObject? =
         pick(entry.layouts, exeSha1 ?: versionFor(entry, releaseId))
 
-    /** The `exe_sha1` of the only version [entry] lists for [releaseId], or null. */
-    fun versionFor(entry: CatalogEntry, releaseId: String?): String? {
+    /**
+     * The `exe_sha1` of the only version [entry] lists for [releaseId], or null. A cartridge
+     * ([headerCrc32] known) is matched by its header instead: the `header_crc32` of the version of
+     * [releaseId] that has it, which its layouts name in their `versions` as a disc's name the sha1.
+     */
+    fun versionFor(entry: CatalogEntry, releaseId: String?, headerCrc32: String? = null): String? {
         val mine = entry.versions.filter { (it.id ?: entry.id) == releaseId }
+        if (headerCrc32 != null) return mine.firstOrNull { it.headerCrc32?.lowercase() == headerCrc32.lowercase() }?.headerCrc32
         return mine.singleOrNull()?.exeSha1
     }
 
