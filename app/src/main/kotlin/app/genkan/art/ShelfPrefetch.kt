@@ -8,12 +8,17 @@ import app.genkan.library.GameEntity
 import app.genkan.library.hasBoxFaces
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,35 +39,49 @@ class ShelfPrefetch @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
 
+    private val _busy = MutableStateFlow(false)
     /** Whether it's fetching the opened shelf now: the whole library's fetch waits for it. */
-    fun busy(): Boolean = job?.isActive == true
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     /** Fetches [games]' art from [index] outwards; [fullBox] adds the box's front and back. */
     fun start(games: List<GameEntity>, index: Int, fullBox: Boolean) {
         job?.cancel()
-        job = scope.launch {
-            delay(SETTLE_MS)
-            // Signed out (or the session not loaded yet): there is no server to ask.
-            if (metered() || !loaders.signedIn()) return@launch
-            // On disk and checked lately: nothing to do for it (a sync starts the shelf over).
-            val paths = pathsFrom(games, index, fullBox).filterNot { loaders.recentlyDone(it) }
-            val queue = Channel<String>(Channel.UNLIMITED).apply { paths.forEach(::trySend); close() }
-            Log.i(TAG, "Fetching ahead: ${paths.size} files")
-            repeat(WORKERS) {
-                launch {
-                    for (path in queue) {
-                        ensureActive()
-                        loaders.fetchToDisk(path)
+        _busy.value = true
+        lateinit var mine: Job
+        mine = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                delay(SETTLE_MS)
+                // Signed out (or the session not loaded yet): there is no server to ask.
+                if (metered() || !loaders.signedIn()) return@launch
+                // On disk and checked lately: nothing to do for it (a sync starts the shelf over).
+                val paths = pathsFrom(games, index, fullBox).filterNot { loaders.recentlyDone(it) }
+                val queue = Channel<String>(Channel.UNLIMITED).apply { paths.forEach(::trySend); close() }
+                Log.i(TAG, "Fetching ahead: ${paths.size} files")
+                // The workers within, so the shelf is busy until the last file is done.
+                coroutineScope {
+                    repeat(WORKERS) {
+                        launch {
+                            for (path in queue) {
+                                ensureActive()
+                                loaders.fetchToDisk(path)
+                            }
+                        }
                     }
                 }
+            } finally {
+                // Only the latest start says the shelf is done: a cancelled one was replaced.
+                if (job === mine) _busy.value = false
             }
         }
+        job = mine
+        mine.start()
     }
 
     /** Stops fetching: the shelf was left. */
     fun stop() {
         job?.cancel()
         job = null
+        _busy.value = false
     }
 
     private fun metered(): Boolean = context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true

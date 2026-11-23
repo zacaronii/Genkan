@@ -15,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -55,7 +56,8 @@ class LibraryArtFetch @Inject constructor(
                 val started = System.currentTimeMillis()
                 val fetched = fetchAll(
                     paths,
-                    held = { !launcher.inFront.value || shelf.busy() },
+                    // Suspended, not polled, while a game runs (for hours, maybe) or the shelf is fetched.
+                    awaitFree = { combine(launcher.inFront, shelf.busy) { front, busy -> front && !busy }.first { it } },
                     fill = loaders::diskFill,
                     recentlyDone = loaders::recentlyDone,
                     fetch = loaders::fetchToDisk,
@@ -73,18 +75,17 @@ class LibraryArtFetch @Inject constructor(
         const val AFTER_SYNC_MS = 5_000L
         /** The cache is left this much room: past it the fetch stops, so nothing the screens drew is pushed out. */
         const val FILL_LIMIT = 0.9
-        const val BUSY_WAIT_MS = 500L
         /** Failures in a row after which the server is taken to be down and the pass stops. */
         const val FAILURES_IN_A_ROW = 10
 
         /**
-         * Fetches [paths] in order with [fetch], one at a time: waiting while [held], leaving out what
+         * Fetches [paths] in order with [fetch], one at a time: first waiting on [awaitFree], leaving out what
          * was [recentlyDone], and stopping when the cache's [fill] reaches [FILL_LIMIT] or after
          * [FAILURES_IN_A_ROW] failed fetches in a row. Returns how many were fetched or checked.
          */
         suspend fun fetchAll(
             paths: List<String>,
-            held: () -> Boolean,
+            awaitFree: suspend () -> Unit,
             fill: () -> Double,
             recentlyDone: (String) -> Boolean,
             fetch: suspend (String) -> Boolean,
@@ -93,7 +94,7 @@ class LibraryArtFetch @Inject constructor(
             var failures = 0
             for (path in paths) {
                 coroutineContext.ensureActive()
-                while (held()) delay(BUSY_WAIT_MS)
+                awaitFree()
                 if (fill() >= FILL_LIMIT) break
                 if (recentlyDone(path)) continue
                 if (fetch(path)) {
