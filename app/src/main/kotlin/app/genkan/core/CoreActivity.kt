@@ -76,7 +76,12 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
-    private var selectDown = false
+    /** Select + a button: save states, fast-forward, quit ([PadChords]). */
+    private val chords = PadChords()
+    private lateinit var states: SaveStates
+    /** The slot the state shortcuts save to and load from; [SaveStates.BEFORE_LOAD] undoes a load. */
+    private var slot = 1
+    private var fastForward = 1
     /** Whether a Back closes something on the bottom screen first ([closedOnBottom]). */
     private val backPress = BackPress(::closedOnBottom)
     /** Whether the stick clicks step the bottom screen: on consoles whose own pad has none. */
@@ -107,6 +112,8 @@ class CoreActivity : ComponentActivity() {
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
+        states = SaveStates(SaveStates.dirFor(File(filesDir, SaveStates.FOLDER), def.id, GameFile.keyFor(romId, rom)), def.id)
+        fastForward = PadChords.fastForwardSpeed(platform)
 
         notice = TextView(this).apply {
             setTextColor(android.graphics.Color.WHITE)
@@ -618,13 +625,107 @@ class CoreActivity : ComponentActivity() {
             }
             return true
         }
-        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
-        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_START && event.action == KeyEvent.ACTION_DOWN && selectDown) {
-            quit()
-            return true
-        }
-        return false
+        if (event.action != KeyEvent.ACTION_DOWN && event.action != KeyEvent.ACTION_UP) return false
+        val verdict = chords.key(event.keyCode, event.action == KeyEvent.ACTION_DOWN, event.repeatCount)
+        verdict.started?.let(::startShortcut)
+        verdict.ended.forEach(::endShortcut)
+        if (verdict.tapSelect) tapSelect(event)
+        return verdict.consume
     }
+
+    private fun startShortcut(shortcut: PadChords.Shortcut) {
+        when (shortcut) {
+            PadChords.Shortcut.QUIT -> quit()
+            PadChords.Shortcut.SAVE_STATE -> lifecycleScope.launch(Dispatchers.IO) { saveState() }
+            PadChords.Shortcut.LOAD_STATE -> lifecycleScope.launch(Dispatchers.IO) { loadState() }
+            PadChords.Shortcut.NEXT_SLOT -> pickSlot(slot + 1)
+            PadChords.Shortcut.PREVIOUS_SLOT -> pickSlot(slot - 1)
+            PadChords.Shortcut.FAST_FORWARD -> if (gameLoaded()) {
+                // Muted while it runs: the cheapest way, as the sound would play at the game's speed.
+                retroView.audioEnabled = false
+                retroView.frameSpeed = fastForward
+            }
+        }
+    }
+
+    private fun endShortcut(shortcut: PadChords.Shortcut) {
+        if (shortcut == PadChords.Shortcut.FAST_FORWARD && gameLoaded()) {
+            retroView.frameSpeed = 1
+            retroView.audioEnabled = true
+        }
+    }
+
+    /** Select let go with no shortcut used: the game gets its press, held for a few frames so it sees it. */
+    private fun tapSelect(event: KeyEvent) {
+        if (!gameLoaded()) return
+        val port = (event.device?.controllerNumber ?: 0) - 1
+        if (port < 0) return
+        retroView.sendKeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_SELECT, port)
+        lifecycleScope.launch {
+            delay(SELECT_TAP_MS)
+            retroView.sendKeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_SELECT, port)
+        }
+    }
+
+    /** Slots 1 to 4, then the state before the last load; the note says what each holds. */
+    private fun pickSlot(next: Int) {
+        slot = Math.floorMod(next, SaveStates.SLOTS + 1)
+        val name = slotName(slot)
+        say(states.savedAt(slot)?.let { "$name · saved ${clock(it)}" } ?: "$name · empty", NOTE_MS)
+    }
+
+    private fun slotName(slot: Int) = if (slot == SaveStates.BEFORE_LOAD) "Before the last load" else "Slot $slot"
+
+    private fun clock(at: Long): String =
+        android.text.format.DateUtils.formatDateTime(this, at, android.text.format.DateUtils.FORMAT_SHOW_TIME or android.text.format.DateUtils.FORMAT_SHOW_DATE or android.text.format.DateUtils.FORMAT_ABBREV_MONTH)
+
+    /** Saves the game's state into the slot picked; what it held stays as its .bak. */
+    private fun saveState() {
+        if (!gameLoaded()) return
+        if (slot == SaveStates.BEFORE_LOAD) return runOnUiThread { say("Pick slot 1 to ${SaveStates.SLOTS} to save into", NOTE_MS) }
+        val note = try {
+            val state = retroView.serializeState()
+            if (state.isEmpty()) "${core.displayName} can't save its state" else {
+                states.write(slot, state)
+                "Saved to slot $slot · ${clock(System.currentTimeMillis())}"
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No state saved: $e")
+            "Couldn't save to slot $slot: ${e.message}"
+        }
+        Log.i(TAG, note)
+        runOnUiThread { say(note, NOTE_MS) }
+    }
+
+    /**
+     * Loads the slot picked. The state the game is in goes to [SaveStates.BEFORE_LOAD] first, and the
+     * battery save is written if the game changed it; a load that fails leaves the game as it was.
+     */
+    private fun loadState() {
+        if (!gameLoaded()) return
+        val name = slotName(slot)
+        val note = when (val read = states.read(slot)) {
+            SaveStates.Read.Empty -> "$name is empty"
+            is SaveStates.Read.OtherCore -> "Couldn't load $name: it was saved by another core (${read.core})"
+            is SaveStates.Read.Unreadable -> "Couldn't load $name: ${read.reason}"
+            is SaveStates.Read.State -> {
+                save()
+                val before = retroView.serializeState()
+                if (slot != SaveStates.BEFORE_LOAD && before.isNotEmpty()) runCatching { states.write(SaveStates.BEFORE_LOAD, before) }
+                if (retroView.unserializeState(read.bytes)) {
+                    saver.stateLoaded()
+                    "Loaded $name · saved ${clock(read.savedAt)}"
+                } else {
+                    // A core that refuses a state may have read part of it: the game goes back to where it was.
+                    if (before.isNotEmpty()) retroView.unserializeState(before)
+                    "Couldn't load $name: ${core.displayName} refused it"
+                }
+            }
+        }
+        Log.i(TAG, note)
+        runOnUiThread { say(note, NOTE_MS) }
+    }
+
 
     /** An asset's text: a RetroArch shader's file for a [ScreenLook]. */
     private fun readAsset(path: String): String = assets.open(path).bufferedReader().use { it.readText() }
@@ -673,6 +774,8 @@ class CoreActivity : ComponentActivity() {
         private const val VOLUME_EVERY_MS = 1_000L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L
+        /** How long a lone Select press is held for the game: a few frames, so a core polling once a frame sees it. */
+        private const val SELECT_TAP_MS = 80L
         /** A kept frame is enlarged to at least this wide for the reader's OCR. */
         private const val MIN_FRAME_SIDE = 720
         @SuppressLint("ClickableViewAccessibility")

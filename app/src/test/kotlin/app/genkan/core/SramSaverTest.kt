@@ -81,4 +81,37 @@ class SramSaverTest {
         assertTrue(SramSaver(fresh, loaded = { true }, read = { ByteArray(512) { 3 } }, last = null).save())
         assertFalse(temp.root.resolve("new.srm" + SramSaver.KEEP_SUFFIX).exists())
     }
+
+    @Test
+    fun `a loaded state's save RAM isn't written over the battery save until the game changes it`() {
+        val save = temp.root.resolve("saves/game.srm")
+        val now = ByteArray(8) { 5 }
+        save.parentFile!!.mkdirs()
+        save.writeBytes(now)
+        var sram = now.copyOf()
+        val saver = SramSaver(save, loaded = { true }, read = { sram }, last = now.copyOf())
+        // An old state's save RAM comes in with it: loading it is not the game saving.
+        sram = ByteArray(8) { 1 }
+        saver.stateLoaded()
+        assertFalse(saver.save())
+        assertArrayEquals("the shared save isn't rolled back", now, save.readBytes())
+        // The game saves (from the loaded state on): that is written.
+        sram = ByteArray(8) { 1 }.also { it[0] = 9 }
+        assertTrue(saver.save())
+        assertArrayEquals(sram, save.readBytes())
+    }
+
+    @Test
+    fun `after a state is loaded the keep still guards a save the core didn't take as it was`() {
+        val save = temp.root.resolve("saves/game.srm")
+        val original = ByteArray(16) { 3 }
+        save.parentFile!!.mkdirs()
+        save.writeBytes(original)
+        var sram = ByteArray(8) { 0 }
+        val saver = SramSaver(save, loaded = { true }, read = { sram }, last = original.copyOf())
+        saver.stateLoaded()
+        sram = ByteArray(8) { 4 }
+        assertTrue(saver.save())
+        assertArrayEquals(original, temp.root.resolve("saves/game.srm" + SramSaver.KEEP_SUFFIX).readBytes())
+    }
 }

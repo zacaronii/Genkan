@@ -46,6 +46,21 @@ class SramSaver(
         return true
     }
 
+    /**
+     * A save state was loaded: its save RAM is the core's now. That isn't the game saving, so it
+     * isn't written over the battery save (another emulator's, maybe) until the game changes it.
+     */
+    @Synchronized
+    fun stateLoaded() {
+        if (!loaded()) return
+        last = try {
+            read()
+        } catch (e: Exception) {
+            Log.w(TAG, "No save from the core: $e")
+            return
+        }
+    }
+
     /** Keeps the started-with save once, when the core's save RAM isn't its size. */
     private fun keepOriginal(sram: ByteArray) {
         val original = startedWith ?: return
