@@ -5,7 +5,8 @@ import kotlin.system.exitProcess
 
 /**
  * Runs in a separate process that Shizuku starts with the shell user's identity, which may read
- * and write other apps' Android/data folders. Keep it to plain file work on paths Genkan names.
+ * and write other apps' Android/data folders. Keep it to plain file work on paths Genkan names,
+ * and connecting the headphones the reader lists ([ShellBluetooth]).
  * Genkan also uses it in-process for save folders it can reach itself (PPSSPP's memory stick).
  */
 class FileService : IFileService.Stub() {
@@ -41,4 +42,7 @@ class FileService : IFileService.Stub() {
     }
 
     override fun deleteRecursively(path: String): Boolean = File(path).deleteRecursively()
+
+    /** Only through Shizuku: in Genkan's own process Android refuses the connect. */
+    override fun connectBluetooth(address: String): Int = ShellBluetooth.connect(address)
 }

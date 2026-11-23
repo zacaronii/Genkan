@@ -71,6 +71,8 @@ fun ReaderScreen(
     onAskAudioPermission: () -> Unit,
     /** Set while browsing the library: back to the focused game's details. */
     onShowGame: (() -> Unit)? = null,
+    /** The headphones list, which the menu opens over the reader. */
+    headphones: HeadphonesViewModel? = null,
 ) {
     val lines by viewModel.session.lines.collectAsStateWithLifecycle()
     val status by viewModel.session.status.collectAsStateWithLifecycle()
@@ -124,9 +126,11 @@ fun ReaderScreen(
             look = look?.let { (now, kept) -> now.label to kept },
             hasThreads = threads.isNotEmpty(),
             thread = chosen?.thread,
+            headphones = headphones != null,
         ),
     )
     var menuOpen by remember { mutableStateOf(false) }
+    var headphonesOpen by remember { mutableStateOf(false) }
     if (menuItems.isEmpty()) menuOpen = false
     val pick: (ReaderMenuItem) -> Unit = { item ->
         if (item.closes) menuOpen = false
@@ -143,6 +147,7 @@ fun ReaderScreen(
             ReaderAction.LOOK -> viewModel.openLookPicker()
             ReaderAction.KEEP_LOOK -> viewModel.keepLook()
             ReaderAction.THREAD -> viewModel.openPicker()
+            ReaderAction.HEADPHONES -> headphonesOpen = true
         }
     }
 
@@ -254,6 +259,21 @@ fun ReaderScreen(
                     ) { menuOpen = false },
                 )
                 ReaderMenuPanel(menuItems, onPick = pick, modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp))
+            }
+            if (headphonesOpen && headphones != null) {
+                val close = {
+                    headphonesOpen = false
+                    headphones.closed()
+                }
+                BottomBackHandler(onBack = close)
+                Box(
+                    Modifier.fillMaxSize().clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = close,
+                    ),
+                )
+                HeadphonesPanel(headphones, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp).widthIn(max = 420.dp))
             }
         }
     }

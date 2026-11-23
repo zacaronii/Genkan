@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- The headphones list: bonded audio devices and which one is connected (asked on first use). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- Games go to a shared ROMs folder that the emulators read. -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
@@ -25,6 +27,10 @@
 
     <!-- Package visibility for the emulators Genkan launches (launch/EmulatorCatalog.kt). -->
     <queries>
+        <!-- The system's output picker, the headphones' fallback when Shizuku can't connect. -->
+        <intent>
+            <action android:name="com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG" />
+        </intent>
         <package android:name="com.retroarch.aarch64" />
         <package android:name="com.retroarch" />
         <package android:name="com.retroarch.ra32" />

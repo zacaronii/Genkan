@@ -56,6 +56,7 @@ class LowerActivity : ComponentActivity() {
 
     private val reader: ReaderViewModel by viewModels()
     private val details: GameDetailsViewModel by viewModels()
+    private val headphones: app.genkan.ui.HeadphonesViewModel by viewModels()
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         reader.onAudioPermission(granted)
     }
@@ -100,6 +101,7 @@ class LowerActivity : ComponentActivity() {
                             onAskCaptureConsent = { startActivity(Intent(this@LowerActivity, CaptureConsentActivity::class.java)) },
                             onAskAudioPermission = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
                             onShowGame = details::showDetails.takeIf { canShowDetails },
+                            headphones = headphones,
                         )
                         // The playing game's manual, over the reader; its words look up through it.
                         PlayManualLayer(reader.manual, reader)

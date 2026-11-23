@@ -58,4 +58,11 @@ class ReaderMenuTest {
         assertEquals(listOf(ReaderAction.FIND_HOOK), actions(ReaderBarState(canFindHook = true)))
         assertEquals(listOf(ReaderAction.STOP_HOOK), actions(ReaderBarState(canFindHook = true, finder = HookFinderState.Working("…"))))
     }
+
+    @Test
+    fun `the headphones list opens from the menu's last row`() {
+        val row = ReaderMenu.items(ReaderBarState(overlayAvailable = true, headphones = true)).last()
+        assertEquals(ReaderAction.HEADPHONES, row.action)
+        assertTrue(row.closes)
+    }
 }

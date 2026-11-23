@@ -42,6 +42,7 @@ import coil3.compose.LocalAsyncImagePreviewHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -387,6 +388,28 @@ class ScreenshotTest {
                 ReaderMenuButton(open = true, attention = items.any { it.attention }) {}
             }
             ReaderMenuPanel(items, onPick = {}, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(top = androidx.compose.ui.unit.Dp(64f), end = androidx.compose.ui.unit.Dp(12f)))
+        }
+    }
+
+    /** The headphones list: one connected, one not, after a tap opened Android's output picker. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun headphonesList() = shoot("headphones_list", BOTTOM_PIXELS) {
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background)) {
+            HeadphonesList(
+                allowed = true,
+                shizuku = false,
+                devices = listOf(
+                    app.genkan.bluetooth.Headphones.Device("00:00:00:00:00:01", "Earbuds", connected = true),
+                    app.genkan.bluetooth.Headphones.Device("00:00:00:00:00:02", "Speaker", connected = false),
+                ),
+                status = app.genkan.bluetooth.Headphones.Status.Opened("Speaker", app.genkan.bluetooth.ConnectRoute.Step.OUTPUT_PICKER),
+                onAllow = {},
+                onPick = {},
+                modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd)
+                    .padding(top = androidx.compose.ui.unit.Dp(64f), end = androidx.compose.ui.unit.Dp(12f))
+                    .width(androidx.compose.ui.unit.Dp(420f)),
+            )
         }
     }
 

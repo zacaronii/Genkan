@@ -293,6 +293,7 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
             "Play time is approximate: sleep and other apps are counted too."
         }
         SetupAction.YOMIKATA -> "Memory samples and the inbox they go to."
+        SetupAction.HEADPHONES -> "Reconnect paired headphones without Android's settings (at once with Shizuku running)."
         SetupAction.SCREEN_LOOK -> "How the built-in player draws each console (smoothed, sharp, scanlines or an LCD grid), its low-latency sound, and per-console button swaps."
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
             if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"

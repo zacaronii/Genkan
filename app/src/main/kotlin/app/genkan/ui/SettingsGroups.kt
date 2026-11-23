@@ -70,6 +70,7 @@ object SettingsGroups {
                 SettingsRow.Switch("Built-in player", SwitchKey.BUILT_IN_PLAYER, SetupAction.BUILT_IN_PLAYER),
                 SettingsRow.Switch("Face buttons: A on the right", SwitchKey.FACE_A_ON_RIGHT, SetupAction.FACE_A_ON_RIGHT),
                 SettingsRow.Button("Screen look and sound", SetupAction.SCREEN_LOOK),
+                SettingsRow.Button("Bluetooth headphones", SetupAction.HEADPHONES),
                 SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
                 SettingsRow.Button("Emulator saves through Shizuku", SetupAction.SHIZUKU),
                 SettingsRow.Button("Usage access for play time", SetupAction.USAGE_ACCESS),
