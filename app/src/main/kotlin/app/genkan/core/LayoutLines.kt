@@ -11,7 +11,9 @@ import app.genkan.yomikata.LayoutRead
  * same sentence twice in a row is two lines; a line that grows after it went (a box that adds a
  * sentence and waits again) goes again, taking back what went before. A game that waits for a
  * press partway through typing a message (`waiting` with `shown` short of the end) has shown only
- * that much: that much goes, and the rest follows as the line grows.
+ * that much: that much goes, and the rest follows as the line grows. A window that scrolls by whole
+ * rows, like a terminal (the old rows less the first one or more, then new ones), keeps
+ * the rows that stayed out of its lines: each line is the rows after them, so no row goes twice.
  */
 class LayoutLines {
     /** [takesBack]: the text of this line that went before, which this one replaces. */
@@ -27,6 +29,12 @@ class LayoutLines {
 
     /** What of the current line has gone, or null. */
     private var sentText: String? = null
+
+    /** The last read's rows, for seeing a scroll. */
+    private var lastRows: List<String>? = null
+
+    /** The rows at the top of the window that went before it scrolled: not part of the current line. */
+    private var kept: List<String> = emptyList()
 
     /** The layout that read the current line, when the watch says. */
     private var currentLayout: Int? = null
@@ -86,7 +94,15 @@ class LayoutLines {
         }
         val answers = if (read.asking) read.choices.orEmpty() else choice?.takeIf { page != null && it.first.startsWith(page) }?.second
         val message = if (answers != null) read.message?.let { withoutAnswers(it, answers) } else read.message
-        val text = message?.takeIf { shown(it) }?.replace("\n", "")?.takeIf { it.isNotBlank() }
+        val rows = message?.takeIf { shown(it) }?.split("\n")
+        val scrolled = rows != null && lastRows?.let { scrolledRows(it, rows) }?.let { kept = it } != null
+        lastRows = rows
+        // A window that no longer starts with the rows kept is a new passage.
+        if (!scrolled && kept.isNotEmpty() && (rows == null || rows.take(kept.size) != kept)) kept = emptyList()
+        val text = rows?.drop(kept.size)?.joinToString("")?.takeIf { it.isNotBlank() }
+        // What has typed out of the current line: the window's, less the kept rows.
+        val keptText = kept.joinToString("")
+        val onScreen = read.onScreen?.let { if (it.startsWith(keptText)) it.substring(keptText.length) else "" }
         val speaker = read.speakerName?.takeIf { it.isNotBlank() } ?: read.speakerNumber?.let { "#$it" }
         val out = mutableListOf<Line>()
         // The page typed out before the game said it's a choice: what of it has typed is this
@@ -105,7 +121,7 @@ class LayoutLines {
             return Step(out, settle = false)
         }
         val previousShown = shown
-        val newLine = before == null ||
+        val newLine = before == null || scrolled ||
             (read.shown != null && previousShown != null && read.shown < previousShown) ||
             (text != before.text && !text.startsWith(before.text))
         if (newLine) {
@@ -124,11 +140,11 @@ class LayoutLines {
         shown = read.shown
         val complete = when {
             read.waiting != null -> read.waiting
-            read.shown != null -> read.onScreen == text
+            read.shown != null -> onScreen == text
             else -> null
         }
-        val partway = read.waiting == true && read.shown != null && read.onScreen != null && read.onScreen != text
-        if (partway) sendPart(read.onScreen!!, out) else if (complete == true) send(out)
+        val partway = read.waiting == true && read.shown != null && onScreen != null && onScreen != text
+        if (partway) sendPart(onScreen!!, out) else if (complete == true) send(out)
         return Step(out, settle = complete == null && unsent() != null)
     }
 
@@ -142,12 +158,27 @@ class LayoutLines {
     }
 
     /** A new game, or the watch stopped. */
+    /**
+     * The rows of [now] that stayed from [before] when the window scrolled by whole rows: [before]
+     * less its first row or rows, at the top of [now] with a new row after them. Null: no scroll
+     * (the same window, a new page, or rows that are all blank).
+     */
+    private fun scrolledRows(before: List<String>, now: List<String>): List<String>? {
+        for (gone in 1 until before.size) {
+            val stayed = before.subList(gone, before.size)
+            if (now.size > stayed.size && now.subList(0, stayed.size) == stayed && stayed.any { it.isNotBlank() }) return stayed
+        }
+        return null
+    }
+
     fun reset() {
         clearLine()
         choice = null
         lastLine = null
         lastLayout = null
         onlyEmptySince = false
+        lastRows = null
+        kept = emptyList()
     }
 
     /** No current line (the message cleared), the last choice kept. */

@@ -226,4 +226,40 @@ class LayoutLinesTest {
         step(LayoutRead(message = "はい", waiting = true))
         assertEquals(listOf("はい", "はい"), sent)
     }
+
+    @Test
+    fun `a 3-row window scrolling 5 times sends each row once`() {
+        val rows = listOf("一行目", "二行目", "三行目", "四行目", "五行目", "六行目", "七行目", "八行目")
+        val sent = mutableListOf<String>()
+        sent += texts(read(rows.take(3).joinToString("\n"), waiting = true))
+        for (top in 1..5) sent += texts(read(rows.subList(top, top + 3).joinToString("\n"), waiting = true))
+        read(null)
+        assertEquals(rows.joinToString(""), sent.joinToString(""))
+        assertEquals(listOf("一行目二行目三行目", "四行目", "五行目", "六行目", "七行目", "八行目"), sent)
+    }
+
+    @Test
+    fun `a scrolled window's new row goes as it types out`() {
+        read("一行目\n二行目", waiting = true)
+        // What has typed out is the window's text without its row breaks.
+        fun typed(shown: Int) = lines.read(LayoutRead(message = "二行目\n三行目", shown = shown.toLong(), onScreen = "二行目三行目".take(shown)))
+        assertEquals(emptyList<String>(), texts(typed(4)))
+        assertEquals(listOf("三行目"), texts(typed(6)))
+    }
+
+    @Test
+    fun `a real repeated row in a new passage, after a clear, is kept`() {
+        read("一行目\n二行目", waiting = true)
+        read(null)
+        assertEquals(listOf("二行目三行目"), texts(read("二行目\n三行目", waiting = true)))
+    }
+
+    @Test
+    fun `a window that changes all its rows at once is a new line`() {
+        read("一行目\n二行目\n三行目", waiting = true)
+        assertEquals(listOf("四行目五行目六行目"), texts(read("四行目\n五行目\n六行目", waiting = true)))
+        // And a new page after a scroll is whole again.
+        read("五行目\n六行目\n七行目", waiting = true)
+        assertEquals(listOf("八行目九行目十行目"), texts(read("八行目\n九行目\n十行目", waiting = true)))
+    }
 }
