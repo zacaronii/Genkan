@@ -50,4 +50,6 @@ interface ICoreSession {
     oneway void setLook(String look) = 13;
     /** A list to draw over the game, apart from the backlog (OverlayPanel's JSON): a choice's answers; blank: none. */
     oneway void showPanel(String panelJson) = 14;
+    /** A cartridge's catalog id and header CRC-32 (SnesCartridge), "id crc"; null for a game that isn't one. */
+    String cartridgeId() = 15;
 }

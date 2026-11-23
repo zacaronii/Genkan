@@ -117,12 +117,14 @@ class BuiltInText @Inject constructor(
         val game = session.game.value
         _notListed.value = false
         val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
+        // A cartridge's id is in its header, read once; a disc's is looked for in RAM as it boots.
+        val cartridge = withContext(Dispatchers.IO) { player.cartridgeId() }
         repeat(LAYOUT_TRIES) { attempt ->
             val id = withContext(Dispatchers.IO) {
                 // RAM first here too: the id found earlier in this run (another disc's, maybe)
                 // only stands in, as the stored one does.
                 GameId.choose(
-                    ram = player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } },
+                    ram = cartridge?.id ?: player.memory()?.use { m -> RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) } },
                     stored = ids[game.key] ?: stored,
                     attempt = attempt,
                 )
@@ -134,7 +136,7 @@ class BuiltInText @Inject constructor(
                 // Genkan can't hash the executable: the release id's only listed version stands in.
                 // A version may have several layouts (one per chapter's program); the watch reads
                 // whichever's `when` is true.
-                val layouts = Layouts.layoutsFor(entry, id).ifEmpty { return }
+                val layouts = Layouts.layoutsFor(entry, id, cartridge?.headerCrc32?.takeIf { cartridge.id == id }).ifEmpty { return }
                 val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
                 setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")

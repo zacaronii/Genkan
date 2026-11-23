@@ -171,6 +171,18 @@ class BuiltInPlayer @Inject constructor() {
     }
 
     /** The running game's memory, or null when no game runs in the player. */
+    /** The playing cartridge's catalog id and header CRC-32 ([SnesCartridge]); null for a disc, or no game. */
+    fun cartridgeId(): SnesCartridge.Id? {
+        val game = _game.value ?: return null
+        val raw = try {
+            game.session.cartridgeId()
+        } catch (e: RemoteException) {
+            null
+        } ?: return null
+        val (id, crc) = raw.split(' ').takeIf { it.size == 2 } ?: return null
+        return SnesCartridge.Id(id, crc)
+    }
+
     fun memory(): MemorySource? {
         val game = _game.value ?: return null
         val raw = try {
