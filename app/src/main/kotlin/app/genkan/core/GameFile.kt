@@ -49,7 +49,8 @@ object GameFile {
             val entries = playable(core, zip)
             // A game in several files (a disc's tracks) is played through its index (a cue sheet,
             // a playlist): the index and the files beside it are unpacked, and the core gets the index.
-            val indexes = entries.filter { isIndex(it.name) }
+            // A playlist lists the cue sheets: it comes first, then the rest by name.
+            val indexes = entries.filter { isIndex(it.name) }.sortedBy { if (it.name.endsWith(".m3u", ignoreCase = true)) 0 else 1 }
             val entry = indexes.firstOrNull() ?: entries.firstOrNull()
                 ?: return Prepared.Unplayable("The game's zip holds nothing ${core.displayName} can play")
             val name = File(entry.name).name
@@ -94,7 +95,7 @@ object GameFile {
                     if (n < 0) break
                     written += n
                     // The entry's own size can lie: the count is what holds.
-                    if (written > maxBytes) throw IOException("more than ${MAX_UNPACKED_BYTES / MB} MB")
+                    if (written > maxBytes) throw IOException("more than ${maxBytes / MB} MB")
                     output.write(buffer, 0, n)
                 }
             }

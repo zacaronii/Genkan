@@ -75,6 +75,9 @@ import app.genkan.library.GameCase
 import app.genkan.library.GameEntity
 import app.genkan.library.MediaKind
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.delay
@@ -324,6 +327,7 @@ internal fun GameShelf(
                         val art = remember(game, coverModel, artModel) {
                             CaseArt(
                                 cover = artModel(game.coverLargePath) ?: coverModel(game),
+                                standIn = if (game.coverLargePath != null) coverModel(game) else null,
                                 spine = artModel(game.box2dSidePath),
                                 logo = artModel(game.logoPath),
                                 physical = artModel(game.physicalPath),
@@ -453,6 +457,8 @@ private fun ShelfTile(game: GameEntity, cover: Any?, maxWidth: Dp, maxHeight: Dp
 @Immutable
 private data class CaseArt(
     val cover: Any?,
+    /** The small cover, drawn under the large one while it loads when it's already on the device. */
+    val standIn: Any? = null,
     val spine: Any?,
     val logo: Any?,
     val physical: Any?,
@@ -547,6 +553,15 @@ private fun ShelfCase(
                         // The title shows until the cover has loaded, and stays if it never does.
                         // Plain text under the image: no request, no state to flip on load.
                         CaseTitle(game.name, caseColor)
+                        // The small cover, from the device only (no request), until the large one is drawn over it.
+                        art.standIn?.let { small ->
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalPlatformContext.current).data(small).networkCachePolicy(CachePolicy.DISABLED).build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         // Coil decodes at this box's laid-out size, the cover as the focused case
                         // draws it, never the full-size file. The neighbours draw the same bitmap
                         // at 0.8 through their graphics layer: decoding them smaller would mean a

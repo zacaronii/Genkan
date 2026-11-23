@@ -49,6 +49,9 @@ object GenkanTap {
     /** Why the game can't be heard (its sound stream wouldn't open, or stopped), or null while it can. */
     @JvmStatic external fun audioProblem(): String?
 
+    /** Forgets the last game's sound problem: the player's process can outlive a game. */
+    @JvmStatic external fun clearAudioProblem()
+
     /**
      * The core stacks two screens in one frame (a DS): the view draws only the upper one, and the
      * whole frame is kept for [copyFrame]. Set before the view is made.

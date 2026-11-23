@@ -2,6 +2,9 @@ package app.genkan.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.genkan.art.ArtLoaders
+import app.genkan.art.RomMArt
+import app.genkan.art.ShelfPrefetch
 import app.genkan.download.DownloadEntity
 import app.genkan.download.DownloadQueue
 import app.genkan.download.DownloadState
@@ -101,6 +104,8 @@ class LibraryViewModel @Inject constructor(
     private val artworkWarmer: ArtworkWarmer,
     private val viewSettings: LibraryViewSettings,
     private val launcherPresence: LauncherPresence,
+    private val artLoaders: ArtLoaders,
+    private val shelfPrefetch: ShelfPrefetch,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalShelves.Shelves(emptyList(), emptyMap()))
@@ -316,6 +321,18 @@ class LibraryViewModel @Inject constructor(
                     artworkWarmer.warmAround(list, at, moving = false, fullBox = box, showsBack = box)
                 }
         }
+        // The whole opened shelf's art, fetched ahead in the background (and checked once a day):
+        // started again for each shelf, from where the focus is.
+        viewModelScope.launch {
+            combine(games, viewSettings.fullBox) { list, box -> list to box }
+                .distinctUntilChanged()
+                .collectLatest { (list, box) -> if (list.isNotEmpty()) shelfPrefetch.start(list, _focus.value.gameIndex, box) }
+        }
+    }
+
+    override fun onCleared() {
+        shelfPrefetch.stop()
+        super.onCleared()
     }
 
     /** Re-reads GameNative's export and the app list; cheap, so it runs on every resume. */
@@ -328,16 +345,23 @@ class LibraryViewModel @Inject constructor(
     /** Set by the grid from its measured width, so up/down move by whole rows. */
     var columns: Int = 1
 
-    /** What the card shows: an app's icon, or a cover URL (RomM asset or Steam art). */
+    /** What the card shows: an app's icon, a Steam cover's URL, or a RomM cover ([RomMArt]). */
     fun coverModel(game: GameEntity): Any? = when {
         game.platformSlug == LocalShelves.APPS_SLUG -> localShelves.appIcon(game)
         LocalShelves.isLocal(game) -> game.coverPath
-        else -> session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, game.coverPath) }
+        else -> artModel(game.coverPath)
     }
 
-    /** A RomM asset path (a large cover, spine, logo or disc cut-out) as a URL, or null without one. */
-    fun artModel(path: String?): Any? =
-        path?.let { p -> session.currentAccount()?.let { app.genkan.romm.RomMApiFactory.assetUrl(it.baseUrl, p) } }
+    /**
+     * A RomM asset path (a cover, spine, logo or disc cut-out) as [RomMArt], at the version the
+     * daily check has reached for it, or null without one or while signed out.
+     */
+    fun artModel(path: String?): Any? = session.currentAccount()?.let {
+        RomMArt.of(path)?.let { art -> art.copy(version = artLoaders.versions.value[art.key] ?: 0) }
+    }
+
+    /** Raised when a file was found replaced on the server: the screens make their art again. */
+    val artVersions: StateFlow<Map<String, Int>> = artLoaders.versions
 
     /**
      * Handles a gamepad key; [repeatCount] is the key event's, so a held D-pad can speed up along

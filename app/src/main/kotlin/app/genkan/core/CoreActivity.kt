@@ -144,6 +144,8 @@ class CoreActivity : ComponentActivity() {
 
     /** Starts [def] on [game], the file it plays (unpacked from [rom] when that is a zip). */
     private fun play(def: CoreDef, rom: File, game: File) {
+        // The process may have played a game before this one: its sound problem isn't this one's.
+        GenkanTap.clearAudioProblem()
         val system = File(filesDir, "system").apply { mkdirs() }
         def.assets?.let { (zip, folder) -> CoreAssets.unpack(this, zip, File(system, folder)) }
 

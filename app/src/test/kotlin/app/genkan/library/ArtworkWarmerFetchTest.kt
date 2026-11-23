@@ -45,7 +45,7 @@ class ArtworkWarmerFetchTest {
         signedIn = true
         warmer.warmAround(games, 10)
         assertEquals(ArtworkWarmer.warmPaths(games, 10, 0).size, requests.size)
-        assertEquals("https://romm.example.com/c/10.png", requests.first().url)
+        assertEquals("/c/10.png", requests.first().url)
     }
 
     @Test
@@ -87,11 +87,11 @@ class ArtworkWarmerFetchTest {
         val count = requests.size
         warmer.warmAround(games, 11)
         // Only game 18 is new to the window; everything else finished.
-        assertEquals(listOf("https://romm.example.com/c/18.png"), requests.drop(count).map { it.url })
+        assertEquals(listOf("/c/18.png"), requests.drop(count).map { it.url })
     }
 
     @Test
-    fun `a game's art at a new version is fetched again, though the old one is on disk`() {
+    fun `a game's art at a new ts is asked for again (the image cache answers it from disk, by its path)`() {
         val v1 = games.map { it.copy(coverPath = "${it.coverPath}?ts=1") }
         warmer.warmAround(v1, 10)
         requests.forEach { it.onDone() }
@@ -99,6 +99,6 @@ class ArtworkWarmerFetchTest {
         // Game 10 changed on the server: its path is new, the rest are the same.
         val v2 = v1.map { if (it.id == 10L) it.copy(coverPath = "/c/10.png?ts=2") else it }
         warmer.warmAround(v2, 10)
-        assertEquals(listOf("https://romm.example.com/c/10.png?ts=2"), requests.drop(count).map { it.url })
+        assertEquals(listOf("/c/10.png?ts=2"), requests.drop(count).map { it.url })
     }
 }

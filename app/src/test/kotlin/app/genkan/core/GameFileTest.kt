@@ -97,6 +97,22 @@ class GameFileTest {
     }
 
     @Test
+    fun `a playlist comes before the cue sheets it lists`() {
+        val psx = CoreCatalog.forPlatform("psx")!!
+        val rom = zip(
+            "set.zip",
+            "a disc 1.cue" to "FILE \"a disc 1.bin\" BINARY\n".toByteArray(),
+            "a disc 1.bin" to bytes(2352, 21),
+            "b disc 2.cue" to "FILE \"b disc 2.bin\" BINARY\n".toByteArray(),
+            "b disc 2.bin" to bytes(2352, 22),
+            "z set.m3u" to "a disc 1.cue\nb disc 2.cue\n".toByteArray(),
+        )
+        val ready = GameFile.prepare(psx, rom, cache, "9") as GameFile.Prepared.Ready
+        assertEquals("z set.m3u", ready.file.name)
+        assertTrue("both discs beside it", File(ready.file.parentFile, "b disc 2.bin").isFile)
+    }
+
+    @Test
     fun `a zip with nothing the core takes can't be played, and says why`() {
         val rom = zip("other.zip", "game.sfc" to bytes(512, 7), "notes.txt" to bytes(8, 8))
         assertFalse(GameFile.takes(mgba, rom))
