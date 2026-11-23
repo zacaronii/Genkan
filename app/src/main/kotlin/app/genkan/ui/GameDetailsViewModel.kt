@@ -3,6 +3,8 @@ package app.genkan.ui
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.genkan.art.ArtLoaders
+import app.genkan.art.RomMArt
 import app.genkan.core.CoreCatalog
 import app.genkan.core.PlayerSettings
 import app.genkan.core.ScreenLook
@@ -23,7 +25,6 @@ import app.genkan.manual.ManualFetcher
 import app.genkan.manual.Manuals
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlayTotals
-import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMSession
 import app.genkan.saves.SaveStatus
 import app.genkan.saves.SaveSync
@@ -113,6 +114,7 @@ class GameDetailsViewModel @Inject constructor(
     private val session: RomMSession,
     private val manuals: Manuals,
     private val steamStore: SteamStore,
+    private val artLoaders: ArtLoaders,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
@@ -295,9 +297,9 @@ class GameDetailsViewModel @Inject constructor(
     }
 
     private fun artFor(game: GameEntity): GameArt {
-        val baseUrl = session.currentAccount()?.baseUrl
-        if (LocalShelves.isLocal(game) || baseUrl == null) return GameArt()
-        val url = { path: String? -> RomMApiFactory.assetUrl(baseUrl, path) }
+        if (LocalShelves.isLocal(game) || session.currentAccount() == null) return GameArt()
+        val versions = artLoaders.versions.value
+        val url = { path: String? -> RomMArt.of(path)?.let { it.copy(version = versions[it.key] ?: 0) } }
         return GameArt(
             physical = url(game.physicalPath),
             logo = url(game.logoPath),

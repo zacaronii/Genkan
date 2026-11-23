@@ -1,6 +1,7 @@
 package app.genkan
 
 import android.app.Application
+import app.genkan.art.ArtLoaders
 import app.genkan.download.DownloadQueue
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
@@ -11,24 +12,17 @@ import app.genkan.saves.SaveSync
 import app.genkan.azahar.AzaharText
 import app.genkan.core.BuiltInText
 import app.genkan.ppsspp.PpssppText
-import app.genkan.romm.RomMImageAuthInterceptor
-import app.genkan.romm.RomMSession
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
-import okhttp3.Dispatcher
-import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 @HiltAndroidApp
 class GenkanApp : Application(), SingletonImageLoader.Factory {
 
     // Lazy, so the built-in player's process (which shares this class) builds none of them.
-    @Inject lateinit var okHttpClient: Lazy<OkHttpClient>
-    @Inject lateinit var rommSession: Lazy<RomMSession>
     @Inject lateinit var readerSession: Lazy<ReaderSession>
     @Inject lateinit var ankiMiner: Lazy<AnkiMiner>
     @Inject lateinit var readingLog: Lazy<ReadingLogPusher>
@@ -39,6 +33,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var downloadQueue: Lazy<DownloadQueue>
     @Inject lateinit var wordMarks: Lazy<WordMarks>
     @Inject lateinit var hachidori: Lazy<HachidoriLink>
+    @Inject lateinit var artLoaders: Lazy<ArtLoaders>
 
     override fun onCreate() {
         super.onCreate()
@@ -59,24 +54,9 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         // Hand marks and lookup counts shared with a Hachidori host, when one is set.
         hachidori.get().start()
         downloadQueue.get().resume()
+        artLoaders.get().start()
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader {
-        // Images get their own dispatcher: the shared one allows 5 requests per host, so the
-        // fifteen-odd covers and spines of a shelf, plus the warmer's, queued behind each other
-        // (and behind anything else on the shared client) for seconds after the focus stopped.
-        val dispatcher = Dispatcher().apply { maxRequestsPerHost = IMAGE_REQUESTS_PER_HOST }
-        val client = okHttpClient.get().newBuilder()
-            .dispatcher(dispatcher)
-            .addInterceptor(RomMImageAuthInterceptor(rommSession.get()::credentials))
-            .build()
-        return ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
-            .build()
-    }
-
-    private companion object {
-        /** Parallel image fetches from the RomM server. */
-        const val IMAGE_REQUESTS_PER_HOST = 12
-    }
+    /** The screen's image loader: see [ArtLoaders]. */
+    override fun newImageLoader(context: PlatformContext): ImageLoader = artLoaders.get().screen
 }

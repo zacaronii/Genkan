@@ -1,8 +1,8 @@
 package app.genkan.library
 
 import android.content.Context
+import app.genkan.art.RomMArt
 import app.genkan.launch.LocalShelves
-import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMSession
 import coil3.SingletonImageLoader
 import coil3.request.CachePolicy
@@ -68,7 +68,7 @@ class ArtworkWarmer @Inject constructor(
         inFlight = buildMap {
             for (path in paths) {
                 val running = kept[path]?.takeUnless { it.isDisposed }
-                val request = running ?: RomMApiFactory.assetUrl(base, path)?.let { url -> fetch(url) { warmed[path] = Unit } }
+                val request = running ?: fetch(path) { warmed[path] = Unit }
                 if (request != null) put(path, request)
             }
         }
@@ -77,14 +77,14 @@ class ArtworkWarmer @Inject constructor(
     /** The signed-in server's address, or null when signed out; replaceable in tests. */
     internal var baseUrl: () -> String? = { session.currentAccount()?.baseUrl }
 
-    /** Starts fetching [url] into the disk cache, calling [onDone] when it is there; replaceable in tests. */
-    internal var fetch: (url: String, onDone: () -> Unit) -> Disposable = { url, onDone ->
+    /** Starts fetching [path] into the disk cache, calling [onDone] when it is there; replaceable in tests. */
+    internal var fetch: (path: String, onDone: () -> Unit) -> Disposable = { path, onDone ->
         // Disk only, decoded at a token size: the screen decodes at its own size later, so a
         // full-size bitmap now would cost CPU while the shelf animates, and push images that are
         // on screen out of the memory cache.
         SingletonImageLoader.get(context).enqueue(
             ImageRequest.Builder(context)
-                .data(url)
+                .data(RomMArt(path))
                 .size(WARM_DECODE_PX)
                 .memoryCachePolicy(CachePolicy.DISABLED)
                 .listener(onSuccess = { _, _ -> onDone() })

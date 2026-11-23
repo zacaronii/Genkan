@@ -34,6 +34,9 @@ class RomMSession @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<RomMState>(RomMState.Loading)
     val state: StateFlow<RomMState> = _state.asStateFlow()
+    private val _signedOut = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Each time the user signs out: what was kept for the account (its art) goes too. */
+    val signedOut: kotlinx.coroutines.flow.SharedFlow<Unit> = _signedOut
 
     @Volatile private var account: RomMAccount? = null
     @Volatile private var api: RomMApi? = null
@@ -164,6 +167,7 @@ class RomMSession @Inject constructor(
         scope.launch {
             store.clear()
             activate(null)
+            _signedOut.emit(Unit)
         }
     }
 

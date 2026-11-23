@@ -78,6 +78,7 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
     val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
+    val artVersions by viewModel.artVersions.collectAsStateWithLifecycle()
     val turnedId by viewModel.turnedId.collectAsStateWithLifecycle()
     val fullBox by viewModel.fullBox.collectAsStateWithLifecycle()
     val order by viewModel.order.collectAsStateWithLifecycle()
@@ -97,8 +98,9 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
         sync = sync,
         downloads = downloads,
         notice = notice,
-        coverModel = viewModel::coverModel,
-        artModel = viewModel::artModel,
+        // New when a file was found replaced on the server, so the shelf makes its art again.
+        coverModel = remember(artVersions) { { game: GameEntity -> viewModel.coverModel(game) } },
+        artModel = remember(artVersions) { { path: String? -> viewModel.artModel(path) } },
         emulatorFor = viewModel::emulatorFor,
         onSelectPlatform = viewModel::selectPlatform,
         onColumns = { viewModel.columns = it },
