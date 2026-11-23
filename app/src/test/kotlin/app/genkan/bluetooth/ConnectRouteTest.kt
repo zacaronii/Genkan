@@ -9,19 +9,29 @@ import org.junit.Test
 
 class ConnectRouteTest {
     @Test
-    fun `Shizuku connects first, then the output picker, then Bluetooth settings`() {
-        assertEquals(listOf(Step.SHIZUKU, Step.OUTPUT_PICKER, Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = true, pickerAvailable = true))
+    fun `headphones not connected are connected by Shizuku, else Bluetooth settings`() {
+        assertEquals(listOf(Step.SHIZUKU, Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = true, pickerAvailable = true, connected = false))
+        assertEquals(listOf(Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = false, pickerAvailable = true, connected = false))
     }
 
     @Test
-    fun `without Shizuku a tap opens the output picker`() {
-        assertEquals(listOf(Step.OUTPUT_PICKER, Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = false, pickerAvailable = true))
+    fun `the output picker, which lists only what's connected, never reconnects`() {
+        for (shizuku in listOf(true, false)) {
+            assertFalse(Step.OUTPUT_PICKER in ConnectRoute.steps(shizuku, pickerAvailable = true, connected = false))
+        }
+    }
+
+    @Test
+    fun `for connected headphones the output picker sends the sound to them`() {
+        assertEquals(listOf(Step.OUTPUT_PICKER, Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = true, pickerAvailable = true, connected = true))
+        assertEquals(listOf(Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = true, pickerAvailable = false, connected = true))
     }
 
     @Test
     fun `Bluetooth settings are always the last way`() {
-        assertEquals(listOf(Step.SHIZUKU, Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = true, pickerAvailable = false))
-        assertEquals(listOf(Step.BLUETOOTH_SETTINGS), ConnectRoute.steps(shizukuReady = false, pickerAvailable = false))
+        for (shizuku in listOf(true, false)) for (picker in listOf(true, false)) for (connected in listOf(true, false)) {
+            assertEquals(Step.BLUETOOTH_SETTINGS, ConnectRoute.steps(shizuku, picker, connected).last())
+        }
     }
 
     @Test

@@ -261,10 +261,8 @@ fun ReaderScreen(
                 ReaderMenuPanel(menuItems, onPick = pick, modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp))
             }
             if (headphonesOpen && headphones != null) {
-                val close = {
-                    headphonesOpen = false
-                    headphones.closed()
-                }
+                // The list stops following Bluetooth and forgets its last word as it leaves.
+                val close = { headphonesOpen = false }
                 BottomBackHandler(onBack = close)
                 Box(
                     Modifier.fillMaxSize().clickable(

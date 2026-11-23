@@ -63,11 +63,22 @@ class HeadphonesViewModel @Inject constructor(
         viewModelScope.launch { headphones.refresh() }
     }
 
-    fun connect(device: Headphones.Device) {
-        viewModelScope.launch { headphones.connect(device) }
+    /** [displayId]: the screen the list is on, where Bluetooth settings open if it comes to that. */
+    fun connect(device: Headphones.Device, displayId: Int?) {
+        viewModelScope.launch { headphones.connect(device, displayId) }
     }
 
-    fun closed() = headphones.clearStatus()
+    /** A list opened: no word left from the last one, and its rows follow Bluetooth while it's up. */
+    fun opened() {
+        headphones.clearStatus()
+        headphones.watch()
+        refresh()
+    }
+
+    fun closed() {
+        headphones.stopWatching()
+        headphones.clearStatus()
+    }
 }
 
 /** The headphones list where it's shown (the reader's bottom screen, or the settings page). */
@@ -77,15 +88,19 @@ fun HeadphonesPanel(viewModel: HeadphonesViewModel, modifier: Modifier = Modifie
     val shizuku by viewModel.shizuku.collectAsStateWithLifecycle()
     val devices by viewModel.headphones.devices.collectAsStateWithLifecycle()
     val status by viewModel.headphones.status.collectAsStateWithLifecycle()
+    val display = androidx.compose.ui.platform.LocalView.current.display?.displayId
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { viewModel.refresh() }
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        viewModel.opened()
+        onDispose { viewModel.closed() }
+    }
     HeadphonesList(
         allowed = allowed,
         shizuku = shizuku,
         devices = devices,
         status = status,
         onAllow = { ask.launch(Manifest.permission.BLUETOOTH_CONNECT) },
-        onPick = viewModel::connect,
+        onPick = { viewModel.connect(it, display) },
         modifier = modifier,
     )
 }
@@ -93,7 +108,6 @@ fun HeadphonesPanel(viewModel: HeadphonesViewModel, modifier: Modifier = Modifie
 /** The settings page: the list on its own, the pad moving through it. */
 @Composable
 fun HeadphonesScreen(viewModel: HeadphonesViewModel) {
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { viewModel.closed() } }
     androidx.compose.foundation.layout.Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(48.dp),
         contentAlignment = Alignment.TopCenter,
@@ -104,7 +118,7 @@ fun HeadphonesScreen(viewModel: HeadphonesViewModel) {
 
 /** What the list says under its title. */
 internal fun headphonesStatus(status: Headphones.Status, shizuku: Boolean): String = when (status) {
-    Headphones.Status.Idle -> if (shizuku) "Tap headphones to connect them." else "Tap headphones to pick them in Android's list. With Shizuku running, a tap connects them here."
+    Headphones.Status.Idle -> if (shizuku) "Tap headphones to connect them." else "Tap headphones to open them in Bluetooth settings. With Shizuku running, a tap connects them here."
     is Headphones.Status.Connecting -> "Connecting ${status.name}…"
     is Headphones.Status.Connected -> "${status.name} connected"
     is Headphones.Status.Opened -> when (status.where) {
