@@ -180,11 +180,11 @@ class HomeActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
-        launcher.set(true)
+        launcher.started(this)
     }
 
     override fun onStop() {
-        launcher.set(false)
+        launcher.stopped(this)
         super.onStop()
     }
 
