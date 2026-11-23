@@ -34,8 +34,10 @@ object CardFields {
             put("Expression", hit.expression)
             put("ExpressionFurigana", source.furiganaPlain)
             put("ExpressionReading", hit.reading.ifEmpty { hit.expression })
-            put("SelectionText", "")
-            put("MainDefinition", source.firstGlossaryHtml)
+            // A short definition Lapis shows in MainDefinition's place, and MainDefinition with
+            // only the first dictionary's glosses; Glossary keeps every entry in full.
+            put("SelectionText", CardDefinitions.selectionText(hit.glossaries))
+            put("MainDefinition", CardDefinitions.mainDefinition(hit.glossaries) ?: source.firstGlossaryHtml)
             put("Sentence", sentenceWithWord(source.sentence, source.matchStart, source.matchLength))
             put("Glossary", source.glossaryHtml)
             put("PitchPosition", pitchPositions(hit))

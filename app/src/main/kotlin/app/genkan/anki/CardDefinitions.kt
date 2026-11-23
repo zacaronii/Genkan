@@ -1,0 +1,141 @@
+package app.genkan.anki
+
+import app.genkan.dictionary.GlossaryEntry
+import com.squareup.moshi.Moshi
+
+/**
+ * The short definitions a card shows, from the dictionaries' own definition JSON (ported from
+ * Amatsubame's StructuredContentRenderer.glosses and CardFormatting.shortDefinition, so cards
+ * mined in either app read the same).
+ *
+ * A sense is a list of glosses. Structured content (JMdict, Jitendex) gives its senses from its
+ * glossary lists only, so example sentences, forms, cross-references and notes never come in. A
+ * plain-text definition with numbered sense lines (新和英: `1 〔…〕 dark; deep.`) gives a sense per
+ * line, its bracketed notes removed; other text is one sense.
+ */
+object CardDefinitions {
+    private val json = Moshi.Builder().build().adapter(Any::class.java).lenient()
+
+    /** [glossary]'s senses, each its glosses. */
+    fun glosses(glossary: String): List<List<String>> {
+        val parsed = try {
+            json.fromJson(glossary)
+        } catch (e: Exception) {
+            glossary
+        }
+        val senses = mutableListOf<List<String>>()
+        val strings = mutableListOf<String>()
+        for (definition in parsed as? List<*> ?: listOf(parsed)) {
+            when {
+                definition is String -> strings += definition
+                definition is Map<*, *> && definition["type"] == "text" -> strings += definition["text"] as? String ?: ""
+                definition is Map<*, *> && definition["type"] == "structured-content" -> senses += glossaryLists(definition["content"])
+            }
+        }
+        val text = strings.map { it.trim() }.filter { it.isNotEmpty() }
+        return textSenses(text) + senses
+    }
+
+    /**
+     * Plain-text definitions as senses: numbered lines (`1 …`), each without its 〔〕《》[]() notes
+     * and split at semicolons, when the text has them; else the text as one sense.
+     */
+    private fun textSenses(text: List<String>): List<List<String>> {
+        if (text.isEmpty()) return emptyList()
+        val numbered = text.flatMap { it.lines() }.mapNotNull { NUMBERED_LINE.matchEntire(it.trim())?.groupValues?.get(1) }
+        if (numbered.isEmpty()) return listOf(text)
+        return numbered.map { line ->
+            NOTES.replace(line, " ").split(';', '；')
+                .map { it.trim().trimEnd('.', '。').trim() }
+                .filter { it.isNotEmpty() }
+        }.filter { it.isNotEmpty() }
+    }
+
+    private fun glossaryLists(value: Any?): List<List<String>> = when (value) {
+        is List<*> -> value.flatMap(::glossaryLists)
+        is Map<*, *> -> if ((value["data"] as? Map<*, *>)?.get("content") == "glossary") {
+            val items = value["content"] as? List<*> ?: listOf(value["content"])
+            val glosses = items.map { plainText(it).trim() }.filter { it.isNotEmpty() }
+            if (glosses.isEmpty()) emptyList() else listOf(glosses)
+        } else {
+            glossaryLists(value["content"])
+        }
+        else -> emptyList()
+    }
+
+    /** An element's text, without ruby readings or images. */
+    private fun plainText(value: Any?): String = when (value) {
+        is String -> value
+        is List<*> -> value.joinToString("") { plainText(it) }
+        is Map<*, *> -> if (value["tag"] in setOf("rt", "rp", "img")) "" else plainText(value["content"])
+        else -> ""
+    }
+
+    /**
+     * A glanceable definition: the first [maxSenses] senses, each with its first [maxGlosses]
+     * glosses, one line per sense ("1. rich; strong; heavy"). Parenthetical notes are dropped
+     * unless they're the whole gloss, and repeated glosses are skipped.
+     */
+    fun shortDefinition(senses: List<List<String>>, maxSenses: Int = 3, maxGlosses: Int = 3): String {
+        val seen = mutableSetOf<String>()
+        val lines = senses.mapNotNull { sense ->
+            val glosses = sense.map(::withoutNotes).filter { it.isNotEmpty() && seen.add(it) }.take(maxGlosses)
+            if (glosses.isEmpty()) null else glosses.joinToString("; ") { escape(it) }
+        }.take(maxSenses)
+        if (lines.size <= 1) return lines.firstOrNull().orEmpty()
+        return lines.mapIndexed { i, line -> "${i + 1}. $line" }.joinToString("<br>")
+    }
+
+    /**
+     * The senses a short definition is made from: the first dictionary, in the results' order,
+     * whose entries give any glosses (a prose dictionary first doesn't leave it empty), leaving out
+     * JMdict's forms entry (its spellings, not a meaning).
+     */
+    fun shortSenses(glossaries: List<GlossaryEntry>): List<List<String>> {
+        val meanings = glossaries.filter { "forms" !in it.definitionTags.split(' ') }
+        val byDictionary = meanings.groupBy { it.dictionary }.mapValues { (_, entries) -> entries.flatMap { glosses(it.glossary) } }
+        return meanings.map { it.dictionary }.distinct().firstNotNullOfOrNull { byDictionary[it]?.takeIf { s -> s.isNotEmpty() } }.orEmpty()
+    }
+
+    /** SelectionText: the short definition of [glossaries]. */
+    fun selectionText(glossaries: List<GlossaryEntry>): String = shortDefinition(shortSenses(glossaries))
+
+    /**
+     * MainDefinition kept short: the first dictionary's entries, each as Yomitan writes it into a
+     * card (its tags and dictionary, then the definition), with only its glosses: a list of them for
+     * one sense, a numbered list of senses for several. Null when that dictionary gives no glosses
+     * at all (a format this doesn't read): the card then takes the entries in full.
+     */
+    fun mainDefinition(glossaries: List<GlossaryEntry>): String? {
+        val first = glossaries.firstOrNull()?.dictionary ?: return null
+        val items = glossaries.filter { it.dictionary == first && "forms" !in it.definitionTags.split(' ') }.mapNotNull { entry ->
+            val senses = glosses(entry.glossary)
+            if (senses.isEmpty()) return@mapNotNull null
+            val label = (entry.definitionTags.split(' ').filter { it.isNotEmpty() } + entry.dictionary).joinToString(", ") { escape(it) }
+            val body = if (senses.size == 1) {
+                senses.single().joinToString("", "<ul>", "</ul>") { "<li>${escape(it)}</li>" }
+            } else {
+                senses.joinToString("", "<ol>", "</ol>") { sense -> "<li>${sense.joinToString("; ") { escape(it) }}</li>" }
+            }
+            "<li data-dictionary=\"${escape(entry.dictionary)}\"><i>($label)</i> $body</li>"
+        }
+        if (items.isEmpty()) return null
+        return items.joinToString("", "<div style=\"text-align: left;\" class=\"yomitan-glossary\"><ol>", "</ol></div>")
+    }
+
+    private fun withoutNotes(gloss: String): String {
+        val stripped = PARENTHESES.replace(gloss, " ").trim()
+        return stripped.ifEmpty { gloss.trim() }
+    }
+
+    private fun escape(text: String) =
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+    private val PARENTHESES = Regex("""\s*[(（][^()（）]*[)）]\s*""")
+
+    /** A numbered sense line: its number, then its text. */
+    private val NUMBERED_LINE = Regex("""^\d+\s+(.+)$""")
+
+    /** 新和英's notes: 〔usage〕, 《field》, [label], (aside). */
+    private val NOTES = Regex("""〔[^〕]*〕|《[^》]*》|\[[^\]]*]|［[^］]*］|[(（][^()（）]*[)）]""")
+}
