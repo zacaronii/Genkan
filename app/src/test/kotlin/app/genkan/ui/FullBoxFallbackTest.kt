@@ -107,4 +107,32 @@ class FullBoxFallbackTest {
 
     @Test
     fun `seen from the back, the overlays still sit on the drawn faces`() = overlaysOnFaces(160f)
+
+    @Test
+    fun `the peek is placed against the drawn faces, not the box's layout`() {
+        var behindWidth = 0f
+        compose.setContent {
+            CompositionLocalProvider(
+                LocalInspectionMode provides true,
+                LocalAsyncImagePreviewHandler provides AsyncImagePreviewHandler { request ->
+                    Bitmap.createBitmap(if (request.data.toString() == "spine") 20 else 200, 280, Bitmap.Config.ARGB_8888).asImage()
+                },
+            ) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                FullBox(
+                    front = "front", spine = "spine", back = null, maxWidth = 300.dp, maxHeight = 300.dp, angle = 28f,
+                    behind = { width, _ -> behindWidth = with(density) { width.toPx() } },
+                    faceOverlay = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().testTag("on-face")) },
+                )
+            }
+        }
+        compose.waitForIdle()
+        val face = bounds(FACE_TAG)
+        val spine = bounds(SPINE_TAG)
+        val left = minOf(face.left, spine.left)
+        assertEquals(maxOf(face.right, spine.right) - left, behindWidth, 1f)
+        // The face is its scan's width (200 by 280), only turned: not squeezed into the box's layout.
+        val turned = kotlin.math.cos(Math.toRadians(28.0)) * kotlin.math.cos(Math.toRadians(7.0))
+        assertEquals(face.height * 200f / 280f * turned.toFloat(), face.width, 1f)
+    }
 }

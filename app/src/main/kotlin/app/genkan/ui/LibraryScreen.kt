@@ -78,10 +78,12 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
     val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
+    val boxTurned by viewModel.boxTurned.collectAsStateWithLifecycle()
     val order by viewModel.order.collectAsStateWithLifecycle()
     val orderPanel by viewModel.orderPanel.collectAsStateWithLifecycle()
     LibraryContent(
         favourites = favourites,
+        turn = ShelfTurn(boxTurned, viewModel::canTurn),
         order = order,
         orderPanel = orderPanel,
         onToggleOrderPanel = viewModel::toggleOrderPanel,
@@ -136,6 +138,8 @@ fun LibraryContent(
     staticInsertProgress: Float? = null,
     /** The games marked as favourites, for what R2 says. */
     favourites: Set<Long> = emptySet(),
+    /** The focused game's full box turned to its back, and which games R3 can turn. */
+    turn: ShelfTurn = ShelfTurn(),
     /** The consoles' sort and filter, and the panel's focused row while it is open. */
     order: LibraryOrder = LibraryOrder(),
     orderPanel: Int? = null,
@@ -149,7 +153,7 @@ fun LibraryContent(
         LibraryBody(
             view, platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor,
             onSelectPlatform, onColumns, onSelectGame, onToggleView, if (insert != null) false else staticMedia, favourites,
-            order.downloadedOnly, gamesFor,
+            order.downloadedOnly, gamesFor, turn,
         )
         if (orderPanel != null) OrderPanelCard(order, orderPanel, onOrder, onToggleOrderPanel, Modifier.align(Alignment.TopEnd))
         if (insert != null) InsertOverlay(insert, onSkipInsert, staticInsertProgress)
@@ -176,9 +180,10 @@ private fun LibraryBody(
     favourites: Set<Long>,
     downloadedOnly: Boolean,
     gamesFor: Long?,
+    turn: ShelfTurn,
 ) {
     if (view == LibraryView.SHELF) {
-        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly, gamesFor)
+        ShelfLibrary(platforms, games, focus, sync, downloads, notice, coverModel, artModel, emulatorFor, onSelectPlatform, onSelectGame, onToggleView, staticMedia, favourites, downloadedOnly, gamesFor, turn)
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -283,6 +288,7 @@ private fun ShelfLibrary(
     favourites: Set<Long>,
     downloadedOnly: Boolean,
     gamesFor: Long?,
+    turn: ShelfTurn,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -317,6 +323,7 @@ private fun ShelfLibrary(
                     onSelect = onSelectGame,
                     staticMedia = staticMedia,
                     shelfId = platforms.getOrNull(focus.platformIndex)?.id ?: 0L,
+                    boxTurned = turn.turned,
                 )
             }
         }
@@ -330,6 +337,8 @@ private fun ShelfLibrary(
             onShelf = focus.pane == LibraryPane.GAMES,
             emulatorFor = emulatorFor,
             favourite = game?.id in favourites,
+            canTurn = game != null && turn.canTurn(game),
+            turned = turn.turned,
             downloadedOnly = downloadedOnly,
         )
     }
@@ -458,6 +467,8 @@ private fun HintBar(
     emulatorFor: (String) -> String?,
     favourite: Boolean,
     downloadedOnly: Boolean,
+    canTurn: Boolean = false,
+    turned: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -480,7 +491,7 @@ private fun HintBar(
         HintRow(
             // On the console strip, where the row is short; on a game its status line needs the room.
             listOfNotNull(Hints.downloadedFilter(downloadedOnly).takeIf { !onShelf }) +
-                Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite),
+                Hints.library(game, download, onGames = onShelf, emulatorFor = emulatorFor, favourite = favourite, canTurn = canTurn, turned = turned),
             Modifier.padding(start = 16.dp),
         )
     }
@@ -787,3 +798,6 @@ internal fun formatSize(bytes: Long): String = when {
     bytes > 0 -> "%.0f KB".format(bytes / 1024.0)
     else -> "—"
 }
+
+/** The focused game's full box turned to its back ([turned], by R3), and which games R3 can turn ([canTurn]). */
+data class ShelfTurn(val turned: Boolean = false, val canTurn: (GameEntity) -> Boolean = { false })

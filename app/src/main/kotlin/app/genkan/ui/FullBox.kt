@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -110,29 +111,38 @@ fun FullBox(
     var faceLoaded by remember(face) { mutableStateOf(false) }
     var spineLoaded by remember(spine) { mutableStateOf(false) }
     val ready = fallback == null || (faceLoaded && spineLoaded)
-    // As tall as allowed, unless the turned box would then be wider than its slot.
-    val shownPerHeight = frontAspect * view.faceShown + spineAspect * view.spineShown
-    val height = if (maxHeight * shownPerHeight > maxWidth) maxWidth / shownPerHeight else maxHeight
+    // Sized once for every angle, so a turning box keeps its size: as tall as allowed, unless its
+    // widest view would then be wider than the slot.
+    val height = boxHeight(maxWidth, maxHeight, frontAspect, spineAspect)
     val faceWidth = height * frontAspect
     val spineWidth = height * spineAspect
     val faceShown = faceWidth * view.faceShown
     val spineShown = spineWidth * view.spineShown
+    // Each face is tilted a little further in its own layer, for depth; the spine meets the face's edge.
+    val faceTilt = view.faceTurn * TILT
+    val spineTilt = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * TILT else (90f - abs(view.faceTurn)) * TILT
+    val spineX: Dp = if (view.spineOnLeft) 0.dp else faceShown
+    val faceX: Dp = if (view.spineOnLeft) spineShown else 0.dp
+    // Where the drawn faces end, the tilts foreshortening them past their layout, for the peek;
+    // worked out here rather than measured, so it is right in the same frame as the faces.
+    val drawn = maxOf(faceX + faceShown * cosDegrees(faceTilt), spineX + spineShown * cosDegrees(spineTilt))
     val camera = 12f * density.density
     Box(modifier, contentAlignment = Alignment.BottomCenter) {
         if (!ready) fallback?.invoke()
         // Composed from the start, so the scans load, but unseen until both have.
         Box(Modifier.size(faceShown + spineShown, height).graphicsLayer { alpha = if (ready) 1f else 0f }) {
-            behind?.invoke(this, faceShown + spineShown, height)
+            behind?.let { media -> Box(Modifier.size(drawn, height)) { media(this, drawn, height) } }
             // The spine meets the face along one edge, turned a right angle further.
-            val spineX: Dp = if (view.spineOnLeft) 0.dp else faceShown
             Box(
                 Modifier
                     .offset(x = spineX)
+                    // Each face keeps its full width, though its layer then narrows it below the box's.
+                    .wrapContentWidth(Alignment.Start, unbounded = true)
                     .size(spineWidth, height)
                     .graphicsLayer {
                         transformOrigin = TransformOrigin(0f, 0.5f)
                         scaleX = view.spineShown.coerceAtLeast(0.001f)
-                        rotationY = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * 0.25f else (90f - abs(view.faceTurn)) * 0.25f
+                        rotationY = spineTilt
                         cameraDistance = camera
                     }
                     .testTag(SPINE_TAG),
@@ -158,12 +168,13 @@ fun FullBox(
             }
             Box(
                 Modifier
-                    .offset(x = if (view.spineOnLeft) spineShown else 0.dp)
+                    .offset(x = faceX)
+                    .wrapContentWidth(Alignment.Start, unbounded = true)
                     .size(faceWidth, height)
                     .graphicsLayer {
                         transformOrigin = TransformOrigin(0f, 0.5f)
                         scaleX = view.faceShown.coerceAtLeast(0.001f)
-                        rotationY = view.faceTurn * 0.25f
+                        rotationY = faceTilt
                         cameraDistance = camera
                     }
                     .testTag(FACE_TAG),
@@ -184,6 +195,21 @@ fun FullBox(
     }
 }
 
+/** How much further each face is tilted in its own layer, as a share of the box's turn. */
+private const val TILT = 0.25f
+
+private fun cosDegrees(degrees: Float): Float = cos(Math.toRadians(degrees.toDouble())).toFloat()
+
 /** Test tags of the box's two drawn faces, for checking what's drawn on them. */
 internal const val FACE_TAG = "full-box-face"
 internal const val SPINE_TAG = "full-box-spine"
+
+/**
+ * A box's height in a [maxWidth] by [maxHeight] slot: as tall as allowed, unless its widest view
+ * over a whole turn (front and spine of [frontAspect] and [spineAspect], widths per height, at
+ * once: their hypotenuse) would then be wider than the slot. One size at every angle.
+ */
+internal fun boxHeight(maxWidth: Dp, maxHeight: Dp, frontAspect: Float, spineAspect: Float): Dp {
+    val widest = kotlin.math.sqrt(frontAspect * frontAspect + spineAspect * spineAspect)
+    return if (maxHeight * widest > maxWidth) maxWidth / widest else maxHeight
+}

@@ -52,6 +52,7 @@ import app.genkan.library.LibraryPane
 import app.genkan.library.LibrarySync
 import app.genkan.library.LibraryView
 import app.genkan.library.LibraryViewSettings
+import app.genkan.library.hasBoxFaces
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import app.genkan.romm.RomMSession
@@ -147,6 +148,16 @@ class LibraryViewModel @Inject constructor(
 
     /** The shelf or the grid, as last left; the shelf until the stored choice has been read. */
     val view: StateFlow<LibraryView> = viewSettings.view.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryView.DEFAULT)
+
+    /** The Full box setting, to know whether R3 can turn a box. */
+    private val fullBoxOn: StateFlow<Boolean> = viewSettings.fullBox.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private val _boxTurned = MutableStateFlow(false)
+    /** Whether the focused game's full box is turned to its back (R3); any move of the focus turns it back. */
+    val boxTurned: StateFlow<Boolean> = _boxTurned.asStateFlow()
+
+    /** Whether R3 can turn [game]'s box: the full box is on, it can be drawn as one, and it has a back. */
+    fun canTurn(game: GameEntity): Boolean = fullBoxOn.value && game.hasBoxFaces() && game.box2dBackPath != null
 
     /** Switches between the shelf and the grid, and remembers the choice. */
     fun toggleView() {
@@ -290,6 +301,10 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             focusedGame.playRequests.collect { id -> games.value.firstOrNull { it.id == id }?.let(::primaryAction) }
         }
+        // A turned box turns back when the focus moves (or the shelf changes).
+        viewModelScope.launch {
+            _focus.map { Triple(it.platformIndex, it.gameIndex, it.pane) }.distinctUntilChanged().collect { _boxTurned.value = false }
+        }
         // The artwork around the focused game: ahead of it while it moves, all the shelf shows
         // once it rests.
         viewModelScope.launch {
@@ -297,8 +312,8 @@ class LibraryViewModel @Inject constructor(
             combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games, viewSettings.fullBox) { index, list, box -> Triple(list, index, box) }
                 .collectLatest { (list, index, box) ->
                     val at = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                    // The full box draws the focused game's front, and its back when turned to it.
-                    val back = box && BoxView.of(FullBoxShelf.angle.value).back
+                    // The full box draws the focused game's front, and R3 can turn it to its back at any time.
+                    val back = box
                     artworkWarmer.warmAround(list, at, moving = true, fullBox = box, showsBack = back)
                     delay(WARM_REST_MS)
                     artworkWarmer.warmAround(list, at, moving = false, fullBox = box, showsBack = back)
@@ -342,6 +357,12 @@ class LibraryViewModel @Inject constructor(
         }
         if (key == PadKey.Y) {
             sync(); return true
+        }
+        // The right stick's click turns the focused game's full box round, to its back and again.
+        if (key == PadKey.R3) {
+            val game = games.value.getOrNull(_focus.value.gameIndex).takeIf { _focus.value.pane == LibraryPane.GAMES }
+            if (repeatCount == 0 && game != null && canTurn(game)) _boxTurned.value = !_boxTurned.value
+            return true
         }
         // The left stick's click flips "Downloaded only", the panel's filter, without opening it.
         if (key == PadKey.L3) {

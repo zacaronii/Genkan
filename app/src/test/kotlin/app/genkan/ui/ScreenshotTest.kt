@@ -162,6 +162,19 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 3, staticMedia = true)
     }
 
+    /**
+     * The focused full box turned round to its back with R3 (the game has a back scan), the hint
+     * offering the front again; it's the same height as facing front.
+     */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfFullBoxBack() = shoot("shelf_full_box_back", TOP_PIXELS) {
+        val games = FakeData.psxGames.mapIndexed { i, game ->
+            if (i == 3) game.copy(box2dPath = "/covers/psx/${game.id}.png", box2dBackPath = "/covers/psx/${game.id + 1}.png") else game
+        }
+        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 3, staticMedia = false, turn = ShelfTurn(turned = true) { it.box2dBackPath != null })
+    }
+
     /** A full box whose game isn't downloaded: the case's download badge, in the box's corner. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
@@ -260,6 +273,7 @@ class ScreenshotTest {
         orderPanel: Int? = null,
         pane: LibraryPane = LibraryPane.GAMES,
         platforms: List<PlatformEntity> = FakeData.platforms,
+        turn: ShelfTurn = ShelfTurn(),
     ) {
         LibraryContent(
             view = view,
@@ -281,6 +295,7 @@ class ScreenshotTest {
             staticInsertProgress = insertProgress,
             order = order,
             orderPanel = orderPanel,
+            turn = turn,
         )
     }
 

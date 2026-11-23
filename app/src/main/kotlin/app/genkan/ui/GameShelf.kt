@@ -198,13 +198,20 @@ internal fun GameShelf(
     staticMedia: Boolean? = null,
     /** Which shelf this is, for what it remembers; "Continue playing" mixes consoles. */
     shelfId: Long = games.firstOrNull()?.platformId ?: 0L,
+    /** The focused game's full box turned round to its back (R3). */
+    boxTurned: Boolean = false,
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
 
     // The Full box setting, and the box's turn.
     val fullBox by FullBoxShelf.on.collectAsState()
-    val fullBoxAngle by FullBoxShelf.angle.collectAsState()
+    val restAngle by FullBoxShelf.angle.collectAsState()
+    // Turned round, the box goes on the same way to show its back; animated both ways. Each focused
+    // game starts facing front, so the next box doesn't spin back from the last one's turn.
+    val turn = remember(shelfId, focused) { Animatable(if (boxTurned) 180f else 0f) }
+    LaunchedEffect(turn, boxTurned) { turn.animateTo(if (boxTurned) 180f else 0f, tween(TURN_MS)) }
+    val fullBoxAngle = restAngle + turn.value
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
@@ -915,3 +922,6 @@ private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.c
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** How long the full box takes to turn round. */
+private const val TURN_MS = 700
