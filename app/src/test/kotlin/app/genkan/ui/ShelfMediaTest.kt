@@ -50,13 +50,19 @@ class ShelfMediaTest {
         var focused by mutableIntStateOf(0)
         // What each composition hands the disc to draw, as it's applied (before any effect runs).
         val drawn = mutableListOf<Pair<Int, Float>>()
+        val accessors = mutableSetOf<() -> Float>()
         var slide: androidx.compose.animation.core.Animatable<Float, *>? = null
         compose.mainClock.autoAdvance = false
         compose.setContent {
             val now = focused
             val media = rememberMediaSlide(shelfId = 1L, focused = now, active = true, staticMedia = null)
             slide = media
-            SideEffect { drawn += now to media.value }
+            // Read the way a case reads it: through the accessor the shelf gives every case.
+            val out = rememberMediaOut(media)
+            SideEffect {
+                drawn += now to out()
+                accessors += out
+            }
         }
         // The first game's disc rests, then slides all the way out.
         repeat(((ShelfDefaults.MEDIA_REST_MS + ShelfDefaults.MEDIA_SLIDE_MS + 300L) / 16).toInt()) { frame() }
@@ -66,5 +72,7 @@ class ShelfMediaTest {
         androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
         repeat(3) { frame() }
         assertEquals("the second disc in the frame the focus arrives", 0f, drawn.first { it.first == 1 }.second, 0.001f)
+        // One accessor throughout, so the step gave no case a changed parameter.
+        assertEquals("accessors given to the cases", 1, accessors.size)
     }
 }
