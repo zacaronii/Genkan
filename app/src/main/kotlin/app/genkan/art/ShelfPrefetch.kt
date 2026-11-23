@@ -34,6 +34,8 @@ class ShelfPrefetch @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    /** When each file (by key) was last fetched or checked: not again until its check is due. */
+    private val seen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /** Fetches [games]' art from [index] outwards; [fullBox] adds the box's front and back. */
     fun start(games: List<GameEntity>, index: Int, fullBox: Boolean) {
@@ -41,14 +43,22 @@ class ShelfPrefetch @Inject constructor(
         job = scope.launch {
             delay(SETTLE_MS)
             if (metered()) return@launch
-            val paths = pathsFrom(games, index, fullBox)
+            val now = System.currentTimeMillis()
+            // On disk and checked lately: nothing to do for it (a sync starts the shelf over).
+            val paths = pathsFrom(games, index, fullBox).filter { path ->
+                seen[RomMArt.keyOf(path)]?.let { now - it >= ArtCacheStrategy.CHECK_EVERY_MS } ?: true
+            }
             val queue = Channel<String>(Channel.UNLIMITED).apply { paths.forEach(::trySend); close() }
             Log.i(TAG, "Fetching ahead: ${paths.size} files")
             repeat(WORKERS) {
                 launch {
                     for (path in queue) {
                         ensureActive()
-                        runCatching { loaders.background.execute(request(path)) }
+                        val key = RomMArt.keyOf(path)
+                        val done = runCatching { loaders.background.execute(request(path)) }.getOrNull()
+                        if (done is coil3.request.SuccessResult) seen[key] = System.currentTimeMillis()
+                        // Only now is a replaced file on disk for the screen to load.
+                        loaders.settle(key)
                     }
                 }
             }

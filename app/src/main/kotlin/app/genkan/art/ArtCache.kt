@@ -27,20 +27,26 @@ import java.io.File
  * and drawn from disk from then on with no request, offline too. Once a day at most, and only when
  * asked ([REVALIDATE], by the background check, never a screen's own load), a file is asked about
  * with the validator the server gave (ETag, or Last-Modified): a 304 keeps the copy, a new file
- * replaces it and is reported ([onReplaced]).
+ * replaces it and is noted, for [takeReplaced] once the request is done (the new file is on disk
+ * only then). A copy with no validator is fetched again when its check is due. An answer that
+ * isn't an image (a proxy's sign-in page, an error page) is never kept: the cache is for good now,
+ * and a page kept under an art's key would never be asked about again.
  */
 class ArtCacheStrategy(
     private val now: () -> Long = System::currentTimeMillis,
-    private val onReplaced: (key: String) -> Unit = {},
 ) : CacheStrategy {
+    private val replaced = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Whether the file under [key] was found replaced by a check; asked once its request is done. */
+    fun takeReplaced(key: String): Boolean = replaced.remove(key)
 
     override suspend fun read(cacheResponse: NetworkResponse, networkRequest: NetworkRequest, options: Options): CacheStrategy.ReadResult {
         val due = options.getExtra(REVALIDATE) && now() - cacheResponse.responseMillis >= CHECK_EVERY_MS
         if (!due) return CacheStrategy.ReadResult(cacheResponse)
         val etag = cacheResponse.headers[ETAG]
         val modified = cacheResponse.headers[LAST_MODIFIED]
-        // Nothing to ask with: the copy stays until the next check finds a validator.
-        if (etag == null && modified == null) return CacheStrategy.ReadResult(cacheResponse)
+        // Nothing to ask with: the file is fetched again, plainly, and kept with what comes back.
+        if (etag == null && modified == null) return CacheStrategy.ReadResult(networkRequest)
         val headers = networkRequest.headers.newBuilder().apply {
             etag?.let { set(IF_NONE_MATCH, it) }
             modified?.let { set(IF_MODIFIED_SINCE, it) }
@@ -59,7 +65,9 @@ class ArtCacheStrategy(
             return CacheStrategy.WriteResult(cacheResponse.copy(responseMillis = now(), headers = cacheResponse.headers + networkResponse.headers))
         }
         if (networkResponse.code !in 200..299) return CacheStrategy.WriteResult.DISABLED
-        if (cacheResponse != null) options.diskCacheKey?.let(onReplaced)
+        val type = networkResponse.headers[CONTENT_TYPE]
+        if (type != null && !type.trim().startsWith("image/", ignoreCase = true)) return CacheStrategy.WriteResult.DISABLED
+        if (cacheResponse != null) options.diskCacheKey?.let(replaced::add)
         return CacheStrategy.WriteResult(networkResponse.copy(responseMillis = now()))
     }
 
@@ -72,6 +80,7 @@ class ArtCacheStrategy(
         const val CHECK_EVERY_MS = 24L * 60 * 60 * 1000
         private const val NOT_MODIFIED = 304
         private const val ETAG = "ETag"
+        private const val CONTENT_TYPE = "Content-Type"
         private const val LAST_MODIFIED = "Last-Modified"
         private const val IF_NONE_MATCH = "If-None-Match"
         private const val IF_MODIFIED_SINCE = "If-Modified-Since"
@@ -83,6 +92,23 @@ class RomMArtFetcher(private val baseUrl: () -> String?, private val network: Fe
     override fun create(data: RomMArt, options: Options, imageLoader: ImageLoader): Fetcher? {
         val url = RomMApiFactory.assetUrl(baseUrl() ?: return null, data.path) ?: return null
         return network.create(url.toUri(), options.copy(diskCacheKey = data.key), imageLoader)
+    }
+}
+
+/**
+ * A RomM file on disk that won't decode (a broken download) is dropped, so the next load asks the
+ * server again. Only a decoding failure does it: a network error, offline or during the daily
+ * check, leaves the copy alone.
+ */
+private class DropUndecodable(private val diskCache: DiskCache) : coil3.EventListener() {
+    override fun onError(request: coil3.request.ImageRequest, result: coil3.request.ErrorResult) {
+        val art = request.data as? RomMArt ?: return
+        val error = result.throwable
+        // The platform's decoder fails with an IOException of its own: that one is the file's fault.
+        val undecodable = error is android.graphics.ImageDecoder.DecodeException ||
+            !(error is java.io.IOException || error is coil3.network.HttpException || error is kotlinx.coroutines.CancellationException)
+        if (!undecodable) return
+        diskCache.remove(art.key)
     }
 }
 
@@ -131,6 +157,7 @@ object ArtCache {
         val network = OkHttpNetworkFetcherFactory(callFactory = callFactory, cacheStrategy = { strategy })
         return ImageLoader.Builder(context)
             .diskCache { diskCache }
+            .eventListener(DropUndecodable(diskCache))
             .apply { if (!memory) memoryCache(null as MemoryCache?) }
             .components {
                 add(network)

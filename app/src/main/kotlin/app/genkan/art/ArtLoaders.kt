@@ -37,12 +37,18 @@ class ArtLoaders @Inject constructor(
     /** How many times each file (by [RomMArt.key]) was found replaced on the server; a screen draws [RomMArt] at that version. */
     val versions: StateFlow<Map<String, Int>> = _versions.asStateFlow()
 
-    private val strategy = ArtCacheStrategy(onReplaced = { key ->
+    val strategy = ArtCacheStrategy()
+
+    /**
+     * After a background request for [key] has finished: if its check found the file replaced
+     * (now on disk), the screens draw it again. The old bitmap goes from memory first.
+     */
+    fun settle(key: String) {
+        if (!strategy.takeReplaced(key)) return
         Log.i(TAG, "Art replaced on the server: $key")
-        _versions.update { it + (key to (it[key] ?: 0) + 1) }
-        // The old bitmap goes from memory, so the next load reads the new file.
         screen.memoryCache?.keys?.filter { it.key == key }?.forEach { screen.memoryCache?.remove(it) }
-    })
+        _versions.update { it + (key to (it[key] ?: 0) + 1) }
+    }
 
     val diskCache: DiskCache by lazy { ArtCache.diskCache(context) }
 

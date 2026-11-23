@@ -41,7 +41,11 @@ class ArtCacheTest {
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val server = MockWebServer()
     private var clock = 1_000_000_000_000L
-    private val replaced = mutableListOf<String>()
+    /** Paths answered with an HTML page (a proxy's sign-in page), with no validator, or with a slow body. */
+    private val html = mutableSetOf<String>()
+    private val noValidator = mutableSetOf<String>()
+    private val slowBody = mutableSetOf<String>()
+    private val broken = mutableSetOf<String>()
 
     /** What the server holds: path to (image width, ETag). */
     private val files = Collections.synchronizedMap(mutableMapOf("/assets/romm/resources/roms/1/cover.png" to (10 to "v1")))
@@ -57,10 +61,14 @@ class ArtCacheTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.url.encodedPath
+                if (path in html) return MockResponse.Builder().code(200).addHeader("Content-Type", "text/html").body("<html>Sign in</html>").build()
                 val (width, etag) = files[path] ?: return MockResponse.Builder().code(404).build()
                 if (request.headers["If-None-Match"] == etag) return MockResponse.Builder().code(304).addHeader("ETag", etag).build()
-                return MockResponse.Builder().code(200).addHeader("ETag", etag).addHeader("Content-Type", "image/png").body(png(width))
+                val body = if (path in broken) Buffer().writeUtf8("not a picture") else png(width)
+                return MockResponse.Builder().code(200).addHeader("Content-Type", "image/png").body(body)
+                    .apply { if (path !in noValidator) addHeader("ETag", etag) }
                     .apply { if (path in slow) headersDelay(1, TimeUnit.SECONDS) }
+                    .apply { if (path in slowBody) bodyDelay(1, TimeUnit.SECONDS) }
                     .build()
             }
         }
@@ -71,10 +79,10 @@ class ArtCacheTest {
 
     private var baseUrl: String? = null
     private val disk by lazy { DiskCache.Builder().directory(temp.newFolder("art").toOkioPath()).maxSizeBytes(50L shl 20).build() }
-    private val strategy = ArtCacheStrategy(now = { clock }, onReplaced = { replaced += it })
+    private val strategy = ArtCacheStrategy(now = { clock })
 
-    private fun loader(client: OkHttpClient = OkHttpClient()): ImageLoader =
-        ArtCache.loader(context, disk, { client }, { baseUrl ?: server.url("/").toString() }, strategy, memory = false)
+    private fun loader(client: OkHttpClient = OkHttpClient(), memory: Boolean = false): ImageLoader =
+        ArtCache.loader(context, disk, { client }, { baseUrl ?: server.url("/").toString() }, strategy, memory)
 
     private fun request(path: String, check: Boolean = false) = ImageRequest.Builder(context).data(RomMArt(path))
         .apply { if (check) extras[ArtCacheStrategy.REVALIDATE] = true }
@@ -117,18 +125,70 @@ class ArtCacheTest {
         clock += ArtCacheStrategy.CHECK_EVERY_MS / 2
         loader.width(cover, check = true)
         assertEquals("not again within a day", 2, server.requestCount)
-        assertTrue(replaced.isEmpty())
+        assertTrue(!strategy.takeReplaced(RomMArt(cover).key))
     }
 
     @Test
-    fun `art replaced on the server is fetched again by the check, reported, and then drawn new`() {
+    fun `art replaced on the server is fetched again by the check, reported once done, and then drawn new`() {
         val loader = loader()
         assertEquals(10, loader.width(cover))
         files[cover] = 20 to "v2"
         clock += ArtCacheStrategy.CHECK_EVERY_MS + 1
         loader.width(cover, check = true)
-        assertEquals(listOf(RomMArt(cover).key), replaced)
+        assertTrue(strategy.takeReplaced(RomMArt(cover).key))
+        assertTrue("reported once", !strategy.takeReplaced(RomMArt(cover).key))
         assertEquals(20, loader.width(cover))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `with a slow new file, the screen's load after the check has settled draws the new picture`() {
+        // The screen's loader keeps bitmaps in memory, as the app's does.
+        val screen = loader(memory = true)
+        assertEquals(10, screen.width(cover))
+        files[cover] = 20 to "v2"
+        slowBody += cover
+        clock += ArtCacheStrategy.CHECK_EVERY_MS + 1
+        // The background check, then what ArtLoaders.settle does once it has returned.
+        loader().width(cover, check = true)
+        assertTrue(strategy.takeReplaced(RomMArt(cover).key))
+        screen.memoryCache?.keys?.filter { it.key == RomMArt(cover).key }?.forEach { screen.memoryCache?.remove(it) }
+        assertEquals(20, screen.width(cover))
+    }
+
+    @Test
+    fun `a page that isn't an image is never kept, and the next load asks again`() {
+        html += cover
+        val loader = loader()
+        runBlocking { loader.execute(request(cover)) }
+        runBlocking { loader.execute(request(cover)) }
+        assertEquals(2, server.requestCount)
+        // The server answers properly again: the art is fetched and kept.
+        html -= cover
+        assertEquals(10, loader.width(cover))
+        assertEquals(10, loader.width(cover))
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `a copy with no validator is fetched again, plainly, when its check is due`() {
+        noValidator += cover
+        val loader = loader()
+        loader.width(cover)
+        clock += ArtCacheStrategy.CHECK_EVERY_MS + 1
+        loader.width(cover, check = true)
+        assertEquals(2, server.requestCount)
+        server.takeRequest()
+        assertEquals(null, server.takeRequest().headers["If-None-Match"])
+    }
+
+    @Test
+    fun `a file on disk that won't decode is dropped, so the next load asks the server`() {
+        broken += cover
+        val loader = loader()
+        assertTrue(runBlocking { loader.execute(request(cover)) } is coil3.request.ErrorResult)
+        broken -= cover
+        assertEquals(10, loader.width(cover))
         assertEquals(2, server.requestCount)
     }
 
