@@ -327,6 +327,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.FULL_BOX -> lifecycleScope.launch {
                 viewModel.librarySettings.setFullBox(!viewModel.librarySettings.fullBox.first())
             }
+            SetupAction.PREFETCH_MANUALS -> lifecycleScope.launch {
+                viewModel.librarySettings.setPrefetchManuals(!viewModel.librarySettings.prefetchManuals.first())
+            }
             SetupAction.SIGN_OUT -> {
                 viewModel.romm.signOut()
                 appViewModel.closeSettings()

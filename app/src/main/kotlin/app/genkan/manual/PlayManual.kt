@@ -56,6 +56,8 @@ class PlayManual internal constructor(
     private val pages = HashMap<String, Int>()
 
     init {
+        // The manual open on the bottom screen is in use: a newer one from the server waits until it's closed.
+        scope.launch { _open.collect { manuals.use("reader", it) } }
         // Another game: its own manual, from its first page.
         scope.launch {
             nowPlaying.game.map { it.key }.distinctUntilChanged().drop(1).collect {
@@ -73,7 +75,8 @@ class PlayManual internal constructor(
         fetcher.open(
             game,
             onFile = { file ->
-                _notice.value = null
+                // A manual the server replaced since it was last opened says so, once.
+                _notice.value = if (manuals.takeReplacedNote(game)) Manuals.REPLACED_NOTE else null
                 _open.value = file
             },
             onFailed = { _notice.value = "Couldn't fetch the manual: ${it.message}" },

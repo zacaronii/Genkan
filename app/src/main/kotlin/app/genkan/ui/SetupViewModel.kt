@@ -43,6 +43,7 @@ enum class SetupAction {
     INSERT_ANIMATION,
     /** The shelf's focused game as a full box, or its case. */
     FULL_BOX,
+    PREFETCH_MANUALS,
     WORDS,
     YOMIKATA,
     SIGN_OUT,
@@ -82,7 +83,7 @@ class SetupViewModel @Inject constructor(
     val state: StateFlow<SetupState> = combine(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
-        librarySettings.insertAnimation, librarySettings.fullBox,
+        librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -97,6 +98,7 @@ class SetupViewModel @Inject constructor(
             dictionaries = v[9] as List<DictionaryEntity>,
             insertAnimation = v[10] as Boolean,
             fullBox = v[11] as Boolean,
+            prefetchManuals = v[12] as Boolean,
         )
     }.stateIn(
         viewModelScope,
