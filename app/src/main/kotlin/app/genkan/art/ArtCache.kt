@@ -96,7 +96,7 @@ object ArtCache {
     fun directory(context: Context) = File(context.noBackupFilesDir, "art")
 
     /** Coil's own folder before this: in the cache folder, which Android may empty. Removed once. */
-    fun oldDirectory(context: Context) = File(context.cacheDir, "image_cache")
+    fun oldDirectory(context: Context) = File(context.cacheDir, "coil3_disk_cache")
 
     /** Removes [oldDirectory], by that exact path; true when there was one to remove. */
     fun removeOldDirectory(context: Context): Boolean = oldDirectory(context).let { it.isDirectory && it.deleteRecursively() }
