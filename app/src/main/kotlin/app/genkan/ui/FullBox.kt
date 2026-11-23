@@ -1,6 +1,8 @@
 package app.genkan.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -17,9 +19,11 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.genkan.library.GameEntity
+import app.genkan.library.hasBoxFaces
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.abs
@@ -27,16 +31,16 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The full-box prototype's switch, for debug builds only (the FULL_BOX broadcast): while [on], the
- * shelf's focused game is drawn as a box from its scanned faces, turned [angle] degrees (0 faces
- * front; past 90 the back shows). Nothing sets it in a release build.
+ * The shelf's full box: while [on] (the "Full box" setting, mirrored here by HomeActivity), the
+ * focused game is drawn as a box from its scanned faces, turned [angle] degrees (0 faces front;
+ * past 90 the back shows). The angle is 28 unless a debug build's FULL_BOX broadcast sets it.
  */
-object FullBoxPrototype {
-    val on = MutableStateFlow(false)
+object FullBoxShelf {
+    val on = MutableStateFlow(true)
     val angle = MutableStateFlow(28f)
 
     /** Whether [game] has the faces a box needs: a front and a spine. A back is shown when there is one. */
-    fun canDraw(game: GameEntity): Boolean = game.box2dPath != null && game.box2dSidePath != null
+    fun canDraw(game: GameEntity): Boolean = game.hasBoxFaces()
 }
 
 /** Where a box's two visible faces go, for a turn of [angle] degrees: plain numbers, for the tests. */
@@ -78,7 +82,10 @@ internal data class BoxView(
  * its vertical axis. The faces keep the scans' own proportions once they load; a spine scanned
  * lying down (wider than tall, as some consoles' are) is stood up. With a [fallback] (the game's
  * case), that is drawn instead until both faces have loaded, so the slot is never empty; a face
- * that fails to load leaves the fallback. A prototype: no lighting or thickness beyond the spine.
+ * that fails to load leaves the fallback. [behind] is drawn behind the box, given its width and
+ * height (the disc or cartridge peeking out, as from the case). [faceOverlay] is drawn on the facing
+ * face and [spineOverlay] on the spine, each in that face's own turned layer, so they stay on it at
+ * any angle (the download badge and dimming), once the box shows. No lighting or thickness beyond the spine.
  */
 @Composable
 fun FullBox(
@@ -90,6 +97,9 @@ fun FullBox(
     angle: Float,
     modifier: Modifier = Modifier,
     fallback: (@Composable () -> Unit)? = null,
+    behind: (@Composable BoxScope.(width: Dp, height: Dp) -> Unit)? = null,
+    faceOverlay: (@Composable BoxScope.() -> Unit)? = null,
+    spineOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     var frontAspect by remember(front) { mutableFloatStateOf(0.72f) }
@@ -112,6 +122,7 @@ fun FullBox(
         if (!ready) fallback?.invoke()
         // Composed from the start, so the scans load, but unseen until both have.
         Box(Modifier.size(faceShown + spineShown, height).graphicsLayer { alpha = if (ready) 1f else 0f }) {
+            behind?.invoke(this, faceShown + spineShown, height)
             // The spine meets the face along one edge, turned a right angle further.
             val spineX: Dp = if (view.spineOnLeft) 0.dp else faceShown
             Box(
@@ -123,7 +134,8 @@ fun FullBox(
                         scaleX = view.spineShown.coerceAtLeast(0.001f)
                         rotationY = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * 0.25f else (90f - abs(view.faceTurn)) * 0.25f
                         cameraDistance = camera
-                    },
+                    }
+                    .testTag(SPINE_TAG),
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
@@ -142,16 +154,10 @@ fun FullBox(
                     // A spine scanned lying down is drawn lying, then turned upright.
                     modifier = if (spineLying) Modifier.requiredSize(height, spineWidth).rotate(90f) else Modifier.size(spineWidth, height),
                 )
+                spineOverlay?.invoke(this)
             }
-            AsyncImage(
-                model = face,
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                onSuccess = { s ->
-                    faceLoaded = true
-                    s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height }
-                },
-                modifier = Modifier
+            Box(
+                Modifier
                     .offset(x = if (view.spineOnLeft) spineShown else 0.dp)
                     .size(faceWidth, height)
                     .graphicsLayer {
@@ -159,8 +165,25 @@ fun FullBox(
                         scaleX = view.faceShown.coerceAtLeast(0.001f)
                         rotationY = view.faceTurn * 0.25f
                         cameraDistance = camera
+                    }
+                    .testTag(FACE_TAG),
+            ) {
+                AsyncImage(
+                    model = face,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    onSuccess = { s ->
+                        faceLoaded = true
+                        s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height }
                     },
-            )
+                    modifier = Modifier.fillMaxSize(),
+                )
+                faceOverlay?.invoke(this)
+            }
         }
     }
 }
+
+/** Test tags of the box's two drawn faces, for checking what's drawn on them. */
+internal const val FACE_TAG = "full-box-face"
+internal const val SPINE_TAG = "full-box-spine"

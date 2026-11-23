@@ -293,12 +293,15 @@ class LibraryViewModel @Inject constructor(
         // The artwork around the focused game: ahead of it while it moves, all the shelf shows
         // once it rests.
         viewModelScope.launch {
-            combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }
-                .collectLatest { (list, index) ->
+            // The Full box setting too: switching it (or the store's first read) warms again.
+            combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games, viewSettings.fullBox) { index, list, box -> Triple(list, index, box) }
+                .collectLatest { (list, index, box) ->
                     val at = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                    artworkWarmer.warmAround(list, at, moving = true)
+                    // The full box draws the focused game's front, and its back when turned to it.
+                    val back = box && BoxView.of(FullBoxShelf.angle.value).back
+                    artworkWarmer.warmAround(list, at, moving = true, fullBox = box, showsBack = back)
                     delay(WARM_REST_MS)
-                    artworkWarmer.warmAround(list, at, moving = false)
+                    artworkWarmer.warmAround(list, at, moving = false, fullBox = box, showsBack = back)
                 }
         }
     }

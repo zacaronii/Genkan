@@ -2,9 +2,12 @@ package app.genkan.ui
 
 import android.app.Application
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -14,6 +17,7 @@ import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import kotlinx.coroutines.awaitCancellation
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,4 +77,34 @@ class FullBoxFallbackTest {
         box(loaded = setOf("front", "spine"))
         compose.onNodeWithText("the case").assertDoesNotExist()
     }
+
+    /** A box at [angle] whose scans both load, with tagged overlays on its face and spine. */
+    private fun overlays(angle: Float) = compose.setContent {
+        CompositionLocalProvider(
+            LocalInspectionMode provides true,
+            LocalAsyncImagePreviewHandler provides AsyncImagePreviewHandler { request ->
+                Bitmap.createBitmap(if (request.data.toString() == "spine") 20 else 200, 280, Bitmap.Config.ARGB_8888).asImage()
+            },
+        ) {
+            FullBox(
+                front = "front", spine = "spine", back = "back", maxWidth = 300.dp, maxHeight = 300.dp, angle = angle,
+                faceOverlay = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().testTag("on-face")) },
+                spineOverlay = { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().testTag("on-spine")) },
+            )
+        }
+    }
+
+    private fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+
+    private fun overlaysOnFaces(angle: Float) {
+        overlays(angle)
+        assertEquals("face at $angle", bounds(FACE_TAG), bounds("on-face"))
+        assertEquals("spine at $angle", bounds(SPINE_TAG), bounds("on-spine"))
+    }
+
+    @Test
+    fun `the overlays sit on the drawn faces, not the box's layout`() = overlaysOnFaces(28f)
+
+    @Test
+    fun `seen from the back, the overlays still sit on the drawn faces`() = overlaysOnFaces(160f)
 }

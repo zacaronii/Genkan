@@ -4,8 +4,6 @@ import android.content.Context
 import app.genkan.launch.LocalShelves
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMSession
-import app.genkan.ui.BoxView
-import app.genkan.ui.FullBoxPrototype
 import coil3.SingletonImageLoader
 import coil3.request.CachePolicy
 import coil3.request.Disposable
@@ -45,9 +43,9 @@ class ArtworkWarmer @Inject constructor(
 
     /**
      * Warms around [index] in [games]: ahead of the focus while [moving], everything the shelf
-     * shows when not.
+     * shows when not. With the [fullBox] setting on, the faces the box draws too (see [warmPaths]).
      */
-    fun warmAround(games: List<GameEntity>, index: Int, moving: Boolean = false) {
+    fun warmAround(games: List<GameEntity>, index: Int, moving: Boolean = false, fullBox: Boolean = false, showsBack: Boolean = false) {
         if (games === lastGames && index != lastIndex) direction = (index - lastIndex).sign
         if (games !== lastGames) direction = 0
         lastGames = games
@@ -61,9 +59,6 @@ class ArtworkWarmer @Inject constructor(
             lastPaths = emptyList()
             return
         }
-        // The full-box prototype (debug builds) draws the focused game from its front and back too.
-        val fullBox = FullBoxPrototype.on.value
-        val showsBack = fullBox && BoxView.of(FullBoxPrototype.angle.value).back
         val paths = warmPaths(games, index, if (moving) direction else 0, fullBox, showsBack).filterNot { it in warmed }
         if (paths == lastPaths) return
         lastPaths = paths
@@ -117,7 +112,7 @@ class ArtworkWarmer @Inject constructor(
          * of the [VISIBLE] games either side, the logo of a game without a cover, and the disc or
          * cartridge cut-out within [RADIUS]. Moving (1 right, -1 left): covers, spines and logos
          * [AHEAD] games that way and [BEHIND] the other, with no cut-outs. With the [fullBox]
-         * prototype on, each of those games it can draw also has its box's front warmed with its
+         * setting on, each of those games it can draw also has its box's front warmed with its
          * spine, since any of them may be the next focused; the back only for the focused game,
          * and only when the box is turned to show it ([showsBack]). Games from local shelves have
          * no RomM artwork.
@@ -140,7 +135,7 @@ class ArtworkWarmer @Inject constructor(
                 .flatMap { (offset, game) ->
                     val cover = game.coverLargePath ?: game.coverPath
                     val physical = game.physicalPath.takeIf { direction == 0 && kotlin.math.abs(offset) <= RADIUS }
-                    val box = fullBox && FullBoxPrototype.canDraw(game)
+                    val box = fullBox && game.hasBoxFaces()
                     val front = game.box2dPath.takeIf { box }
                     val back = game.box2dBackPath.takeIf { box && showsBack && offset == 0 }
                     listOfNotNull(cover, game.logoPath.takeIf { cover == null }, game.box2dSidePath, front, back, physical)
