@@ -33,6 +33,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -252,18 +253,8 @@ internal fun GameShelf(
         }
     }
 
-    val media = remember(shelfId) { Animatable(0f) }
-    LaunchedEffect(shelfId, focused, active, staticMedia) {
-        if (staticMedia != null) {
-            media.snapTo(if (staticMedia) 1f else 0f)
-            return@LaunchedEffect
-        }
-        media.snapTo(0f)
-        if (!active) return@LaunchedEffect
-        delay(ShelfDefaults.MEDIA_REST_MS)
-        media.animateTo(1f, tween(ShelfDefaults.MEDIA_SLIDE_MS, easing = FastOutSlowInEasing))
-    }
-    val mediaNow = remember(media) { { media.value } }
+    val media = rememberMediaSlide(shelfId, focused, active, staticMedia)
+    val mediaNow = rememberMediaOut(media)
 
     // While a direction is held, only the cases near the focus are drawn: the far ones, mostly
     // hidden under their neighbours anyway, cost the GPU a turned layer each on every frame. A tap
@@ -925,3 +916,37 @@ private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphi
 
 /** How long the full box takes to turn round. */
 private const val TURN_MS = 700
+
+/**
+ * The focused game's disc or cartridge sliding out of its case: 0 in, 1 out. It rests in for a
+ * moment ([ShelfDefaults.MEDIA_REST_MS]), then slides, while [active]; [staticMedia] holds it
+ * fully out (true) or in (false). One slide per focused game, so a newly focused game's disc is in
+ * its case in the very frame the focus arrives: shared, it was drawn for a frame where the last
+ * game's had slid to, until the effect snapped it back.
+ */
+@Composable
+internal fun rememberMediaSlide(shelfId: Long, focused: Int, active: Boolean, staticMedia: Boolean?): Animatable<Float, *> {
+    val media = remember(shelfId, focused) { Animatable(if (staticMedia == true) 1f else 0f) }
+    LaunchedEffect(media, active, staticMedia) {
+        if (staticMedia != null) {
+            media.snapTo(if (staticMedia) 1f else 0f)
+            return@LaunchedEffect
+        }
+        media.snapTo(0f)
+        if (!active) return@LaunchedEffect
+        delay(ShelfDefaults.MEDIA_REST_MS)
+        media.animateTo(1f, tween(ShelfDefaults.MEDIA_SLIDE_MS, easing = FastOutSlowInEasing))
+    }
+    return media
+}
+
+/**
+ * The current [slide]'s progress, read when the media is drawn. One accessor for the shelf's life,
+ * so it is no reason for a case to recompose on a step; it reads whichever slide is current, set in
+ * composition, so the frame the focus arrives in already reads the new game's.
+ */
+@Composable
+internal fun rememberMediaOut(slide: Animatable<Float, *>): () -> Float {
+    val current = rememberUpdatedState(slide)
+    return remember { { current.value.value } }
+}
