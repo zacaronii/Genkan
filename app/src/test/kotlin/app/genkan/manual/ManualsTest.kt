@@ -65,7 +65,11 @@ class ManualsTest {
     private fun cachedFile(game: GameEntity, text: String): File =
         File(folder, Manuals.fileName(game)).apply { parentFile?.mkdirs(); writeText(text) }
 
-    private fun pdf(text: String, etag: String) = MockResponse.Builder().code(200).addHeader("ETag", etag).body(text).build()
+    /** A made-up PDF answer: what makes it one is how it starts. */
+    private fun pdf(text: String, etag: String) = MockResponse.Builder().code(200).addHeader("ETag", etag).addHeader("Content-Type", "application/pdf").body("%PDF $text").build()
+
+    /** A manual file's text, without the made-up PDF's first bytes. */
+    private fun File.content() = readText().removePrefix("%PDF ")
 
     @Test
     fun `a manual that can't be fetched opens the game's earlier one, and keeps it`() = runBlocking {
@@ -75,7 +79,7 @@ class ManualsTest {
         server.enqueue(MockResponse.Builder().code(503).build())
         server.enqueue(MockResponse.Builder().code(503).build())
         val opened = manuals.file(game("2", path = other))
-        assertEquals("manual 1", opened.readText())
+        assertEquals("manual 1", opened.content())
         assertTrue(opened.isFile)
     }
 
@@ -94,7 +98,7 @@ class ManualsTest {
         server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Length", "15").build())
         server.enqueue(pdf("the new manual!", "m2"))
         val opened = manuals.file(game("2", path = other))
-        assertEquals("the new manual!", opened.readText())
+        assertEquals("the new manual!", opened.content())
         assertTrue(!earlier.exists())
     }
 
@@ -122,7 +126,7 @@ class ManualsTest {
         assertEquals("m1", server.takeRequest().headers["If-None-Match"])
         assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
         assertEquals(2, server.requestCount)
-        assertEquals("manual", manuals.cached(game("1"))!!.readText())
+        assertEquals("manual", manuals.cached(game("1"))!!.content())
     }
 
     @Test
@@ -135,7 +139,7 @@ class ManualsTest {
         clock += Manuals.CHECK_EVERY_MS + 1
         server.enqueue(pdf("Japanese manual", "ja"))
         assertEquals(Manuals.Refresh.REPLACED, manuals.refresh(game("1")))
-        assertEquals("Japanese manual", manuals.cached(game("1"))!!.readText())
+        assertEquals("Japanese manual", manuals.cached(game("1"))!!.content())
         assertEquals(7L, reported.await())
     }
 
@@ -148,7 +152,7 @@ class ManualsTest {
         clock += Manuals.CHECK_EVERY_MS + 1
         server.close()
         assertEquals(Manuals.Refresh.FAILED, manuals.refresh(game("1")))
-        assertEquals("manual", file.readText())
+        assertEquals("manual", file.content())
         assertEquals(file, manuals.file(game("1")))
     }
 
@@ -160,7 +164,7 @@ class ManualsTest {
         File(folder, oldName).apply { parentFile?.mkdirs(); writeText("manual") }
         server.enqueue(MockResponse.Builder().code(200).addHeader("ETag", "m1").addHeader("Content-Length", "6").build())
         val opened = manuals.file(game("1"))
-        assertEquals("manual", opened.readText())
+        assertEquals("manual", opened.content())
         assertEquals("HEAD", server.takeRequest().method)
         assertEquals("no download", 1, server.requestCount)
         // Kept under its new name, with what's needed to ask about it later.
@@ -169,7 +173,7 @@ class ManualsTest {
 
     @Test
     fun `a fetch says how far along it is, from the length the server gives`() = runBlocking {
-        val body = "x".repeat(200_000)
+        val body = "%PDF" + "x".repeat(200_000)
         server.enqueue(MockResponse.Builder().code(200).body(body).build())
         val seen = mutableListOf<Float?>()
         manuals.file(game("2")) { seen += it }
@@ -201,5 +205,67 @@ class ManualsTest {
         val ms = (System.nanoTime() - started) / 1_000_000
         assertTrue("took $ms ms", ms < 2_000)
         assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
+    }
+
+    @Test
+    fun `a cached manual opens at once while a check of it waits on the server`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("manual", "m1"))
+        manuals.file(game("1"))
+        clock += Manuals.CHECK_EVERY_MS + 1
+        // The check's answer is held back, as on a slow connection.
+        server.enqueue(MockResponse.Builder().code(304).headersDelay(5, java.util.concurrent.TimeUnit.SECONDS).build())
+        val check = launch(kotlinx.coroutines.Dispatchers.IO) { manuals.refresh(game("1")) }
+        kotlinx.coroutines.delay(200)
+        val started = System.currentTimeMillis()
+        val opened = manuals.file(game("1"))
+        assertTrue("opened in ${System.currentTimeMillis() - started} ms", System.currentTimeMillis() - started < 1_000)
+        assertEquals("manual", opened.content())
+        check.join()
+    }
+
+    @Test
+    fun `a page instead of a manual never replaces the cached one`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("manual", "m1"))
+        manuals.file(game("1"))
+        clock += Manuals.CHECK_EVERY_MS + 1
+        // A proxy's sign-in page, answered with a 200.
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "text/html").body("<html>Sign in</html>").build())
+        assertEquals(Manuals.Refresh.FAILED, manuals.refresh(game("1")))
+        assertEquals("manual", manuals.cached(game("1"))!!.content())
+        // Said to be a PDF, but isn't one.
+        server.enqueue(MockResponse.Builder().code(200).addHeader("ETag", "m2").addHeader("Content-Type", "application/pdf").body("not a pdf").build())
+        assertEquals(Manuals.Refresh.FAILED, manuals.refresh(game("1")))
+        assertEquals("manual", manuals.cached(game("1"))!!.content())
+        assertTrue("no part left", folder.listFiles()!!.none { it.name.endsWith(".part") })
+    }
+
+    @Test(expected = IOException::class)
+    fun `a first fetch that brings a page instead of a manual keeps nothing`() {
+        runBlocking {
+            server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "text/html").body("<html>Sign in</html>").build())
+            try {
+                manuals.file(game("1"))
+            } finally {
+                assertEquals(null, manuals.cached(game("1")))
+            }
+        }
+    }
+
+    @Test
+    fun `a manual with no validator is checked by a HEAD, and kept when the length is the same`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Type", "application/pdf").body("%PDF manual").build())
+        manuals.file(game("1"))
+        clock += Manuals.CHECK_EVERY_MS + 1
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Length", "11").build())
+        assertEquals(Manuals.Refresh.UNCHANGED, manuals.refresh(game("1")))
+        server.takeRequest()
+        assertEquals("HEAD", server.takeRequest().method)
+        assertEquals("no download", 2, server.requestCount)
     }
 }

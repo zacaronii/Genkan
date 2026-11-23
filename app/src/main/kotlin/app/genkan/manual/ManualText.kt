@@ -19,8 +19,15 @@ import javax.inject.Singleton
 class ManualText(private val engine: OcrEngine) {
     @Inject constructor(mlKit: MlKitJapaneseOcr) : this(mlKit as OcrEngine)
 
-    /** A page of a manual: [manual] is the file it came from. */
-    private data class Key(val manual: String, val page: Int)
+    /**
+     * A page of a manual: [manual] is the file it came from, [version] that file's time and length.
+     * A manual replaced at the same name (a newer one from the server) is another version, so the
+     * old one's text is never taken for it.
+     */
+    private data class Key(val manual: String, val version: Long, val page: Int)
+
+    private fun keyOf(manual: String, page: Int): Key =
+        java.io.File(manual).let { Key(manual, it.lastModified() * 31 + it.length(), page) }
 
     private val read = object : LinkedHashMap<Key, ScreenText>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, ScreenText>) = size > KEPT_PAGES
@@ -28,7 +35,7 @@ class ManualText(private val engine: OcrEngine) {
     private val lock = Mutex()
 
     /** Whether [page] of [manual] has been read, so a tap on it needs no OCR. */
-    suspend fun isRead(manual: String, page: Int): Boolean = lock.withLock { Key(manual, page) in read }
+    suspend fun isRead(manual: String, page: Int): Boolean = lock.withLock { keyOf(manual, page) in read }
 
     /**
      * The character under a tap at ([x], [y]) (fractions of the page) on [page] of [manual], or
@@ -38,7 +45,7 @@ class ManualText(private val engine: OcrEngine) {
         textOf(manual, pages, page, widthPx).hit(x, y)
 
     private suspend fun textOf(manual: String, pages: ManualPages, page: Int, widthPx: Int): ScreenText = lock.withLock {
-        val key = Key(manual, page)
+        val key = keyOf(manual, page)
         read[key]?.let { return it }
         val bitmap = pages.render(page, widthPx) ?: return ScreenText.EMPTY
         val text = try {

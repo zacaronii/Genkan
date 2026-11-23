@@ -1,6 +1,7 @@
 package app.genkan.manual
 
 import android.content.Context
+import android.util.Log
 import app.genkan.library.GameEntity
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMImageAuthInterceptor
@@ -59,15 +60,22 @@ class Manuals @Inject constructor(
 
     private val folder: File get() = File(context.cacheDir, FOLDER)
 
-    /** One fetch at a time: the details and the reader can ask for the same manual at once. */
-    private val lock = Mutex()
+    /**
+     * One fetch or check of a game's manual at a time (the details and the reader can ask for the
+     * same one at once). Opening a cached manual takes none: it never waits on the network.
+     */
+    private val locks = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
+    private fun lockFor(game: GameEntity) = locks.getOrPut(game.id) { Mutex() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** The clock the daily check goes by; replaceable in tests. */
     internal var now: () -> Long = System::currentTimeMillis
 
     private val _replaced = MutableSharedFlow<Long>(extraBufferCapacity = 4)
-    /** A game (its id) whose cached manual was replaced by a newer one from the server. */
+    /**
+     * A game (its id) whose cached manual was replaced by a newer one from the server. Nothing
+     * listens yet: the next open shows the new manual. The manual prefetch will use it.
+     */
     val replaced: SharedFlow<Long> = _replaced
 
     override fun has(game: GameEntity): Boolean = game.manualPath != null && session.currentAccount() != null
@@ -78,14 +86,20 @@ class Manuals @Inject constructor(
      * [game]'s manual, fetched first when it isn't cached; throws when it can't be had. A second
      * caller waits for a fetch under way and then finds the file cached.
      */
-    override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File = lock.withLock {
+    override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File {
         cached(game)?.let { cached ->
-            // Opened as it is; whether the server has a newer one is asked after, in the background.
+            // Opened as it is, at once; whether the server has a newer one is asked after, in the background.
             scope.launch { refresh(game) }
-            return@withLock cached
+            return cached
         }
+        return lockFor(game).withLock { fetchFile(game, onProgress) }
+    }
+
+    private suspend fun fetchFile(game: GameEntity, onProgress: (Float?) -> Unit): File {
+        // A caller that waited for another's fetch finds it cached.
+        cached(game)?.let { return it }
         val file = File(folder, fileName(game))
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             try {
                 val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) }
                     ?: throw IOException("no manual on the server")
@@ -115,45 +129,50 @@ class Manuals @Inject constructor(
      * asked about with a HEAD, and kept when the server's length is its own. A newer one is fetched
      * and takes the cached one's place (a reader that has the old one open keeps it until it reopens).
      */
-    suspend fun refresh(game: GameEntity): Refresh = lock.withLock {
-        withContext(Dispatchers.IO) {
-            val file = File(folder, fileName(game)).takeIf { it.isFile && it.length() > 0L } ?: return@withContext Refresh.NOT_DUE
-            val meta = readMeta(file)
-            if (meta != null && now() - meta.checkedAt < CHECK_EVERY_MS) return@withContext Refresh.NOT_DUE
-            val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return@withContext Refresh.NOT_DUE
-            try {
-                if (meta == null) {
-                    // Cached before validators were kept: the same length on the server is taken as the same file.
-                    assetClient.newCall(Request.Builder().url(url).head().build()).execute().use { head ->
-                        if (head.isSuccessful && head.header("Content-Length")?.toLongOrNull() == file.length()) {
-                            writeMeta(file, Validator(head.header("ETag"), head.header("Last-Modified")))
-                            return@withContext Refresh.UNCHANGED
-                        }
+    suspend fun refresh(game: GameEntity): Refresh = lockFor(game).withLock {
+        withContext(Dispatchers.IO) { checkNow(game) }.also { if (it != Refresh.NOT_DUE) Log.i(TAG, "Manual of rom ${game.id} checked: $it") }
+    }
+
+    private fun checkNow(game: GameEntity): Refresh {
+        val file = File(folder, fileName(game)).takeIf { it.isFile && it.length() > 0L } ?: return Refresh.NOT_DUE
+        val meta = readMeta(file)
+        if (meta != null && now() - meta.checkedAt < CHECK_EVERY_MS) return Refresh.NOT_DUE
+        val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return Refresh.NOT_DUE
+        return try {
+            if (meta?.etag == null && meta?.lastModified == null) {
+                // Nothing to ask with (cached before validators were kept, or the server gave
+                // none): the same length on the server is taken as the same file, and kept.
+                assetClient.newCall(Request.Builder().url(url).head().build()).execute().use { head ->
+                    if (head.isSuccessful && head.header("Content-Length")?.toLongOrNull() == file.length()) {
+                        writeMeta(file, Validator(head.header("ETag"), head.header("Last-Modified")))
+                        return Refresh.UNCHANGED
                     }
                 }
-                val request = Request.Builder().url(url).apply {
-                    meta?.etag?.let { header("If-None-Match", it) }
-                    meta?.lastModified?.takeIf { meta.etag == null }?.let { header("If-Modified-Since", it) }
-                }.build()
-                val part = File(file.path + ".part")
-                val validator = assetClient.newCall(request).execute().use { response ->
-                    if (response.code == 304) {
-                        writeMeta(file, meta!!.validator)
-                        return@withContext Refresh.UNCHANGED
-                    }
-                    if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
-                    part.outputStream().use { out -> response.body.byteStream().copyTo(out) }
-                    Validator(response.header("ETag"), response.header("Last-Modified"))
-                }
-                if (!part.renameTo(file)) throw IOException("couldn't save it")
-                writeMeta(file, validator)
-                _replaced.tryEmit(game.id)
-                Refresh.REPLACED
-            } catch (e: IOException) {
-                // Offline, or the server is away: the cached manual stays as it is, and is asked about next time.
-                File(file.path + ".part").delete()
-                Refresh.FAILED
             }
+            val request = Request.Builder().url(url).apply {
+                meta?.etag?.let { header("If-None-Match", it) }
+                meta?.lastModified?.takeIf { meta.etag == null }?.let { header("If-Modified-Since", it) }
+            }.build()
+            val part = File(file.path + ".part")
+            val validator = assetClient.newCall(request).execute().use { response ->
+                if (response.code == 304 && meta != null) {
+                    writeMeta(file, meta.validator)
+                    return Refresh.UNCHANGED
+                }
+                if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
+                checkType(response)
+                part.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+                checkPdf(part)
+                Validator(response.header("ETag"), response.header("Last-Modified"))
+            }
+            if (!part.renameTo(file)) throw IOException("couldn't save it")
+            writeMeta(file, validator)
+            _replaced.tryEmit(game.id)
+            Refresh.REPLACED
+        } catch (e: IOException) {
+            // Offline, or the server is away: the cached manual stays as it is, and is asked about next time.
+            File(file.path + ".part").delete()
+            Refresh.FAILED
         }
     }
 
@@ -164,6 +183,22 @@ class Manuals @Inject constructor(
             writeMeta(file, Validator(head.header("ETag"), head.header("Last-Modified")))
             true
         }
+
+    /** An answer that says it's a web page (a proxy's sign-in page, an error page) is no manual. */
+    private fun checkType(response: okhttp3.Response) {
+        val type = response.header("Content-Type") ?: return
+        if (type.trim().startsWith("text/html", ignoreCase = true)) throw IOException("the server sent a page, not a manual")
+    }
+
+    /** What arrived must be a PDF before it's kept: else it's thrown away and the cached manual stays. */
+    private fun checkPdf(part: File) {
+        val head = ByteArray(4)
+        val n = part.inputStream().use { it.read(head) }
+        if (n < 4 || String(head, Charsets.US_ASCII) != "%PDF") {
+            part.delete()
+            throw IOException("what the server sent isn't a PDF")
+        }
+    }
 
     /** What the server gave to ask about a file again: its ETag and Last-Modified. */
     private data class Validator(val etag: String?, val lastModified: String?)
@@ -212,6 +247,7 @@ class Manuals @Inject constructor(
                 watch.cancel()
             }
         }
+        checkPdf(part)
         if (!part.renameTo(file)) throw IOException("couldn't save it")
         return validator
     }
@@ -219,6 +255,7 @@ class Manuals @Inject constructor(
     private suspend fun fetchBody(call: okhttp3.Call, part: File, onProgress: (Float?) -> Unit): Validator =
         call.execute().use { response ->
             if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
+            checkType(response)
             val length = response.body.contentLength().takeIf { it > 0 }
             onProgress(if (length == null) null else 0f)
             part.outputStream().use { out ->
@@ -239,6 +276,7 @@ class Manuals @Inject constructor(
         }
 
     companion object {
+        private const val TAG = "Manuals"
         private const val FOLDER = "manuals"
         /** How often a cached manual is asked about on the server, at most. */
         const val CHECK_EVERY_MS = 24L * 60 * 60 * 1000
