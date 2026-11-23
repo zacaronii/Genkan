@@ -21,6 +21,8 @@ class ManualFetcherTest {
         var fetches = 0
         var answer = CompletableDeferred<Result<File>>()
         var report: ((Float?) -> Unit)? = null
+        /** Whether the fetch's wait goes on through a cancel, as a blocking read on the IO thread does. */
+        var uncancellable = false
 
         override fun has(game: GameEntity) = true
         override fun cached(game: GameEntity) = cachedFile
@@ -29,7 +31,8 @@ class ManualFetcherTest {
             cachedFile?.let { return it }
             report = onProgress
             onProgress(0f)
-            return answer.await().getOrThrow()
+            val result = if (uncancellable) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { answer.await() } else answer.await()
+            return result.getOrThrow()
         }
     }
 
@@ -119,6 +122,22 @@ class ManualFetcherTest {
         // The copy runs on for a while (blocking, on another thread) and reports, then ends.
         late(0.9f)
         s.source.answer.complete(Result.failure(CancellationException("cancelled")))
+        runCurrent()
+        advanceTimeBy(ManualFetcher.FAILED_MS + 1)
+        assertNull(s.fetcher.state.value)
+        assertEquals(emptyList<Throwable>(), s.failures)
+        assertEquals(emptyList<File>(), s.opened)
+    }
+
+    @Test
+    fun `a fetch that fails after it was cancelled says nothing`() = runTest {
+        val s = Setup(this)
+        s.source.uncancellable = true
+        s.open(game)
+        runCurrent()
+        s.fetcher.cancel()
+        // The stalled read times out after the cancel: the failure reaches the fetcher anyway.
+        s.source.answer.complete(Result.failure(IOException("timeout")))
         runCurrent()
         advanceTimeBy(ManualFetcher.FAILED_MS + 1)
         assertNull(s.fetcher.state.value)

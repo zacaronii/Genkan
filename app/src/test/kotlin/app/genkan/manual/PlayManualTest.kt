@@ -51,6 +51,8 @@ class PlayManualTest {
         var cachedFile: File? = null
         /** The fetch's progress report, kept to call late, as a cancelled copy still running would. */
         var report: ((Float?) -> Unit)? = null
+        /** Whether the fetch's wait goes on through a cancel, as a blocking read on the IO thread does. */
+        var uncancellable = false
         override fun cached(game: GameEntity): File? = cachedFile
         override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File {
             fetches++
@@ -58,7 +60,8 @@ class PlayManualTest {
             // Half of it, then whatever the test answers.
             report = onProgress
             onProgress(0.5f)
-            return answer.await().getOrThrow()
+            val result = if (uncancellable) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { answer.await() } else answer.await()
+            return result.getOrThrow()
         }
     }
 
@@ -195,6 +198,18 @@ class PlayManualTest {
         source.answer.complete(Result.failure(kotlinx.coroutines.CancellationException("cancelled")))
         assertNull(manual.fetch.value)
         assertNull(manual.notice.value)
+        assertNull(manual.open.value)
+    }
+
+    @Test
+    fun `a fetch that times out after hide says nothing in the header`() {
+        val manual = playing(game(1))
+        source.uncancellable = true
+        manual.show()
+        manual.hide()
+        source.answer.complete(Result.failure(IOException("timeout")))
+        assertNull(manual.notice.value)
+        assertNull(manual.fetch.value)
         assertNull(manual.open.value)
     }
 }

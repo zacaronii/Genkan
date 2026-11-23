@@ -107,4 +107,18 @@ class ManualsTest {
         fetch.cancelAndJoin()
         assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
     }
+
+    @Test
+    fun `a stalled fetch ends at once when cancelled, not at its timeout`() = runBlocking {
+        // 100 bytes, then nothing for 10 s: the next read blocks until the call is cancelled.
+        server.enqueue(MockResponse.Builder().code(200).body("x".repeat(1_000)).throttleBody(100, 10, java.util.concurrent.TimeUnit.SECONDS).build())
+        val reading = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fetch = launch(kotlinx.coroutines.Dispatchers.Default) { manuals.file(game("2")) { if (it != null && it > 0f) reading.complete(Unit) } }
+        reading.await()
+        val started = System.nanoTime()
+        fetch.cancelAndJoin()
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertTrue("took $ms ms", ms < 2_000)
+        assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
+    }
 }

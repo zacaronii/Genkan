@@ -29,8 +29,11 @@ class ManualFetcher(
 
     private var job: Job? = null
 
-    /** The fetch allowed to write [state]; any other is cancelled or done. */
-    @Volatile private var current = 0
+    /** The fetch allowed to write [state] or call back; any other is cancelled or done. */
+    private var current = 0
+
+    /** Held around every read and write of [current] and [state]: progress comes from the IO thread, a cancel from the main one. */
+    private val lock = Any()
 
     /**
      * Opens [game]'s manual: [onFile] gets the file, fetched first when it isn't cached. A press
@@ -40,11 +43,14 @@ class ManualFetcher(
     fun open(game: GameEntity, onFile: (File) -> Unit, onFailed: (Throwable) -> Unit = {}) {
         if (job?.isActive == true && _state.value !is ManualFetch.Failed) return
         job?.cancel()
-        val id = ++current
-        fun show(state: ManualFetch?) {
-            if (current == id) _state.value = state
+        val id = synchronized(lock) {
+            _state.value = null
+            ++current
         }
-        show(null)
+        /** Writes [state] if this is still the current fetch, in one step with [cancel]; false once it isn't. */
+        fun show(state: ManualFetch?): Boolean = synchronized(lock) {
+            (current == id).also { if (it) _state.value = state }
+        }
         job = scope.launch {
             if (source.cached(game) == null) show(ManualFetch.Busy())
             val file = try {
@@ -52,21 +58,24 @@ class ManualFetcher(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                show(ManualFetch.Failed(failedLabel))
+                // A fetch cancelled meanwhile can still end in a failure (a stalled read timing
+                // out): it says nothing then.
+                if (!show(ManualFetch.Failed(failedLabel))) return@launch
                 onFailed(e)
                 delay(FAILED_MS)
                 show(null)
                 return@launch
             }
-            show(null)
-            onFile(file)
+            if (show(null)) onFile(file)
         }
     }
 
     /** Stops the fetch under way, if any: the control shows nothing, whatever the fetch still reports. */
     fun cancel() {
-        current++
-        _state.value = null
+        synchronized(lock) {
+            current++
+            _state.value = null
+        }
         job?.cancel()
     }
 

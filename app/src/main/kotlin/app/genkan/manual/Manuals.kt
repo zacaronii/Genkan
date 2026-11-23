@@ -6,10 +6,12 @@ import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -92,31 +94,45 @@ class Manuals @Inject constructor(
     private suspend fun fetch(url: String, file: File, onProgress: (Float?) -> Unit) {
         file.parentFile?.mkdirs()
         val part = File(file.path + ".part")
-        assetClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
-            val length = response.body.contentLength().takeIf { it > 0 }
-            onProgress(if (length == null) null else 0f)
+        val call = assetClient.newCall(Request.Builder().url(url).build())
+        coroutineScope {
+            // Cancelled, the call is too, from another thread: a stalled read ends at once
+            // instead of at its timeout, and lets go of the lock.
+            val watch = launch { try { awaitCancellation() } finally { call.cancel() } }
             try {
-                part.outputStream().use { out ->
-                    val input = response.body.byteStream()
-                    val buffer = ByteArray(64 * 1024)
-                    var done = 0L
-                    while (true) {
-                        // A cancelled fetch stops here instead of downloading to the end.
-                        currentCoroutineContext().ensureActive()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        out.write(buffer, 0, read)
-                        done += read
-                        if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
-                    }
-                }
-            } catch (e: CancellationException) {
+                fetchBody(call, part, onProgress)
+            } catch (e: Throwable) {
+                // A half file is no use. Cancelled, the read fails as the socket closes: that's the cancel.
                 part.delete()
+                currentCoroutineContext().ensureActive()
                 throw e
+            } finally {
+                watch.cancel()
             }
         }
         if (!part.renameTo(file)) throw IOException("couldn't save it")
+    }
+
+    private suspend fun fetchBody(call: okhttp3.Call, part: File, onProgress: (Float?) -> Unit) {
+        call.execute().use { response ->
+            if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
+            val length = response.body.contentLength().takeIf { it > 0 }
+            onProgress(if (length == null) null else 0f)
+            part.outputStream().use { out ->
+                val input = response.body.byteStream()
+                val buffer = ByteArray(64 * 1024)
+                var done = 0L
+                while (true) {
+                    // A cancelled fetch stops here instead of downloading to the end.
+                    currentCoroutineContext().ensureActive()
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    done += read
+                    if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
+                }
+            }
+        }
     }
 
     companion object {
