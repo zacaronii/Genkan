@@ -22,6 +22,8 @@ data class PopupPrefs(
     val maxResults: Int = LOCAL_MAX_RESULTS,
     /** The frequency dictionary results are sorted by, by title (null: the first one enabled). */
     val frequencyDictionary: String? = null,
+    /** The host's frequency order ("auto", "ascending", …); null: by the dictionary's mode. */
+    val frequencyOrder: String? = null,
     /** Whether these came from a Hachidori host. */
     val fromHachidori: Boolean = false,
 ) {
@@ -52,13 +54,19 @@ class PopupPrefsSource @Inject constructor(settings: WordSettings, link: Hachido
                 summaryDictionary = host.optString("compactDefinitionSummaryDictionary").takeIf { it.isNotBlank() && it != "null" },
                 maxResults = host.optInt("maxResults", HACHIDORI_MAX_RESULTS).coerceIn(1, 64),
                 frequencyDictionary = host.optString("frequencyDictionary").takeIf { it.isNotBlank() && it != "null" },
+                frequencyOrder = host.optString("frequencyOrder").takeIf { it.isNotBlank() && it != "null" },
                 fromHachidori = true,
             )
         }
     }.stateIn(scope, SharingStarted.Eagerly, PopupPrefs())
 
     init {
-        scope.launch { prefs.collect { dictionaries.preferredFrequency = it.frequencyDictionary } }
+        scope.launch {
+            prefs.collect {
+                dictionaries.preferredFrequency = it.frequencyDictionary
+                dictionaries.preferredFrequencyOrder = it.frequencyOrder
+            }
+        }
     }
 
     private companion object {
