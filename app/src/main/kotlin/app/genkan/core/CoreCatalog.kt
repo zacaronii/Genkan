@@ -87,6 +87,14 @@ object CoreCatalog {
             splitScreens = true,
             extensions = setOf("nds", "ids", "dsi"),
         ),
+        CoreDef(
+            id = "bsnes_mercury", displayName = "bsnes-mercury", library = "libbsnes_mercury_libretro_android.so",
+            platforms = setOf("snes", "sfam"),
+            // Pointers are 24-bit. The core's memory map gives the bus's own addresses (work RAM at
+            // 0x7E0000, mirrored low in banks 00-3F), so no base is added to them.
+            pointerMask = 0xFFFFFFL,
+            extensions = setOf("sfc", "smc", "bml"),
+        ),
     )
 
     fun forPlatform(platformSlug: String): CoreDef? = cores.firstOrNull { platformSlug in it.platforms }

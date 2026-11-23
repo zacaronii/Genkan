@@ -1,3 +1,6 @@
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.security.MessageDigest
 
@@ -166,6 +169,80 @@ abstract class DownloadPinnedFiles : DefaultTask() {
     }
 }
 
+/**
+ * A libretro core built from source, a submodule pinned at [commit] (checked before building), with
+ * the NDK's ndk-build into [outputDir]. Built once per commit into [cacheDir], so later builds (and
+ * CI, which caches the folder) only copy it; nothing is downloaded but the submodule itself.
+ */
+abstract class BuildLibretroCore : DefaultTask() {
+    @get:Input abstract val commit: Property<String>
+    /** The folder holding the core's jni/Android.mk and jni/Application.mk, inside the submodule. */
+    @get:Internal abstract val projectDir: DirectoryProperty
+    @get:Internal abstract val submoduleDir: DirectoryProperty
+    @get:Input abstract val libraryName: Property<String>
+    @get:Input abstract val abi: Property<String>
+    @get:Input abstract val flags: ListProperty<String>
+    /** Further ndk-build variables, "NAME=value" (a core's build profile). */
+    @get:Input abstract val variables: ListProperty<String>
+    @get:Internal abstract val ndkDir: DirectoryProperty
+    @get:Internal abstract val cacheDir: DirectoryProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+    @get:Inject abstract val exec: ExecOperations
+
+    @TaskAction
+    fun build() {
+        val head = ByteArrayOutputStream().also { out ->
+            exec.exec { commandLine("git", "-C", submoduleDir.get().asFile.path, "rev-parse", "HEAD"); standardOutput = out }
+        }.toString().trim()
+        check(head == commit.get()) { "${submoduleDir.get().asFile.name} is at $head, not the pinned ${commit.get()}: run git submodule update" }
+        val cached = cacheDir.get().asFile.resolve("${libraryName.get().removeSuffix(".so")}-${commit.get()}/${abi.get()}/${libraryName.get()}")
+        if (!cached.isFile) {
+            logger.lifecycle("Building ${libraryName.get()} at ${commit.get().take(7)}")
+            val work = temporaryDir.apply { deleteRecursively(); mkdirs() }
+            val project = projectDir.get().asFile
+            exec.exec {
+                commandLine(
+                    listOf(
+                        ndkDir.get().asFile.resolve("ndk-build").path,
+                        "NDK_PROJECT_PATH=${project.path}",
+                        "APP_BUILD_SCRIPT=${project.resolve("jni/Android.mk").path}",
+                        "NDK_APPLICATION_MK=${project.resolve("jni/Application.mk").path}",
+                        "NDK_OUT=${work.resolve("obj").path}",
+                        "NDK_LIBS_OUT=${work.resolve("libs").path}",
+                        "APP_ABI=${abi.get()}",
+                        "APP_CPPFLAGS+=${flags.get().joinToString(" ")}",
+                        "-j${Runtime.getRuntime().availableProcessors()}",
+                    ) + variables.get(),
+                )
+            }
+            cached.parentFile.mkdirs()
+            work.resolve("libs/${abi.get()}/libretro.so").copyTo(cached, overwrite = true)
+        }
+        val out = outputDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
+        cached.copyTo(out.resolve(libraryName.get()), overwrite = true)
+    }
+}
+
+/**
+ * bsnes-mercury (GPL-3.0), the Super Famicom core, built from libretro's repository at this commit,
+ * balanced profile. See NOTICE. (Plain bsnes's libretro side gives no save RAM or memory map, which
+ * the player's saves and the reader need.)
+ */
+val bsnesMercuryCommit = "79d7f9de218b6ffa65a80bbdc5828532bc239232"
+
+val buildBsnes = tasks.register<BuildLibretroCore>("buildBsnes") {
+    commit.set(bsnesMercuryCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/bsnes-mercury"))
+    projectDir.set(rootProject.layout.projectDirectory.dir("third_party/bsnes-mercury/target-libretro"))
+    libraryName.set("libbsnes_mercury_libretro_android.so")
+    abi.set("arm64-v8a")
+    variables.set(listOf("PROFILE=balanced"))
+    flags.set(emptyList())
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/bsnes"))
+}
+
 val meikiDetect = "https://huggingface.co/rtr46/meiki.text.detect.v0/resolve/a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6"
 val meikiRecognize = "https://huggingface.co/rtr46/meiki.txt.recognition.v0/resolve/a28cf5874dc2438ebb1c86336be26bcec51e3375"
 
@@ -219,6 +296,7 @@ androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
         // The PC hook kit (tools/hookbridge/kit.sh, which needs MinGW): packed when it's been
         // built; without it, Genkan just has no kit to install.

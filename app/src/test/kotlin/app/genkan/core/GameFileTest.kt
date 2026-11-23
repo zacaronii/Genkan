@@ -164,7 +164,12 @@ class GameFileTest {
         assertFalse(GameFile.takes(melonds, zip("gba.zip", "game.gba" to bytes(64, 16))))
         assertFalse(GameFile.takes(mgba, File(temp.root, "game.7z").apply { writeBytes(bytes(64, 17)) }))
         assertTrue(GameFile.takes(CoreCatalog.forPlatform("psx")!!, File(temp.root, "game.chd").apply { writeBytes(bytes(64, 18)) }))
+        // The Super Famicom has its core: its cartridges, and zips holding one.
+        val snes = CoreCatalog.forPlatform("snes")!!
+        assertEquals("bsnes_mercury", snes.id)
+        assertTrue(GameFile.takes(snes, zip("sfc.zip", "game.sfc" to bytes(64, 23))))
+        assertFalse(GameFile.takes(snes, zip("gb.zip", "game.gb" to bytes(64, 24))))
         // A console with no built-in core goes to the outside emulator as before.
-        assertNull(CoreCatalog.forPlatform("snes"))
+        assertNull(CoreCatalog.forPlatform("n64"))
     }
 }
