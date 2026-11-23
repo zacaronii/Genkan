@@ -438,6 +438,9 @@ class CoreActivity : ComponentActivity() {
             if (file.parentFile?.canonicalPath != java.io.File(filesDir, "yomikata-snapshots").canonicalPath) return false
             if (length <= 0) return false
             val ram = ByteArray(length)
+            // The video RAM too, from the same frame, when the core gives it out.
+            val vram = GenkanTap.videoRamSize().takeIf { it in 1..MAX_VRAM }?.let { ByteArray(it.toInt()) }
+            var read = false
             val done = CountDownLatch(1)
             captured = null
             var requested = false
@@ -457,9 +460,13 @@ class CoreActivity : ComponentActivity() {
                 val chunk = ByteArray(CAPTURE_CHUNK)
                 while (at < length) {
                     val n = minOf(CAPTURE_CHUNK, length - at)
-                    if (GenkanTap.readMemory(address + at, chunk, n)) chunk.copyInto(ram, at, 0, n)
+                    if (GenkanTap.readMemory(address + at, chunk, n)) {
+                        chunk.copyInto(ram, at, 0, n)
+                        read = true
+                    }
                     at += n
                 }
+                if (vram != null && !GenkanTap.readVideoRam(0, vram, vram.size)) vram.fill(0)
                 done.countDown()
                 true
             }
@@ -468,8 +475,11 @@ class CoreActivity : ComponentActivity() {
                 capture = null
                 return false
             }
+            // Memory the core doesn't map there: no capture, rather than a dump of zeros.
+            if (!read) return false
             return try {
                 file.writeBytes(ram)
+                vram?.let { java.io.File(path + BuiltInPlayer.VRAM_SUFFIX).writeBytes(it) }
                 true
             } catch (e: Exception) {
                 Log.w(TAG, "No capture: $e")
@@ -775,6 +785,8 @@ class CoreActivity : ComponentActivity() {
         private const val BOTTOM_BACK_WAIT_MS = 300L
         private const val CAPTURE_WAIT_MS = 2_000L
         private const val CAPTURE_CHUNK = 1 shl 20
+        /** The most video RAM a capture copies (a PS1's is 1 MB). */
+        private const val MAX_VRAM = 4L shl 20
         private const val AUDIO_EVERY_MS = 100L
         /** How long a failed load's reason stays up before the player closes. */
         private const val FAIL_SHOW_MS = 5_000L

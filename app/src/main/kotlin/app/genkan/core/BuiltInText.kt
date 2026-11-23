@@ -211,16 +211,19 @@ class BuiltInText @Inject constructor(
         val game = session.game.value
         val memory = player.memory() ?: return@withContext "No game in the built-in player"
         memory.use { m ->
-            val id = ids[game.key] ?: RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) }
-                ?: return@withContext "This game's id isn't in its memory yet"
+            // A cartridge's id is in its header; a disc's in its RAM.
+            val id = ids[game.key] ?: player.cartridgeId()?.id ?: RamSnapshots.mainRamOf(m, game.platform)?.let { RamSnapshots.gameId(game.platform, it) }
+                ?: return@withContext "This game's id isn't known yet"
             ids[game.key] = id
             yomikataIds.learned(game.rommRomId, id)
-            // The line as far as anything has read it: the layout's, else OCR's last.
+            // The line as far as anything has read it: the layout's, else OCR's last. None is a
+            // snapshot of its own: the same game with no text on screen.
             val read = lastRead
             val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
                 ?: ocr.latest.value?.takeIf { it.isNotBlank() }
-                ?: return@withContext "Nothing read yet: turn OCR on, or wait for a line"
+                ?: ""
             val moment = when {
+                line.isEmpty() -> "no text on screen"
                 read?.asking == true -> "a question on screen"
                 read?.waitingOnLine == true -> "waiting for a press"
                 read?.shown != null && read.onScreen != read.message?.replace("\n", "") -> "typing out"

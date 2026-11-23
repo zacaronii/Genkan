@@ -27,6 +27,14 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "psx" -> MainRam(0x0L until 0x200000L, 0x80000000L)
             // User RAM, the 32 MB from 0x08000000.
             "psp" -> MainRam(0x08000000L until 0x0A000000L, 0x08000000L)
+            // Work RAM, the 128 KB at 0x7E0000 (bsnes-mercury's memory map gives the bus's addresses).
+            "snes", "sfam" -> MainRam(0x7E0000L until 0x800000L, 0x7E0000L)
+            // The 256 KB of external work RAM at 0x02000000, as mGBA maps it.
+            "gba" -> MainRam(0x02000000L until 0x02040000L, 0x02000000L)
+            // Work RAM's 8 KB window at 0xC000.
+            "gb", "gbc" -> MainRam(0xC000L until 0xE000L, 0xC000L)
+            // Main RAM, 4 MB at 0x02000000 (melonDS's, which Genkan reads from that base).
+            "nds" -> MainRam(0x02000000L until 0x02400000L, 0x02000000L)
             else -> null
         }
     }
@@ -49,7 +57,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     /** Snapshots waiting to be sent: each one's meta file (its RAM beside it, `.ram.gz`). */
     fun pending(): List<File> {
         // A capture's memory left behind by a process that died mid-snapshot.
-        dir.listFiles { f -> f.name.endsWith(".capture") && f.lastModified() < System.currentTimeMillis() - STALE_CAPTURE_MS }
+        dir.listFiles { f -> (f.name.endsWith(".capture") || f.name.endsWith(".capture.vram")) && f.lastModified() < System.currentTimeMillis() - STALE_CAPTURE_MS }
             ?.forEach { it.delete() }
         return dir.listFiles { f -> f.name.endsWith(".meta.json") }.orEmpty().sortedBy { it.name }
     }
@@ -77,11 +85,15 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         /** The frame on screen. */
         fun screen(): Bitmap? = null
         /**
-         * The frame and [ram]'s bytes from the same moment, the game held still between them,
-         * through [scratch]; null when the emulator can't, and [screen] and a plain read are used.
+         * The frame, [ram]'s bytes and the video RAM from the same moment, the game held still
+         * between them, through [scratch]; null when the emulator can't, and [screen], a plain
+         * read and [vram] are used.
          */
-        fun moment(ram: MainRam, scratch: File): Pair<Bitmap?, ByteArray>? = null
+        fun moment(ram: MainRam, scratch: File): Moment? = null
     }
+
+    /** One moment of the game: its frame, RAM and video RAM (null where the core gives none). */
+    class Moment(val frame: Bitmap?, val ram: ByteArray, val vram: ByteArray?)
 
     /** Sent or refused for good: gone from the device. */
     fun remove(meta: File) {
@@ -145,9 +157,9 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         val moment = extras?.moment(ram, File(dir, "$name.capture"))
         // A moment without its frame goes without a picture: a later one would claim the
         // memory's moment and not be it.
-        val frame = if (moment != null) moment.first else extras?.screen()
+        val frame = if (moment != null) moment.frame else extras?.screen()
         // What can't be read stays zeros: the dump keeps its addresses.
-        val bytes = moment?.second ?: readRam(memory, ram) ?: return false
+        val bytes = moment?.ram ?: readRam(memory, ram) ?: return false
         GZIPOutputStream(File(dir, "$name.ram.gz").outputStream()).use { it.write(bytes) }
         val meta = JSONObject()
             .put("id", id)
@@ -161,9 +173,13 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
         if (line.isBlank()) meta.put("no_text", true)
-        extras?.vram()?.let { video ->
+        (if (moment != null) moment.vram else extras?.vram())?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
-            meta.put("vram", JSONObject().put("bytes", video.size).put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH).put("format", "ps1-15bit"))
+            val format = vramFormat(game.platform!!)
+            val described = JSONObject().put("bytes", video.size).put("format", format)
+            // A PS1's is a 1024-wide 16-bit frame buffer; other consoles' are their cores' raw blocks.
+            if (format == PS1_VRAM) described.put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH)
+            meta.put("vram", described).put("vram_format", format)
         }
         extras?.state(File(dir, "$name.state.gz"))?.let { size -> meta.put("state", JSONObject().put("bytes", size)) }
         frame?.let { frame ->
@@ -178,6 +194,10 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     companion object {
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
+        private const val PS1_VRAM = "ps1-15bit"
+
+        /** The label of a console's video RAM for the inbox (`meta.vram_format`): PS1's frame buffer, else the core's raw block. */
+        fun vramFormat(platform: String): String = TextSamples.yomikataPlatform(platform).let { if (it == "ps1") PS1_VRAM else "$it-vram" }
 
         /** Games the Yomikata server is working on now, which want more lines. */
         private val ACTIVE = mapOf("SLPS-02100" to 10)

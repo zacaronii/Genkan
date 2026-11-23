@@ -31,6 +31,27 @@ class RamSnapshotsTest {
         assertEquals(0x80000000L, MainRam.of("psx")!!.baseAddress)
         assertEquals(2L * 1024 * 1024, MainRam.of("psx")!!.range.let { it.last - it.first + 1 })
         assertEquals(32L * 1024 * 1024, MainRam.of("psp")!!.range.let { it.last - it.first + 1 })
-        assertNull(MainRam.of("gba"))
+        fun size(platform: String) = MainRam.of(platform)!!.range.let { it.last - it.first + 1 }
+        assertEquals(0x7E0000L, MainRam.of("snes")!!.baseAddress)
+        assertEquals(128L * 1024, size("snes"))
+        assertEquals(MainRam.of("snes"), MainRam.of("sfam"))
+        assertEquals(0x02000000L, MainRam.of("gba")!!.baseAddress)
+        assertEquals(256L * 1024, size("gba"))
+        assertEquals(0xC000L, MainRam.of("gb")!!.baseAddress)
+        assertEquals(8L * 1024, size("gbc"))
+        assertEquals(0x02000000L, MainRam.of("nds")!!.baseAddress)
+        assertEquals(4L * 1024 * 1024, size("nds"))
+        assertNull(MainRam.of("n64"))
+    }
+
+    @Test
+    fun `video RAM is labelled by console, PS1's as its frame buffer`() {
+        assertEquals("ps1-15bit", RamSnapshots.vramFormat("psx"))
+        assertEquals("sfc-vram", RamSnapshots.vramFormat("snes"))
+        assertEquals("sfc-vram", RamSnapshots.vramFormat("sfam"))
+        assertEquals("gba-vram", RamSnapshots.vramFormat("gba"))
+        assertEquals("gb-vram", RamSnapshots.vramFormat("gb"))
+        assertEquals("gbc-vram", RamSnapshots.vramFormat("gbc"))
+        assertEquals("nds-vram", RamSnapshots.vramFormat("nds"))
     }
 }
