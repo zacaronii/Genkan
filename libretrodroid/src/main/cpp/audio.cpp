@@ -56,6 +56,11 @@ bool Audio::initializeStream() {
         fifoBuffer = std::make_unique<oboe::FifoBuffer>(2, audioBufferSize);
         temporaryAudioBuffer = std::unique_ptr<int16_t[]>(new int16_t[audioBufferSize]);
         latencyTuner = std::make_unique<oboe::LatencyTuner>(*stream);
+        // Genkan: what the device gave, for a game with no sound.
+        LOGI("Audio stream open on device %d: %d Hz, performance mode %s (asked %s), sharing %s, %s",
+             stream->getDeviceId(), stream->getSampleRate(), oboe::convertToText(stream->getPerformanceMode()),
+             audioLatencySettings->useLowLatencyStream ? "LowLatency" : "None",
+             oboe::convertToText(stream->getSharingMode()), oboe::convertToText(stream->getAudioApi()));
         return true;
     } else {
         LOGE("Failed to create stream. Error: %s", oboe::convertToText(result));
@@ -115,12 +120,33 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     int32_t currentFramesToSubmit = std::round(framesToSubmit);
     framesToSubmit -= currentFramesToSubmit;
 
-    fifoBuffer->readNow(temporaryAudioBuffer.get(), currentFramesToSubmit * 2);
+    int32_t samplesRead = fifoBuffer->readNow(temporaryAudioBuffer.get(), currentFramesToSubmit * 2);
 
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
     resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
 
+    callbacksSinceReport++;
+    framesReadSinceReport += samplesRead / 2;
+    for (int32_t i = 0; i < numFrames * 2; i++) {
+        peakOutSinceReport = std::max(peakOutSinceReport, std::abs((int32_t) outputArray[i]));
+    }
+
     latencyTuner->tune();
+
+    // Genkan: every ten seconds of sound, the stream's state, its underruns and how full the
+    // buffer is, so a game with no sound can be told apart from a stream that isn't playing.
+    framesSinceReport += numFrames;
+    if (framesSinceReport >= oboeStream->getSampleRate() * 10) {
+        auto xruns = oboeStream->getXRunCount();
+        LOGI("Audio stream on device %d: %s, %d underruns, buffer %d of %d frames; %d callbacks asked %lld frames, read %lld from the buffer, peak out %d of 32767",
+             oboeStream->getDeviceId(), oboe::convertToText(oboeStream->getState()), xruns ? xruns.value() : -1,
+             fifoBuffer->getFullFramesAvailable(), fifoBuffer->getBufferCapacityInFrames(),
+             callbacksSinceReport, (long long) framesSinceReport, (long long) framesReadSinceReport, peakOutSinceReport);
+        framesSinceReport = 0;
+        callbacksSinceReport = 0;
+        framesReadSinceReport = 0;
+        peakOutSinceReport = 0;
+    }
 
     return oboe::DataCallbackResult::Continue;
 }
@@ -153,6 +179,12 @@ double Audio::computeDynamicBufferConversionFactor(double dt) {
 
 int32_t Audio::roundToEven(int32_t x) {
     return (x / 2) * 2;
+}
+
+// Genkan: every error the stream reports is logged, before and after it closes.
+bool Audio::onError(oboe::AudioStream* oboeStream, oboe::Result result) {
+    LOGI("Audio stream error on device %d: %s", oboeStream->getDeviceId(), oboe::convertToText(result));
+    return false;
 }
 
 void Audio::onErrorAfterClose(oboe::AudioStream* oldStream, oboe::Result result) {

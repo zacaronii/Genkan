@@ -3,6 +3,7 @@ package app.genkan.download
 import android.app.ServiceStartNotAllowedException
 import android.os.Environment
 import android.util.Log
+import app.genkan.core.UnpackedGames
 import app.genkan.library.GameEntity
 import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMRetryInterceptor
@@ -43,6 +44,7 @@ class DownloadQueue @Inject constructor(
     private val dao: DownloadDao,
     private val session: RomMSession,
     httpClient: OkHttpClient,
+    private val unpacked: UnpackedGames,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // The file requests carry the token too, so they can meet the same 5xx; the retry only ever
@@ -109,6 +111,7 @@ class DownloadQueue @Inject constructor(
         if (row.state != DownloadState.INSTALLED) {
             dao.delete(romId)
             removeFiles(File(row.path), partsOnly = false)
+            unpacked.forget(romId)
         }
     }
 
@@ -116,6 +119,8 @@ class DownloadQueue @Inject constructor(
     fun delete(romId: Long) = scope.launch {
         val row = dao.get(romId) ?: return@launch
         removeFiles(File(row.path), partsOnly = false)
+        // The built-in player's unpacked copy of it, if it made one.
+        unpacked.forget(romId)
         dao.delete(romId)
     }
 

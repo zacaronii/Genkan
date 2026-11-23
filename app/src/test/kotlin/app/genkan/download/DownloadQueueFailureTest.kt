@@ -70,7 +70,7 @@ class DownloadQueueFailureTest {
             every { api() } returns api
         }
         val dao = FakeDownloadDao()
-        val queue = DownloadQueue(starter = {}, dao = dao, session = session, httpClient = OkHttpClient())
+        val queue = DownloadQueue(starter = {}, dao = dao, session = session, httpClient = OkHttpClient(), unpacked = app.genkan.core.UnpackedGames(java.io.File("build/unpacked-test")))
 
         queue.enqueue(game(1, "one.iso")).join()
         queue.enqueue(game(2, "two.iso")).join()

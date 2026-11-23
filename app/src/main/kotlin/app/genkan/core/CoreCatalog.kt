@@ -28,7 +28,12 @@ data class CoreDef(
     val firmware: Map<String, String> = emptyMap(),
     /** The core stacks two screens in one frame (a DS): the lower one goes to the bottom display. */
     val splitScreens: Boolean = false,
-)
+    /** The file types the core plays, lower case, without the dot: the core's own list. */
+    val extensions: Set<String> = emptySet(),
+) {
+    /** Whether a file named [name] is one the core plays. */
+    fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
+}
 
 object CoreCatalog {
 
@@ -36,6 +41,7 @@ object CoreCatalog {
         CoreDef(
             id = "mgba", displayName = "mGBA", library = "libmgba_libretro_android.so",
             platforms = setOf("gb", "gbc", "gba"),
+            extensions = setOf("gb", "gbc", "sgb", "gba"),
         ),
         CoreDef(
             id = "pcsx_rearmed", displayName = "PCSX ReARMed", library = "libpcsx_rearmed_libretro_android.so",
@@ -45,6 +51,7 @@ object CoreCatalog {
             // Without a BIOS it emulates one, which some games hang on. The Japanese one (SCPH-5500,
             // v3.0J) for Japanese discs, under a name the core picks up; it would prefer a US one.
             firmware = mapOf("ps-30j.bin" to "scph5500.bin"),
+            extensions = setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "ccd", "chd", "iso", "exe"),
         ),
         CoreDef(
             id = "ppsspp", displayName = "PPSSPP", library = "libppsspp_libretro_android.so",
@@ -57,6 +64,7 @@ object CoreCatalog {
             ramBase = 0x08000000L,
             // The core's saves folder is its memory stick: PPSSPP's own, so PSP/SAVEDATA is shared.
             sharedSaves = listOf("ppsspp", "PPSSPP"),
+            extensions = setOf("elf", "iso", "cso", "prx", "pbp", "chd"),
         ),
         CoreDef(
             id = "melonds", displayName = "melonDS DS", library = "libmelonds_libretro_android.so",
@@ -77,6 +85,7 @@ object CoreCatalog {
             pointerMask = 0x023FFFFFL,
             ramBase = 0x02000000L,
             splitScreens = true,
+            extensions = setOf("nds", "ids", "dsi"),
         ),
     )
 

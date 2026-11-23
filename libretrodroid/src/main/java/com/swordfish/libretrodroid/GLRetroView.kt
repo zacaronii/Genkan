@@ -76,8 +76,14 @@ class GLRetroView(
 
     private val openGLESVersion: Int
 
-    private var isGameLoaded = false
+    @Volatile private var isGameLoaded = false
     private var isEmulationReady = false
+
+    /**
+     * Genkan: whether the core has a game in it. Until it has (and never, when the load failed)
+     * the core must not be asked for its memory or save RAM: some crash.
+     */
+    val gameLoaded: Boolean get() = isGameLoaded
     private var isAborted = false
 
     private val retroGLEventsSubject = MutableSharedFlow<GLRetroEvents>(1)
