@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -245,17 +246,7 @@ internal fun GameShelf(
         }
     }
 
-    val media = remember(shelfId) { Animatable(0f) }
-    LaunchedEffect(shelfId, focused, active, staticMedia) {
-        if (staticMedia != null) {
-            media.snapTo(if (staticMedia) 1f else 0f)
-            return@LaunchedEffect
-        }
-        media.snapTo(0f)
-        if (!active) return@LaunchedEffect
-        delay(ShelfDefaults.MEDIA_REST_MS)
-        media.animateTo(1f, tween(ShelfDefaults.MEDIA_SLIDE_MS, easing = FastOutSlowInEasing))
-    }
+    val media = rememberMediaSlide(shelfId, focused, active, staticMedia)
     val mediaNow = remember(media) { { media.value } }
 
     // While a direction is held, only the cases near the focus are drawn: the far ones, mostly
@@ -772,7 +763,8 @@ private fun BoxScope.PhysicalMedia(
                 translationX = endX * t
                 translationY = endY * t
                 alpha = if (t > 0f) 1f else 0f
-            },
+            }
+            .testTag(MEDIA_TAG),
         contentAlignment = Alignment.Center,
     ) {
         MediaArt(kind, model, logo, title, caseColor, shape.outline)
@@ -915,3 +907,29 @@ private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.c
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** Test tag of the focused game's disc or cartridge. */
+internal const val MEDIA_TAG = "shelf-media"
+
+/**
+ * The focused game's disc or cartridge sliding out of its case: 0 in, 1 out. It rests in for a
+ * moment ([ShelfDefaults.MEDIA_REST_MS]), then slides, while [active]; [staticMedia] holds it
+ * fully out (true) or in (false). One slide per focused game, so a newly focused game's disc is in
+ * its case in the very frame the focus arrives: shared, it was drawn for a frame where the last
+ * game's had slid to, until the effect snapped it back.
+ */
+@Composable
+internal fun rememberMediaSlide(shelfId: Long, focused: Int, active: Boolean, staticMedia: Boolean?): Animatable<Float, *> {
+    val media = remember(shelfId, focused) { Animatable(if (staticMedia == true) 1f else 0f) }
+    LaunchedEffect(media, active, staticMedia) {
+        if (staticMedia != null) {
+            media.snapTo(if (staticMedia) 1f else 0f)
+            return@LaunchedEffect
+        }
+        media.snapTo(0f)
+        if (!active) return@LaunchedEffect
+        delay(ShelfDefaults.MEDIA_REST_MS)
+        media.animateTo(1f, tween(ShelfDefaults.MEDIA_SLIDE_MS, easing = FastOutSlowInEasing))
+    }
+    return media
+}
