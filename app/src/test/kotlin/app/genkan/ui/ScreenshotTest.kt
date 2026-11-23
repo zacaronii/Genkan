@@ -41,6 +41,7 @@ import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -357,6 +358,36 @@ class ScreenshotTest {
     @Config(qualifiers = BOTTOM_SCREEN)
     fun gameDetailsManualFetching() = shoot("game_details_manual_fetching", BOTTOM_PIXELS) {
         GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, manualFetch = app.genkan.manual.ManualFetch.Busy(0.42f))
+    }
+
+    /** The reader's menu open under its button: every row, a look not kept and a manual that failed marked. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun readerMenu() = shoot("reader_menu", BOTTOM_PIXELS) {
+        val items = ReaderMenu.items(
+            ReaderBarState(
+                manual = true,
+                manualFetch = app.genkan.manual.ManualFetch.Failed("Couldn't fetch the manual"),
+                ocrOn = true,
+                capturing = true,
+                engine = "ML Kit",
+                overlayAvailable = true,
+                overlayOn = true,
+                look = "CRT" to false,
+                thread = "1",
+            ),
+        )
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background)) {
+            androidx.compose.foundation.layout.Row(
+                androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(androidx.compose.ui.unit.Dp(12f)),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(androidx.compose.ui.unit.Dp(12f)),
+            ) {
+                Chip("OCR on") {}
+                Chip("Snapshot") {}
+                ReaderMenuButton(open = true, attention = items.any { it.attention }) {}
+            }
+            ReaderMenuPanel(items, onPick = {}, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(top = androidx.compose.ui.unit.Dp(64f), end = androidx.compose.ui.unit.Dp(12f)))
+        }
     }
 
     /** A fetch that failed, said on the same button for a few seconds. */
