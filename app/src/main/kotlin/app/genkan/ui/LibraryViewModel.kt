@@ -148,6 +148,9 @@ class LibraryViewModel @Inject constructor(
     /** The shelf or the grid, as last left; the shelf until the stored choice has been read. */
     val view: StateFlow<LibraryView> = viewSettings.view.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryView.DEFAULT)
 
+    /** The Full box setting, for the artwork warmer. */
+    private val fullBox: StateFlow<Boolean> = viewSettings.fullBox.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     /** Switches between the shelf and the grid, and remembers the choice. */
     fun toggleView() {
         val next = view.value.toggled()
@@ -296,9 +299,12 @@ class LibraryViewModel @Inject constructor(
             combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }
                 .collectLatest { (list, index) ->
                     val at = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                    artworkWarmer.warmAround(list, at, moving = true)
+                    // The full box (a setting) draws the focused game's front, and its back when turned to it.
+                    val box = fullBox.value
+                    val back = box && BoxView.of(FullBoxShelf.angle.value).back
+                    artworkWarmer.warmAround(list, at, moving = true, fullBox = box, showsBack = back)
                     delay(WARM_REST_MS)
-                    artworkWarmer.warmAround(list, at, moving = false)
+                    artworkWarmer.warmAround(list, at, moving = false, fullBox = box, showsBack = back)
                 }
         }
     }

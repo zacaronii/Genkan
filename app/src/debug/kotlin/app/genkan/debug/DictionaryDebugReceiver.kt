@@ -31,7 +31,7 @@ import app.genkan.privileged.Privileged
 import app.genkan.reader.NowPlaying
 import app.genkan.reader.HookMessage
 import app.genkan.reader.ReaderSession
-import app.genkan.ui.FullBoxPrototype
+import app.genkan.ui.FullBoxShelf
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,9 +77,9 @@ import javax.inject.Inject
  * (writes what a card made now would carry, the frame as WebP and the last 3 s as M4A, to Download/genkan-card-media)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false]
  * (switches the built-in player setting)
- *   adb shell am broadcast -a app.genkan.debug.FULL_BOX -n app.genkan/.debug.DictionaryDebugReceiver [--ez on false] [--ei angle 28]
- * (the full-box prototype: the shelf's focused game as a box from its scans, turned that many degrees; past 90 shows the back.
- *  On/off is stored, as Settings > Playing > Full box does; the angle lasts until the app restarts)
+ *   adb shell am broadcast -a app.genkan.debug.FULL_BOX -n app.genkan/.debug.DictionaryDebugReceiver --ei angle 28
+ * (turns the shelf's full box that many degrees, to try other views; past 90 shows the back. Lasts until the app
+ *  restarts. On or off is the Full box setting)
  *   adb shell am broadcast -a app.genkan.debug.MANUAL_OCR -n app.genkan/.debug.DictionaryDebugReceiver --es file cache/manuals/<name>.pdf [--ei page 0] [--ei width 1240]
  * (times one manual page read as a tap would: render, then ML Kit; logs sizes and timings at info, never the text)
  *   adb shell am broadcast -a app.genkan.debug.PANEL -n app.genkan/.debug.DictionaryDebugReceiver --es items 'Yes|No' [--ei cursor 0]
@@ -108,7 +108,6 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var saveSync: SaveSync
     @Inject lateinit var privileged: Privileged
     @Inject lateinit var mlKitOcr: app.genkan.ocr.MlKitJapaneseOcr
-    @Inject lateinit var librarySettings: app.genkan.library.LibraryViewSettings
     @Inject lateinit var azahar: AzaharText
     @Inject lateinit var downloadQueue: DownloadQueue
     @Inject lateinit var gameLauncher: GameLauncher
@@ -211,11 +210,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Card media: frame ${frame?.width}x${frame?.height}, audio ${voice?.size} samples, in $dir")
                     }
                     "app.genkan.debug.PLAYER" -> playerSettings.setEnabled(intent.getBooleanExtra("on", true))
-                    "app.genkan.debug.FULL_BOX" -> {
-                        // Stored, as the debug Settings row does, so it survives a restart.
-                        librarySettings.setFullBox(intent.getBooleanExtra("on", true))
-                        if (intent.hasExtra("angle")) FullBoxPrototype.angle.value = intent.getIntExtra("angle", 28).toFloat()
-                    }
+                    "app.genkan.debug.FULL_BOX" -> FullBoxShelf.angle.value = intent.getIntExtra("angle", 28).toFloat()
                     "app.genkan.debug.MANUAL_OCR" -> {
                         // Times reading one manual page as a tap would: a render at the given width, then ML Kit.
                         // Logs numbers only, never the text; nothing is looked up.

@@ -202,9 +202,9 @@ internal fun GameShelf(
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
 
-    // The full-box prototype's switch (debug builds; off otherwise).
-    val fullBox by FullBoxPrototype.on.collectAsState()
-    val fullBoxAngle by FullBoxPrototype.angle.collectAsState()
+    // The Full box setting, and the box's turn.
+    val fullBox by FullBoxShelf.on.collectAsState()
+    val fullBoxAngle by FullBoxShelf.angle.collectAsState()
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
@@ -355,9 +355,9 @@ internal fun GameShelf(
                                     trace = trace,
                                 )
                             }
-                            if (fullBox && index == focused && FullBoxPrototype.canDraw(game)) {
-                                // Debug builds' full-box prototype: the focused game as a box from its
-                                // scans, its case in the meantime.
+                            if (fullBox && index == focused && FullBoxShelf.canDraw(game)) {
+                                // The full box: the focused game as a box from its scans, its case in the
+                                // meantime, with the case's download badge (the focused game's is on the right).
                                 FullBox(
                                     front = art.front,
                                     spine = art.spine,
@@ -367,6 +367,14 @@ internal fun GameShelf(
                                     angle = fullBoxAngle,
                                     modifier = transform.then(select),
                                     fallback = { case(Modifier) },
+                                    // The disc or cartridge peeks out of the box as it does from the case.
+                                    behind = if (active) { boxWidth, boxHeight ->
+                                        PhysicalMedia(
+                                            MediaKind.forSlug(game.platformSlug), art.physical, art.logo, game.name,
+                                            Color(GameCase.specFor(game.platformSlug).color), boxWidth, boxHeight, mediaNow,
+                                        )
+                                    } else null,
+                                    overlay = { DownloadMark(game, downloads[game.id], onLeft = false) },
                                 )
                             } else {
                                 case(transform.then(select))
@@ -444,7 +452,7 @@ private data class CaseArt(
     val spine: Any?,
     val logo: Any?,
     val physical: Any?,
-    /** The box's front and back scans, for the full-box prototype. */
+    /** The box's front and back scans, for the full box. */
     val front: Any? = null,
     val back: Any? = null,
 )

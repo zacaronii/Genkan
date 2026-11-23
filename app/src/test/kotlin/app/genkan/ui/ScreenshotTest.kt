@@ -150,6 +150,26 @@ class ScreenshotTest {
         library(LibraryView.SHELF, platformIndex = 1, FakeData.psxGames, gameIndex = 3, staticMedia = true)
     }
 
+    /**
+     * The focused game drawn as a full box (the Full box setting is on by default): it has a front
+     * and a spine scan. Its disc peeks out of the box as from the case, and the box keeps the
+     * case's download badge; the games around it keep their cases.
+     */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfFullBox() = shoot("shelf_full_box", TOP_PIXELS) {
+        val games = FakeData.psxGames.mapIndexed { i, game -> if (i == 3) game.copy(box2dPath = "/covers/psx/${game.id}.png") else game }
+        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 3, staticMedia = true)
+    }
+
+    /** A full box whose game isn't downloaded: the case's download badge, in the box's corner. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun shelfFullBoxBadge() = shoot("shelf_full_box_badge", TOP_PIXELS) {
+        val games = FakeData.psxGames.mapIndexed { i, game -> if (i == 0) game.copy(box2dPath = "/covers/psx/${game.id}.png") else game }
+        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 0)
+    }
+
     /** A DS game with no cut-out on the server: a drawn card with the logo as its label. */
     @Test
     @Config(qualifiers = TOP_SCREEN)

@@ -58,6 +58,7 @@ object SettingsGroups {
             info = listOf(SettingsInfo.ROMM_ACCOUNT),
             rows = listOf(
                 SettingsRow.Button("Sync library now", SetupAction.SYNC_LIBRARY),
+                SettingsRow.Switch("Full box", SwitchKey.FULL_BOX, SetupAction.FULL_BOX),
                 SettingsRow.Button("Sign out of RomM", SetupAction.SIGN_OUT),
             ),
         ),
@@ -108,11 +109,6 @@ object SettingsGroups {
         ),
     )
 
-    /** [DEFAULT] with the rows only debug builds show: prototypes to look at on the device. */
-    val DEBUG: List<SettingsGroup> = DEFAULT.map { group ->
-        if (group.id != "playing") group
-        else group.copy(rows = group.rows + SettingsRow.Switch("Full box (prototype)", SwitchKey.FULL_BOX, SetupAction.FULL_BOX))
-    }
 }
 
 enum class SettingsPane { GROUPS, ROWS }
