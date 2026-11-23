@@ -262,4 +262,64 @@ class LayoutLinesTest {
         read("五行目\n六行目\n七行目", waiting = true)
         assertEquals(listOf("八行目九行目十行目"), texts(read("八行目\n九行目\n十行目", waiting = true)))
     }
+
+    /** A window with no flags, whose reads are [rows] each: the lines sent, settling after each read in [settleAfter]. */
+    private fun replay(vararg reads: List<String>, settleAfter: Set<Int> = emptySet()): List<LayoutLines.Line> {
+        val sent = mutableListOf<LayoutLines.Line>()
+        reads.forEachIndexed { i, rows ->
+            val step = read(rows.joinToString("\n"))
+            sent += step.lines
+            if (i in settleAfter) lines.settled()?.let { sent += it }
+        }
+        return sent
+    }
+
+    @Test
+    fun `a window that moves its rows up a frame before typing the next grows one line`() {
+        // The rows move up with the bottom one blank (the cleanup drops it), then the next types in.
+        val sent = replay(
+            listOf("いち"), listOf("いち", "にい"), listOf("いち", "にい", "さん"),
+            listOf("にい", "さん"),
+            listOf("にい", "さん", "し"), listOf("にい", "さん", "しい"),
+            listOf("さん", "しい"),
+            listOf("さん", "しい", "ご"),
+            settleAfter = setOf(2, 5, 7),
+        )
+        assertEquals(listOf("いちにいさん", "いちにいさんしい", "いちにいさんしいご"), sent.map { it.text })
+        // Each takes back the one before, so the backlog keeps one line.
+        assertEquals(listOf(null, "いちにいさん", "いちにいさんしい"), sent.map { it.takesBack })
+    }
+
+    @Test
+    fun `a scroll and a new paragraph's first character in one read still grow the line`() {
+        val sent = replay(
+            listOf("◆いち", "にい", "さん"),
+            listOf("にい", "さん", "◆"),
+            listOf("にい", "さん", "◆しい"),
+            listOf("さん", "◆しい"),
+            listOf("さん", "◆しい", "ご"),
+            settleAfter = setOf(0, 4),
+        )
+        assertEquals(listOf("◆いちにいさん", "◆いちにいさん◆しいご"), sent.map { it.text })
+        assertEquals("◆いちにいさん", sent.last().takesBack)
+    }
+
+    @Test
+    fun `a new page after a grown line starts without the rows that scrolled off`() {
+        val sent = replay(
+            listOf("いち", "にい"), listOf("にい", "さん"),
+            listOf("あたらしい"), listOf("あたらしい", "ぺえじ"),
+            settleAfter = setOf(1, 3),
+        )
+        assertEquals(listOf("いちにいさん", "あたらしいぺえじ"), sent.map { it.text })
+        assertNull(sent.last().takesBack)
+    }
+
+    @Test
+    fun `the window clearing ends a grown line`() {
+        replay(listOf("いち", "にい"), listOf("にい", "さん"))
+        val gone = read(null)
+        assertEquals(listOf("いちにいさん"), texts(gone))
+        assertEquals(listOf("いち"), replay(listOf("いち"), settleAfter = setOf(0)).map { it.text })
+    }
 }
