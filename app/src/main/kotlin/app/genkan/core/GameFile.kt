@@ -47,38 +47,30 @@ object GameFile {
         }
         zip.use {
             val entries = playable(core, zip)
-            val entry = entries.firstOrNull()
+            // A game in several files (a disc's tracks) is played through its index (a cue sheet,
+            // a playlist): the index and the files beside it are unpacked, and the core gets the index.
+            val indexes = entries.filter { isIndex(it.name) }
+            val entry = indexes.firstOrNull() ?: entries.firstOrNull()
                 ?: return Prepared.Unplayable("The game's zip holds nothing ${core.displayName} can play")
             val name = File(entry.name).name
             if (name.isEmpty() || name == "." || name == "..") return Prepared.Unplayable("The game's zip has an entry with no usable name")
-            if (entry.size > maxBytes) return Prepared.Unplayable("The game is too large to unpack (${entry.size / MB} MB)")
+            val parts = if (entry in indexes) besides(zip, entry) else listOf(entry)
+            val size = parts.sumOf { it.size.coerceAtLeast(0) }
+            if (size > maxBytes) return Prepared.Unplayable("The game is too large to unpack (${size / MB} MB)")
             val folder = File(cacheRoot, folderName(gameKey, rom))
             val target = File(folder, name)
-            val note = if (entries.size > 1) "Playing ${entry.name}, the first of ${entries.size} files in the zip" else null
+            val choices = if (indexes.isNotEmpty()) indexes.size else entries.size
+            val note = if (choices > 1) "Playing ${entry.name}, the first of $choices in the zip" else null
             if (File(folder, DONE).isFile && target.isFile) return Prepared.Ready(target, note)
             // Another copy of this game's zip (replaced, or downloaded again): its files go.
             forget(cacheRoot, gameKey)
-            folder.mkdirs()
-            if (entry.size > 0 && cacheRoot.usableSpace < entry.size + SPACE_MARGIN_BYTES) {
-                return Prepared.Unplayable("Not enough free space to unpack the game (${entry.size / MB} MB)")
+            if (size > 0 && cacheRoot.apply { mkdirs() }.usableSpace < size + SPACE_MARGIN_BYTES) {
+                return Prepared.Unplayable("Not enough free space to unpack the game (${size / MB} MB)")
             }
-            val part = File(folder, "$name.part")
+            folder.mkdirs()
             try {
-                zip.getInputStream(entry).use { input ->
-                    part.outputStream().use { output ->
-                        val buffer = ByteArray(BUFFER_BYTES)
-                        var written = 0L
-                        while (true) {
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            written += n
-                            // The entry's own size can lie: the count is what holds.
-                            if (written > maxBytes) throw IOException("more than ${maxBytes / MB} MB")
-                            output.write(buffer, 0, n)
-                        }
-                    }
-                }
-                if (!part.renameTo(target)) throw IOException("couldn't keep the unpacked file")
+                var left = maxBytes
+                for (part in parts) left -= unpack(zip, part, folder, left)
                 File(folder, DONE).writeText(entry.name)
             } catch (e: IOException) {
                 folder.deleteRecursively()
@@ -87,6 +79,41 @@ object GameFile {
             return Prepared.Ready(target, note)
         }
     }
+
+    /** Writes [entry] into [folder] by its own name, no more than [maxBytes] of it; returns how many it wrote. */
+    private fun unpack(zip: ZipFile, entry: ZipEntry, folder: File, maxBytes: Long): Long {
+        val name = File(entry.name).name
+        if (name.isEmpty() || name == "." || name == "..") return 0
+        val part = File(folder, "$name.part")
+        var written = 0L
+        zip.getInputStream(entry).use { input ->
+            part.outputStream().use { output ->
+                val buffer = ByteArray(BUFFER_BYTES)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    written += n
+                    // The entry's own size can lie: the count is what holds.
+                    if (written > maxBytes) throw IOException("more than ${MAX_UNPACKED_BYTES / MB} MB")
+                    output.write(buffer, 0, n)
+                }
+            }
+        }
+        if (!part.renameTo(File(folder, name))) throw IOException("couldn't keep the unpacked file")
+        return written
+    }
+
+    /** [index] and the files in the same folder of [zip]: what a cue sheet or playlist refers to. */
+    private fun besides(zip: ZipFile, index: ZipEntry): List<ZipEntry> {
+        val folder = index.name.substringBeforeLast('/', "")
+        return zip.entries().asSequence()
+            .filter { !it.isDirectory && it.name.substringBeforeLast('/', "") == folder }
+            .sortedBy { it.name }
+            .toList()
+    }
+
+    /** A file that lists a game's other files: a cue sheet, a playlist, a CloneCD or cdrdao table. */
+    private fun isIndex(name: String) = name.substringAfterLast('.', "").lowercase() in INDEX_EXTENSIONS
 
     /** Removes everything unpacked for [gameKey] (its game was removed, or its zip changed). */
     fun forget(cacheRoot: File, gameKey: String) {
@@ -113,6 +140,7 @@ object GameFile {
     private const val SPACE_MARGIN_BYTES = 64L shl 20
     private const val BUFFER_BYTES = 1 shl 16
     private const val MB = 1L shl 20
+    private val INDEX_EXTENSIONS = setOf("cue", "m3u", "ccd", "toc")
     /** Written last into a folder whose file is whole. */
     private const val DONE = ".done"
 }

@@ -274,6 +274,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             .putExtra(CoreActivity.EXTRA_ROM, intent.getStringExtra("path"))
                             .putExtra(CoreActivity.EXTRA_PLATFORM, intent.getStringExtra("platform"))
+                            .putExtra(CoreActivity.EXTRA_LOW_LATENCY, intent.getBooleanExtra("low_latency", true))
                         withContext(Dispatchers.Main) { context.startActivity(start, topScreenOptions()) }
                     }
                     "app.genkan.debug.PLAYER_DUMP" -> player.memory()?.use { memory ->

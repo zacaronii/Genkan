@@ -17,6 +17,9 @@ object PlayerMessages {
     /** Shown when a game starts while the media volume can't be heard. */
     const val MEDIA_VOLUME_OFF = "Media volume is off"
 
+    /** Shown when the game can't be heard: its sound stream wouldn't open, or stopped. */
+    fun noSound(problem: String): String = "No sound: $problem"
+
     /** Whether the media volume is off: at zero, or muted. */
     fun volumeOff(volume: Int, muted: Boolean): Boolean = volume == 0 || muted
 

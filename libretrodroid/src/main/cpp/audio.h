@@ -92,6 +92,8 @@ private:
     int32_t callbacksSinceReport = 0;
     int64_t framesReadSinceReport = 0;
     int32_t peakOutSinceReport = 0;
+    // Genkan: whether a stream that died was already opened again once.
+    bool reopenedAfterError = false;
     double errorIntegral = 0.0;
 
     double playbackSpeed = 1.0;

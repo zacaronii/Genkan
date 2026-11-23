@@ -197,4 +197,15 @@ std::pair<unsigned, unsigned> GenkanTap::frameSize() {
     return { frameWidth, frameHeight };
 }
 
+
+void GenkanTap::setAudioProblem(const std::string &value) {
+    std::lock_guard<std::mutex> lock(problemLock);
+    problem = value;
+}
+
+std::string GenkanTap::audioProblem() {
+    std::lock_guard<std::mutex> lock(problemLock);
+    return problem;
+}
+
 }

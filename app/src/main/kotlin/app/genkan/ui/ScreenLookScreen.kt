@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.core.PlayerSettings
 import app.genkan.core.ScreenLook
 import app.genkan.core.ScreenLooks
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,7 +47,19 @@ val LOOK_CONSOLES: List<Pair<String, String>> = listOf(
 )
 
 @HiltViewModel
-class ScreenLookViewModel @Inject constructor(private val looks: ScreenLooks) : ViewModel() {
+class ScreenLookViewModel @Inject constructor(
+    private val looks: ScreenLooks,
+    private val player: PlayerSettings,
+) : ViewModel() {
+
+    /** The consoles whose sound is played without asking for low latency. */
+    val lowLatencyOff: StateFlow<Set<String>> =
+        player.lowLatencyOff.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun toggleLowLatency(platform: String) {
+        viewModelScope.launch { player.setLowLatency(platform, platform in lowLatencyOff.value) }
+    }
+
 
     /** The looks chosen for consoles; a console that isn't in it has its default. */
     val consoles: StateFlow<Map<String, ScreenLook>> =
@@ -73,9 +86,13 @@ class ScreenLookViewModel @Inject constructor(private val looks: ScreenLooks) : 
 fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
     val consoles by viewModel.consoles.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
+    val lowLatencyOff by viewModel.lowLatencyOff.collectAsStateWithLifecycle()
     // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
     DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
-    ScreenLookContent(consoles, picking, onOpen = viewModel::open, onPick = viewModel::pick, onClose = { viewModel.closePicker() })
+    ScreenLookContent(
+        consoles, picking, onOpen = viewModel::open, onPick = viewModel::pick, onClose = { viewModel.closePicker() },
+        lowLatencyOff = lowLatencyOff, onToggleLowLatency = viewModel::toggleLowLatency,
+    )
 }
 
 /**
@@ -89,6 +106,9 @@ fun ScreenLookContent(
     onOpen: (String) -> Unit = {},
     onPick: (String, ScreenLook) -> Unit = { _, _ -> },
     onClose: () -> Unit = {},
+    /** The consoles whose sound is played without asking for low latency, and a press on one's row. */
+    lowLatencyOff: Set<String> = emptySet(),
+    onToggleLowLatency: (String) -> Unit = {},
 ) {
     // The console whose list was opened last: the pad comes back to its row.
     var returnTo by remember { mutableStateOf<String?>(null) }
@@ -118,7 +138,7 @@ fun ScreenLookContent(
             .padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Screen look", style = MaterialTheme.typography.displaySmall, color = colors.primary)
+        Text("Screen look and sound", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "How the built-in player draws each console's picture on the top screen. A press opens the looks to pick from. " +
                 "Until you choose, PlayStation and DS are Sharp, the Game Boys LCD and the PSP Default. " +
@@ -135,6 +155,22 @@ fun ScreenLookContent(
                     focused = null,
                     onClick = { onOpen(platform) },
                     modifier = Modifier.focusRequester(rows.getValue(platform)),
+                )
+            }
+        }
+        Text("Low-latency sound", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
+        Text(
+            "Asks the device for its fastest sound stream, so sound keeps up with the picture. A device that can't give " +
+                "one plays a plain stream instead. Switch it off for a console whose sound is missing or crackles.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LOOK_CONSOLES.forEach { (platform, name) ->
+                ActionRow(
+                    "$name: ${if (platform in lowLatencyOff) "off" else "on"}",
+                    focused = null,
+                    onClick = { onToggleLowLatency(platform) },
                 )
             }
         }

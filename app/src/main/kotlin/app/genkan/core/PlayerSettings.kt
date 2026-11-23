@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +37,24 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         context.playerStore.edit { it[SAMPLES] = on }
     }
 
+    /**
+     * The consoles (platform slugs) whose sound is played without asking for a low-latency stream.
+     * Low latency is asked for by default, as before; a device that can't give it gets a plain
+     * stream anyway (see the player's sound log).
+     */
+    val lowLatencyOff: Flow<Set<String>> = context.playerStore.data.map { it[LOW_LATENCY_OFF].orEmpty() }
+
+    suspend fun lowLatency(platform: String): Boolean = platform !in lowLatencyOff.first()
+
+    suspend fun setLowLatency(platform: String, on: Boolean) {
+        context.playerStore.edit { prefs ->
+            val off = prefs[LOW_LATENCY_OFF].orEmpty()
+            prefs[LOW_LATENCY_OFF] = if (on) off - platform else off + platform
+        }
+    }
+
     private companion object {
+        val LOW_LATENCY_OFF = stringSetPreferencesKey("low_latency_off")
         val ENABLED = booleanPreferencesKey("enabled")
         val SAMPLES = booleanPreferencesKey("yomikata_samples")
     }
