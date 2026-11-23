@@ -53,6 +53,9 @@ class Headphones @Inject constructor(
 
     @Volatile private var a2dp: BluetoothA2dp? = null
 
+    /** Debug builds' test of the fallbacks: Shizuku's connect counts as refused, Shizuku left running. */
+    @Volatile var skipShizuku = false
+
     /** Whether Genkan may see the bonded devices (BLUETOOTH_CONNECT, asked on first use). */
     fun allowed(): Boolean = context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
@@ -79,7 +82,8 @@ class Headphones @Inject constructor(
     suspend fun connect(device: Device) {
         _status.value = Status.Connecting(device.name)
         val picker = pickerIntent().takeIf { context.packageManager.queryBroadcastReceivers(it, 0).isNotEmpty() }
-        for (step in ConnectRoute.steps(privileged.state() == Privileged.State.READY, picker != null)) {
+        val shizuku = !skipShizuku && privileged.state() == Privileged.State.READY
+        for (step in ConnectRoute.steps(shizuku, picker != null)) {
             when (step) {
                 ConnectRoute.Step.SHIZUKU -> {
                     val code = try {

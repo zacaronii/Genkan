@@ -98,6 +98,8 @@ import javax.inject.Inject
  * (starts a downloaded game and marks it as playing, without the save sync the grid runs first)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FILE -n app.genkan/.debug.DictionaryDebugReceiver --es path /sdcard/x.nds --es platform nds
  * (plays a file that isn't in the library, such as homebrew, in the built-in player)
+ *   adb shell am broadcast -a app.genkan.debug.HEADPHONES_SKIP_SHIZUKU -n app.genkan/.debug.DictionaryDebugReceiver --ez skip true
+ * (a tap on headphones goes on as if Shizuku couldn't connect them, without stopping Shizuku; false undoes it)
  */
 @AndroidEntryPoint
 class DictionaryDebugReceiver : BroadcastReceiver() {
@@ -119,6 +121,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var audio: GameAudioRecorder
     @Inject lateinit var readingLog: ReadingLogSettings
     @Inject lateinit var readerSession: ReaderSession
+    @Inject lateinit var headphones: app.genkan.bluetooth.Headphones
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -269,6 +272,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         found.take(20).forEach { Log.i(TAG, "  0x%08x %s: %s".format(it.start, it.hit.charset.name(), it.text.take(300))) }
                     }
                     "app.genkan.debug.PLAYER_OFFER" -> builtInText.offered.emit(intent.getStringExtra("text").orEmpty())
+                    "app.genkan.debug.HEADPHONES_SKIP_SHIZUKU" -> {
+                        headphones.skipShizuku = intent.getBooleanExtra("skip", true)
+                        Log.i(TAG, "Headphones: Shizuku's connect ${if (headphones.skipShizuku) "skipped" else "used"}")
+                    }
                     "app.genkan.debug.PLAYER_FILE" -> {
                         val start = Intent(context, CoreActivity::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
