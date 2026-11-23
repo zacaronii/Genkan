@@ -2,6 +2,7 @@ package app.genkan.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.genkan.library.GameEntity
@@ -81,8 +83,9 @@ internal data class BoxView(
  * lying down (wider than tall, as some consoles' are) is stood up. With a [fallback] (the game's
  * case), that is drawn instead until both faces have loaded, so the slot is never empty; a face
  * that fails to load leaves the fallback. [behind] is drawn behind the box, given its width and
- * height (the disc or cartridge peeking out, as from the case), and [overlay] over it (the
- * download badge), once the box shows. No lighting or thickness beyond the spine.
+ * height (the disc or cartridge peeking out, as from the case). [faceOverlay] is drawn on the facing
+ * face and [spineOverlay] on the spine, each in that face's own turned layer, so they stay on it at
+ * any angle (the download badge and dimming), once the box shows. No lighting or thickness beyond the spine.
  */
 @Composable
 fun FullBox(
@@ -95,7 +98,8 @@ fun FullBox(
     modifier: Modifier = Modifier,
     fallback: (@Composable () -> Unit)? = null,
     behind: (@Composable BoxScope.(width: Dp, height: Dp) -> Unit)? = null,
-    overlay: (@Composable () -> Unit)? = null,
+    faceOverlay: (@Composable BoxScope.() -> Unit)? = null,
+    spineOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     var frontAspect by remember(front) { mutableFloatStateOf(0.72f) }
@@ -130,7 +134,8 @@ fun FullBox(
                         scaleX = view.spineShown.coerceAtLeast(0.001f)
                         rotationY = if (view.spineOnLeft) -(90f - abs(view.faceTurn)) * 0.25f else (90f - abs(view.faceTurn)) * 0.25f
                         cameraDistance = camera
-                    },
+                    }
+                    .testTag(SPINE_TAG),
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
@@ -149,16 +154,10 @@ fun FullBox(
                     // A spine scanned lying down is drawn lying, then turned upright.
                     modifier = if (spineLying) Modifier.requiredSize(height, spineWidth).rotate(90f) else Modifier.size(spineWidth, height),
                 )
+                spineOverlay?.invoke(this)
             }
-            AsyncImage(
-                model = face,
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                onSuccess = { s ->
-                    faceLoaded = true
-                    s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height }
-                },
-                modifier = Modifier
+            Box(
+                Modifier
                     .offset(x = if (view.spineOnLeft) spineShown else 0.dp)
                     .size(faceWidth, height)
                     .graphicsLayer {
@@ -166,9 +165,25 @@ fun FullBox(
                         scaleX = view.faceShown.coerceAtLeast(0.001f)
                         rotationY = view.faceTurn * 0.25f
                         cameraDistance = camera
+                    }
+                    .testTag(FACE_TAG),
+            ) {
+                AsyncImage(
+                    model = face,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    onSuccess = { s ->
+                        faceLoaded = true
+                        s.painter.intrinsicSize.let { if (it.height > 0f) frontAspect = it.width / it.height }
                     },
-            )
-            overlay?.invoke()
+                    modifier = Modifier.fillMaxSize(),
+                )
+                faceOverlay?.invoke(this)
+            }
         }
     }
 }
+
+/** Test tags of the box's two drawn faces, for checking what's drawn on them. */
+internal const val FACE_TAG = "full-box-face"
+internal const val SPINE_TAG = "full-box-spine"

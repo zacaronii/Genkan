@@ -148,9 +148,6 @@ class LibraryViewModel @Inject constructor(
     /** The shelf or the grid, as last left; the shelf until the stored choice has been read. */
     val view: StateFlow<LibraryView> = viewSettings.view.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryView.DEFAULT)
 
-    /** The Full box setting, for the artwork warmer. */
-    private val fullBox: StateFlow<Boolean> = viewSettings.fullBox.stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
     /** Switches between the shelf and the grid, and remembers the choice. */
     fun toggleView() {
         val next = view.value.toggled()
@@ -296,11 +293,11 @@ class LibraryViewModel @Inject constructor(
         // The artwork around the focused game: ahead of it while it moves, all the shelf shows
         // once it rests.
         viewModelScope.launch {
-            combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games) { index, list -> list to index }
-                .collectLatest { (list, index) ->
+            // The Full box setting too: switching it (or the store's first read) warms again.
+            combine(_focus.map { it.gameIndex }.distinctUntilChanged(), games, viewSettings.fullBox) { index, list, box -> Triple(list, index, box) }
+                .collectLatest { (list, index, box) ->
                     val at = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                    // The full box (a setting) draws the focused game's front, and its back when turned to it.
-                    val box = fullBox.value
+                    // The full box draws the focused game's front, and its back when turned to it.
                     val back = box && BoxView.of(FullBoxShelf.angle.value).back
                     artworkWarmer.warmAround(list, at, moving = true, fullBox = box, showsBack = back)
                     delay(WARM_REST_MS)

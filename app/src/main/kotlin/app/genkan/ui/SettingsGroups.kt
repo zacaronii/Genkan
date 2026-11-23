@@ -108,7 +108,6 @@ object SettingsGroups {
             ),
         ),
     )
-
 }
 
 enum class SettingsPane { GROUPS, ROWS }

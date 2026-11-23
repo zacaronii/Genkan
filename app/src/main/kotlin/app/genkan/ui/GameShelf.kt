@@ -374,7 +374,9 @@ internal fun GameShelf(
                                             Color(GameCase.specFor(game.platformSlug).color), boxWidth, boxHeight, mediaNow,
                                         )
                                     } else null,
-                                    overlay = { DownloadMark(game, downloads[game.id], onLeft = false) },
+                                    // The case's badge and dimming, on the box's own faces: the badge on the facing one.
+                                    faceOverlay = { DownloadMark(game, downloads[game.id], onLeft = false) },
+                                    spineOverlay = { downloadDim(game, downloads[game.id])?.let { Box(Modifier.fillMaxSize().background(it)) } },
                                 )
                             } else {
                                 case(transform.then(select))
@@ -670,6 +672,14 @@ private fun BlankCover(title: String, logo: Any?, caseColor: Color) {
     }
 }
 
+/** How a game's case (or box) is dimmed for its download state: not downloaded, or under way; null otherwise. */
+internal fun downloadDim(game: GameEntity, download: DownloadEntity?): Color? = when {
+    LocalShelves.isLocal(game) -> null
+    download == null -> Color(0x59000000)
+    download.state == DownloadState.QUEUED || download.state == DownloadState.RUNNING -> Color(0x40000000)
+    else -> null
+}
+
 /**
  * The download state on the case: dimmed with a download arrow when the game isn't on the device,
  * a progress ring while it downloads, a red mark when the download failed. A game on the device
@@ -679,10 +689,10 @@ private fun BlankCover(title: String, logo: Any?, caseColor: Color) {
 private fun DownloadMark(game: GameEntity, download: DownloadEntity?, onLeft: Boolean) {
     if (LocalShelves.isLocal(game)) return
     val colors = MaterialTheme.colorScheme
+    downloadDim(game, download)?.let { Box(Modifier.fillMaxSize().background(it)) }
     when (download?.state) {
         DownloadState.INSTALLED -> Unit
         null -> {
-            Box(Modifier.fillMaxSize().background(Color(0x59000000)))
             Badge(Color(0xCC1C1C21), onLeft) {
                 Canvas(Modifier.size(14.dp)) {
                     val stroke = 2.dp.toPx()
@@ -695,7 +705,6 @@ private fun DownloadMark(game: GameEntity, download: DownloadEntity?, onLeft: Bo
             }
         }
         DownloadState.QUEUED, DownloadState.RUNNING -> {
-            Box(Modifier.fillMaxSize().background(Color(0x40000000)))
             val fraction = if (download.bytesTotal > 0) download.bytesDone.toFloat() / download.bytesTotal else 0f
             Badge(Color(0xCC1C1C21), onLeft) {
                 Canvas(Modifier.size(18.dp)) {
