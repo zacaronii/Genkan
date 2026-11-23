@@ -61,6 +61,9 @@ class CoreActivity : ComponentActivity() {
     private lateinit var notice: TextView
     private lateinit var root: FrameLayout
     @Volatile private var quitting = false
+    /** The game couldn't be played: its reason is on screen until the player closes. */
+    @Volatile private var failed = false
+    private var deviceCallback: AudioDeviceCallback? = null
 
     /** A Yomikata layout the reader asked for, read between frames. */
     private val layoutWatch by lazy {
@@ -154,7 +157,8 @@ class CoreActivity : ComponentActivity() {
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
             shader = look.shader(::readAsset)
-            preferLowLatencyAudio = true
+            // Per console (Settings > Playing): low latency unless it was switched off there.
+            preferLowLatencyAudio = intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
             rumbleEventsEnabled = false
         }
         saver = SramSaver(saveFile, loaded = ::gameLoaded, read = { retroView.serializeSRAM(useEmulationThread = false) }, last = data.saveRAMState)
@@ -178,7 +182,7 @@ class CoreActivity : ComponentActivity() {
         // A load that fails says why on screen, then closes: never a silent black screen.
         lifecycleScope.launch { retroView.getGLRetroErrors().collect { code -> fail(PlayerMessages.loadError(code, def.displayName)) } }
         logOutputs()
-        watchVolume()
+        watchSound()
         retroView.afterFrame = {
             layoutWatch.afterFrame()
             capture?.let { if (it()) capture = null }
@@ -203,20 +207,30 @@ class CoreActivity : ComponentActivity() {
     private fun gameLoaded(): Boolean = ::retroView.isInitialized && retroView.gameLoaded
 
     /**
-     * Says "Media volume is off" while it is: at the start and whenever it goes to zero or mute
-     * while the game runs (another app on the device may set it as the player starts), and hides
-     * it when the volume comes back.
+     * Says "Media volume is off" for a few seconds at the start when it is, and again each time it
+     * goes to zero or mute while the game runs (another app on the device may set it as the player
+     * starts); a volume muted on purpose isn't kept on screen. Says, too, when the sound stream
+     * wouldn't open or stopped ([GenkanTap.audioProblem]).
      */
-    private fun watchVolume() {
+    private fun watchSound() {
         val audio = getSystemService(AudioManager::class.java)
         lifecycleScope.launch {
             var off = false
+            var problem: String? = null
             while (isActive) {
                 val now = PlayerMessages.volumeOff(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.isStreamMute(AudioManager.STREAM_MUSIC))
                 if (now != off && !quitting) {
                     off = now
                     Log.i(TAG, if (now) "Media volume is off" else "Media volume is back")
-                    if (now) say(PlayerMessages.MEDIA_VOLUME_OFF) else if (notice.text == PlayerMessages.MEDIA_VOLUME_OFF) say(null)
+                    if (now) say(PlayerMessages.MEDIA_VOLUME_OFF, NOTE_MS) else if (notice.text == PlayerMessages.MEDIA_VOLUME_OFF) say(null)
+                }
+                val nowProblem = GenkanTap.audioProblem()
+                if (nowProblem != problem && !quitting) {
+                    problem = nowProblem
+                    nowProblem?.let {
+                        Log.w(TAG, "No sound: $it")
+                        say(PlayerMessages.noSound(it), NOTE_MS)
+                    }
                 }
                 delay(VOLUME_EVERY_MS)
             }
@@ -239,6 +253,7 @@ class CoreActivity : ComponentActivity() {
     private fun fail(reason: String) {
         if (quitting) return
         quitting = true
+        failed = true
         Log.w(TAG, "Can't play: $reason")
         say(reason)
         lifecycleScope.launch {
@@ -259,7 +274,7 @@ class CoreActivity : ComponentActivity() {
             android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).build(),
         ).joinToString { "${it.id} ${PlayerMessages.outputType(it.type)}" }
         Log.i(TAG, "Audio outputs: ${describe(audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS))}; media goes to ${mediaRoute()}")
-        audio.registerAudioDeviceCallback(object : AudioDeviceCallback() {
+        deviceCallback = object : AudioDeviceCallback() {
             override fun onAudioDevicesAdded(added: Array<AudioDeviceInfo>) {
                 Log.i(TAG, "Audio outputs added: ${describe(added.filter { it.isSink }.toTypedArray())}; media goes to ${mediaRoute()}")
             }
@@ -267,7 +282,7 @@ class CoreActivity : ComponentActivity() {
             override fun onAudioDevicesRemoved(removed: Array<AudioDeviceInfo>) {
                 Log.i(TAG, "Audio outputs removed: ${describe(removed.filter { it.isSink }.toTypedArray())}; media goes to ${mediaRoute()}")
             }
-        }, null)
+        }.also { audio.registerAudioDeviceCallback(it, null) }
     }
 
     /** A tap on the overlay: the reader looks the word up. */
@@ -513,6 +528,11 @@ class CoreActivity : ComponentActivity() {
     }
 
     private fun quit() {
+        // A failed load's reason is up: Back closes at once, with nothing to save.
+        if (failed) {
+            finish()
+            return
+        }
         if (quitting) return
         quitting = true
         save()
@@ -603,6 +623,8 @@ class CoreActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        deviceCallback?.let { getSystemService(AudioManager::class.java).unregisterAudioDeviceCallback(it) }
+        deviceCallback = null
         lowerScreen?.dismiss()
         lowerScreen = null
         super.onDestroy()
@@ -620,6 +642,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_PLATFORM = "platform"
         /** The [ScreenLook] to draw the game with, by name. */
         const val EXTRA_LOOK = "look"
+        /** Whether to ask for a low-latency sound stream (the console's setting); yes when absent. */
+        const val EXTRA_LOW_LATENCY = "low_latency"
         private const val MAX_READ = 64 * 1024
         private const val FRAME_WAIT_MS = 500L
         /** How long Back waits for the launcher to say whether it closed something on the bottom screen. */

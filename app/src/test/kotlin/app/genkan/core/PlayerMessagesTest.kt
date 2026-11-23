@@ -21,4 +21,9 @@ class PlayerMessagesTest {
         assertTrue(PlayerMessages.volumeOff(7, muted = true))
         assertFalse(PlayerMessages.volumeOff(7, muted = false))
     }
+
+    @Test
+    fun `a stream that won't open or stopped is said, not left silent`() {
+        assertEquals("No sound: the sound stream wouldn't open (ErrorInternal)", PlayerMessages.noSound("the sound stream wouldn't open (ErrorInternal)"))
+    }
 }

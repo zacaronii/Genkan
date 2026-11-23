@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <utility>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "../../libretro-common/include/libretro.h"
@@ -59,6 +60,9 @@ public:
     int32_t getSampleRate();
     void pushAudio(const int16_t *stereo, size_t frames);
     size_t drainAudio(int16_t *out, size_t capacity);
+    /** Why the game can't be heard (the sound stream wouldn't open, or stopped), empty while it can. */
+    void setAudioProblem(const std::string &problem);
+    std::string audioProblem();
 
     /**
      * Two screens stacked in one frame (a DS): this display draws only the upper one, and the
@@ -95,6 +99,8 @@ private:
     std::vector<uint8_t> frame;
     unsigned frameWidth = 0;
     unsigned frameHeight = 0;
+    std::mutex problemLock;
+    std::string problem;
 };
 
 }

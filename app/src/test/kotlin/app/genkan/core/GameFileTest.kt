@@ -75,7 +75,25 @@ class GameFileTest {
         val ready = GameFile.prepare(mgba, rom, cache, "2") as GameFile.Prepared.Ready
         assertEquals("a side.gba", ready.file.name)
         assertTrue(ready.file.readBytes().contentEquals(bytes(512, 6)))
-        assertEquals("Playing Disk/a side.gba, the first of 2 files in the zip", ready.note)
+        assertEquals("Playing Disk/a side.gba, the first of 2 in the zip", ready.note)
+    }
+
+    @Test
+    fun `a disc in several files is played through its cue sheet, with every track beside it`() {
+        val psx = CoreCatalog.forPlatform("psx")!!
+        val cue = "FILE \"disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\nFILE \"disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n".toByteArray()
+        val rom = zip(
+            "disc.zip",
+            "disc/disc (Track 1).bin" to bytes(2352, 19),
+            "disc/disc (Track 2).bin" to bytes(2352, 20),
+            "disc/disc.cue" to cue,
+        )
+        val ready = GameFile.prepare(psx, rom, cache, "8") as GameFile.Prepared.Ready
+        assertEquals("disc.cue", ready.file.name)
+        assertNull("one index: nothing to choose", ready.note)
+        val folder = ready.file.parentFile!!
+        assertTrue(File(folder, "disc (Track 1).bin").readBytes().contentEquals(bytes(2352, 19)))
+        assertTrue("the audio track too", File(folder, "disc (Track 2).bin").readBytes().contentEquals(bytes(2352, 20)))
     }
 
     @Test

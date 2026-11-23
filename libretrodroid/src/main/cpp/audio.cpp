@@ -18,6 +18,7 @@
 #include "log.h"
 
 #include "audio.h"
+#include "genkantap.h"
 #include <cmath>
 #include <memory>
 
@@ -61,11 +62,20 @@ bool Audio::initializeStream() {
              stream->getDeviceId(), stream->getSampleRate(), oboe::convertToText(stream->getPerformanceMode()),
              audioLatencySettings->useLowLatencyStream ? "LowLatency" : "None",
              oboe::convertToText(stream->getSharingMode()), oboe::convertToText(stream->getAudioApi()));
+        GenkanTap::getInstance().setAudioProblem("");
         return true;
     } else {
         LOGE("Failed to create stream. Error: %s", oboe::convertToText(result));
         stream = nullptr;
         latencyTuner = nullptr;
+        // Genkan: a low-latency stream that won't open is tried once more as a plain one; one that
+        // still won't is said on screen (the player asks GenkanTap), never left silent.
+        if (audioLatencySettings->useLowLatencyStream) {
+            LOGI("Trying a plain stream instead of a low-latency one");
+            audioLatencySettings = std::make_unique<AudioLatencySettings>(DEFAULT_LATENCY_SETTINGS);
+            return initializeStream();
+        }
+        GenkanTap::getInstance().setAudioProblem(std::string("the sound stream wouldn't open (") + oboe::convertToText(result) + ")");
         return false;
     }
 }
@@ -138,7 +148,7 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     framesSinceReport += numFrames;
     if (framesSinceReport >= oboeStream->getSampleRate() * 10) {
         auto xruns = oboeStream->getXRunCount();
-        LOGI("Audio stream on device %d: %s, %d underruns, buffer %d of %d frames; %d callbacks asked %lld frames, read %lld from the buffer, peak out %d of 32767",
+        LOGI("Audio stream on device %d: %s, %d underruns, buffer %d of %d samples; %d callbacks asked %lld frames, read %lld from the buffer, peak out %d of 32767",
              oboeStream->getDeviceId(), oboe::convertToText(oboeStream->getState()), xruns ? xruns.value() : -1,
              fifoBuffer->getFullFramesAvailable(), fifoBuffer->getBufferCapacityInFrames(),
              callbacksSinceReport, (long long) framesSinceReport, (long long) framesReadSinceReport, peakOutSinceReport);
@@ -191,8 +201,16 @@ void Audio::onErrorAfterClose(oboe::AudioStream* oldStream, oboe::Result result)
     AudioStreamErrorCallback::onErrorAfterClose(oldStream, result);
     LOGI("Stream error in oboe::onErrorAfterClose %s", oboe::convertToText(result));
 
-    if (result != oboe::Result::ErrorDisconnected)
-        return;
+    // Genkan: a stream that died for any other reason than its device going away is opened again
+    // once, as a plain stream; if it won't open, the player says so.
+    if (result != oboe::Result::ErrorDisconnected) {
+        if (reopenedAfterError) {
+            GenkanTap::getInstance().setAudioProblem(std::string("the sound stopped (") + oboe::convertToText(result) + ")");
+            return;
+        }
+        reopenedAfterError = true;
+        audioLatencySettings = std::make_unique<AudioLatencySettings>(DEFAULT_LATENCY_SETTINGS);
+    }
 
     initializeStream();
     if (startRequested) {

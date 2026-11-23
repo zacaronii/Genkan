@@ -71,6 +71,11 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_GenkanTap_drainAudio(JNI
     return static_cast<jint>(n);
 }
 
+JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_GenkanTap_audioProblem(JNIEnv *env, jclass) {
+    std::string problem = GenkanTap::getInstance().audioProblem();
+    return problem.empty() ? nullptr : env->NewStringUTF(problem.c_str());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSplitScreens(JNIEnv *, jclass, jboolean split) {
     GenkanTap::getInstance().setSplitScreens(split == JNI_TRUE);
 }

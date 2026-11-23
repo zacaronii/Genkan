@@ -46,6 +46,9 @@ object GenkanTap {
     /** Moves up to `out.size` mono samples into [out]; returns how many. */
     @JvmStatic external fun drainAudio(out: ShortArray): Int
 
+    /** Why the game can't be heard (its sound stream wouldn't open, or stopped), or null while it can. */
+    @JvmStatic external fun audioProblem(): String?
+
     /**
      * The core stacks two screens in one frame (a DS): the view draws only the upper one, and the
      * whole frame is kept for [copyFrame]. Set before the view is made.
