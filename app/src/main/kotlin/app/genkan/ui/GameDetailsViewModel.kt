@@ -18,6 +18,8 @@ import app.genkan.library.FavouriteDao
 import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
+import app.genkan.manual.ManualFetch
+import app.genkan.manual.ManualFetcher
 import app.genkan.manual.Manuals
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlayTotals
@@ -161,7 +163,10 @@ class GameDetailsViewModel @Inject constructor(
     /** A short message under the buttons, e.g. while the manual downloads. Clears itself. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
     private var noticeJob: Job? = null
-    private var manualJob: Job? = null
+
+    private val manualFetcher = ManualFetcher(manuals, viewModelScope, failedLabel = "Couldn't fetch the manual")
+    /** The manual being fetched for "Open manual", or that it couldn't be, for the button to show. */
+    val manualFetch: StateFlow<ManualFetch?> = manualFetcher.state
 
     private val _manual = MutableStateFlow<File?>(null)
     /** The fetched manual the bottom screen is showing in [ManualViewer], or null. */
@@ -173,7 +178,7 @@ class GameDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             focusedGame.focus.map { it?.game?.id }.drop(1).collect {
                 _pickingLook.value = false
-                manualJob?.cancel()
+                manualFetcher.cancel()
                 _manual.value = null
                 noticeJob?.cancel()
                 _notice.value = null
@@ -222,17 +227,9 @@ class GameDetailsViewModel @Inject constructor(
      */
     fun openManual() {
         val game = details.value?.focus?.game ?: return
-        if (!manuals.has(game) || manualJob?.isActive == true) return
-        manualJob = viewModelScope.launch {
-            if (manuals.cached(game) == null) {
-                noticeJob?.cancel()
-                _notice.value = "Fetching the manual…"
-            }
-            val file = runCatching { manuals.file(game) }
-                .getOrElse { show("Couldn't fetch the manual: ${it.message}"); return@launch }
-            _notice.value = null
-            _manual.value = file
-        }
+        if (!manuals.has(game)) return
+        // Shown on the button that was pressed; the reason goes to the notice below the buttons.
+        manualFetcher.open(game, onFile = { _manual.value = it }, onFailed = { show("Couldn't fetch the manual: ${it.message}") })
     }
 
     /**

@@ -15,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -47,10 +48,20 @@ class PlayManualTest {
         var answer = CompletableDeferred<Result<File>>()
 
         override fun has(game: GameEntity) = game.manualPath != null
-        override fun cached(game: GameEntity): File? = null
-        override suspend fun file(game: GameEntity): File {
+        var cachedFile: File? = null
+        /** The fetch's progress report, kept to call late, as a cancelled copy still running would. */
+        var report: ((Float?) -> Unit)? = null
+        /** Whether the fetch's wait goes on through a cancel, as a blocking read on the IO thread does. */
+        var uncancellable = false
+        override fun cached(game: GameEntity): File? = cachedFile
+        override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File {
             fetches++
-            return answer.await().getOrThrow()
+            cachedFile?.let { return it }
+            // Half of it, then whatever the test answers.
+            report = onProgress
+            onProgress(0.5f)
+            val result = if (uncancellable) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { answer.await() } else answer.await()
+            return result.getOrThrow()
         }
     }
 
@@ -146,5 +157,59 @@ class PlayManualTest {
         nowPlaying.started(2, "Game 2", "psx")
         assertNull(manual.open.value)
         assertEquals(0, manual.pageOf(file))
+    }
+
+    @Test
+    fun `while the manual is fetched the chip is busy, with how far along it is`() {
+        val manual = playing(game(1))
+        manual.show()
+        assertEquals(ManualFetch.Busy(0.5f), manual.fetch.value)
+        source.answer.complete(Result.success(pdf("1-a.pdf")))
+        assertNull(manual.fetch.value)
+    }
+
+    @Test
+    fun `a failed fetch shows on the chip`() {
+        val manual = playing(game(1))
+        manual.show()
+        source.answer.complete(Result.failure(IOException("the server answered 500")))
+        assertEquals(ManualFetch.Failed("Couldn't fetch"), manual.fetch.value)
+    }
+
+    @Test
+    fun `a cached manual opens without the chip ever being busy`() {
+        val manual = playing(game(1))
+        val seen = mutableListOf<ManualFetch?>()
+        val watch = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.test.UnconfinedTestDispatcher()).launch { manual.fetch.collect { seen += it } }
+        source.cachedFile = pdf("1-a.pdf")
+        manual.show()
+        assertEquals(source.cachedFile, manual.open.value)
+        assertEquals(listOf<ManualFetch?>(null), seen)
+        watch.cancel()
+    }
+
+    @Test
+    fun `hide during a fetch leaves the chip and the header empty, whatever the fetch still does`() {
+        val manual = playing(game(1))
+        manual.show()
+        val late = source.report!!
+        manual.hide()
+        late(0.8f)
+        source.answer.complete(Result.failure(kotlinx.coroutines.CancellationException("cancelled")))
+        assertNull(manual.fetch.value)
+        assertNull(manual.notice.value)
+        assertNull(manual.open.value)
+    }
+
+    @Test
+    fun `a fetch that times out after hide says nothing in the header`() {
+        val manual = playing(game(1))
+        source.uncancellable = true
+        manual.show()
+        manual.hide()
+        source.answer.complete(Result.failure(IOException("timeout")))
+        assertNull(manual.notice.value)
+        assertNull(manual.fetch.value)
+        assertNull(manual.open.value)
     }
 }

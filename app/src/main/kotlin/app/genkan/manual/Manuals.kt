@@ -7,6 +7,11 @@ import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -27,7 +32,7 @@ interface ManualSource {
     fun cached(game: GameEntity): File?
 
     /** [game]'s manual, fetched first when it isn't cached; throws when it can't be had. */
-    suspend fun file(game: GameEntity): File
+    suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit = {}): File
 }
 
 /**
@@ -58,14 +63,14 @@ class Manuals @Inject constructor(
      * [game]'s manual, fetched first when it isn't cached; throws when it can't be had. A second
      * caller waits for a fetch under way and then finds the file cached.
      */
-    override suspend fun file(game: GameEntity): File = lock.withLock {
+    override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File = lock.withLock {
         cached(game)?.let { return@withLock it }
         val file = File(folder, fileName(game))
         withContext(Dispatchers.IO) {
             try {
                 val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) }
                     ?: throw IOException("no manual on the server")
-                fetch(url, file)
+                fetch(url, file, onProgress)
             } catch (e: IOException) {
                 // This version can't be had (offline, say): an earlier one of the game's manual
                 // still opens, until a fetch succeeds.
@@ -82,15 +87,52 @@ class Manuals @Inject constructor(
         folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name.endsWith(".pdf") && old.length() > 0L }
             ?.maxByOrNull { it.lastModified() }
 
-    /** Downloads [url] to [file] through a .part file, so a cut-off download is never opened. */
-    private fun fetch(url: String, file: File) {
+    /**
+     * Downloads [url] to [file] through a .part file, so a cut-off download is never opened,
+     * telling [onProgress] the share done when the server gives the length (null when it doesn't).
+     */
+    private suspend fun fetch(url: String, file: File, onProgress: (Float?) -> Unit) {
         file.parentFile?.mkdirs()
         val part = File(file.path + ".part")
-        assetClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
-            part.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+        val call = assetClient.newCall(Request.Builder().url(url).build())
+        coroutineScope {
+            // Cancelled, the call is too, from another thread: a stalled read ends at once
+            // instead of at its timeout, and lets go of the lock.
+            val watch = launch { try { awaitCancellation() } finally { call.cancel() } }
+            try {
+                fetchBody(call, part, onProgress)
+            } catch (e: Throwable) {
+                // A half file is no use. Cancelled, the read fails as the socket closes: that's the cancel.
+                part.delete()
+                currentCoroutineContext().ensureActive()
+                throw e
+            } finally {
+                watch.cancel()
+            }
         }
         if (!part.renameTo(file)) throw IOException("couldn't save it")
+    }
+
+    private suspend fun fetchBody(call: okhttp3.Call, part: File, onProgress: (Float?) -> Unit) {
+        call.execute().use { response ->
+            if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
+            val length = response.body.contentLength().takeIf { it > 0 }
+            onProgress(if (length == null) null else 0f)
+            part.outputStream().use { out ->
+                val input = response.body.byteStream()
+                val buffer = ByteArray(64 * 1024)
+                var done = 0L
+                while (true) {
+                    // A cancelled fetch stops here instead of downloading to the end.
+                    currentCoroutineContext().ensureActive()
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    done += read
+                    if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
+                }
+            }
+        }
     }
 
     companion object {

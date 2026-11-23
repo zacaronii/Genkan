@@ -9,6 +9,8 @@ import app.genkan.romm.RomMAccount
 import app.genkan.romm.RomMSession
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -82,5 +84,41 @@ class ManualsTest {
         val opened = manuals.file(game("2"))
         assertEquals("manual 2", opened.readText())
         assertTrue(!earlier.exists())
+    }
+
+    @Test
+    fun `a fetch says how far along it is, from the length the server gives`() = runBlocking {
+        val body = "x".repeat(200_000)
+        server.enqueue(MockResponse.Builder().code(200).body(body).build())
+        val seen = mutableListOf<Float?>()
+        manuals.file(game("2")) { seen += it }
+        assertEquals(0f, seen.first())
+        assertEquals(1f, seen.last())
+        assertTrue(seen.filterNotNull().zipWithNext().all { (a, b) -> b >= a })
+    }
+
+    @Test
+    fun `a fetch cancelled mid-copy stops and leaves no file`() = runBlocking {
+        // A slow download: 1 MB at 64 KB every 50 ms.
+        server.enqueue(MockResponse.Builder().code(200).body("x".repeat(1_000_000)).throttleBody(64 * 1024, 50, java.util.concurrent.TimeUnit.MILLISECONDS).build())
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fetch = launch(kotlinx.coroutines.Dispatchers.Default) { manuals.file(game("2")) { if (it != null && it > 0f) started.complete(Unit) } }
+        started.await()
+        fetch.cancelAndJoin()
+        assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
+    }
+
+    @Test
+    fun `a stalled fetch ends at once when cancelled, not at its timeout`() = runBlocking {
+        // 100 bytes, then nothing for 10 s: the next read blocks until the call is cancelled.
+        server.enqueue(MockResponse.Builder().code(200).body("x".repeat(1_000)).throttleBody(100, 10, java.util.concurrent.TimeUnit.SECONDS).build())
+        val reading = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fetch = launch(kotlinx.coroutines.Dispatchers.Default) { manuals.file(game("2")) { if (it != null && it > 0f) reading.complete(Unit) } }
+        reading.await()
+        val started = System.nanoTime()
+        fetch.cancelAndJoin()
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertTrue("took $ms ms", ms < 2_000)
+        assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
     }
 }
