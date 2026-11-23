@@ -110,4 +110,15 @@ class GameDetailsActionsTest {
         compose.waitForIdle()
         assertTrue(span("Couldn't fetch the manual").endInclusive <= bottom)
     }
+
+    @Test
+    fun `without a length, "Fetching the manual…" fits its button`() {
+        compose.setContent {
+            GameDetailsContent(details = fiveButtons(), onShowReader = {}, manualFetch = app.genkan.manual.ManualFetch.Busy(null))
+        }
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText("Fetching the manual…", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue("cut short", !layouts.single().hasVisualOverflow)
+    }
 }

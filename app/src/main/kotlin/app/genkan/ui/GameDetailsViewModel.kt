@@ -19,6 +19,7 @@ import app.genkan.library.Favourites
 import app.genkan.library.FocusedGame
 import app.genkan.library.GameEntity
 import app.genkan.manual.ManualFetch
+import app.genkan.manual.ManualFetcher
 import app.genkan.manual.Manuals
 import app.genkan.play.PlaySessionDao
 import app.genkan.play.PlayTotals
@@ -162,11 +163,10 @@ class GameDetailsViewModel @Inject constructor(
     /** A short message under the buttons, e.g. while the manual downloads. Clears itself. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
     private var noticeJob: Job? = null
-    private var manualJob: Job? = null
 
-    private val _manualFetch = MutableStateFlow<ManualFetch?>(null)
-    /** The manual being fetched for "Open manual", or why it couldn't be, for the button to show. */
-    val manualFetch: StateFlow<ManualFetch?> = _manualFetch.asStateFlow()
+    private val manualFetcher = ManualFetcher(manuals, viewModelScope, failedLabel = "Couldn't fetch the manual")
+    /** The manual being fetched for "Open manual", or that it couldn't be, for the button to show. */
+    val manualFetch: StateFlow<ManualFetch?> = manualFetcher.state
 
     private val _manual = MutableStateFlow<File?>(null)
     /** The fetched manual the bottom screen is showing in [ManualViewer], or null. */
@@ -178,8 +178,7 @@ class GameDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             focusedGame.focus.map { it?.game?.id }.drop(1).collect {
                 _pickingLook.value = false
-                manualJob?.cancel()
-                _manualFetch.value = null
+                manualFetcher.cancel()
                 _manual.value = null
                 noticeJob?.cancel()
                 _notice.value = null
@@ -228,22 +227,9 @@ class GameDetailsViewModel @Inject constructor(
      */
     fun openManual() {
         val game = details.value?.focus?.game ?: return
-        if (!manuals.has(game) || manualJob?.isActive == true) return
-        manualJob = viewModelScope.launch {
-            // Only a fetch takes long enough to show: a cached manual opens in about a tenth of a second.
-            if (manuals.cached(game) == null) _manualFetch.value = ManualFetch.Busy()
-            val file = runCatching { manuals.file(game) { progress -> _manualFetch.value = ManualFetch.Busy(progress) } }
-                .getOrElse {
-                    // Said on the button that was pressed, for a few seconds, then it's ready again.
-                    val failed = ManualFetch.Failed("Couldn't fetch the manual")
-                    _manualFetch.value = failed
-                    delay(NOTICE_MS)
-                    _manualFetch.compareAndSet(failed, null)
-                    return@launch
-                }
-            _manualFetch.value = null
-            _manual.value = file
-        }
+        if (!manuals.has(game)) return
+        // Shown on the button that was pressed; the reason goes to the notice below the buttons.
+        manualFetcher.open(game, onFile = { _manual.value = it }, onFailed = { show("Couldn't fetch the manual: ${it.message}") })
     }
 
     /**

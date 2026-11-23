@@ -6,7 +6,10 @@ import app.genkan.romm.RomMApiFactory
 import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -86,24 +89,31 @@ class Manuals @Inject constructor(
      * Downloads [url] to [file] through a .part file, so a cut-off download is never opened,
      * telling [onProgress] the share done when the server gives the length (null when it doesn't).
      */
-    private fun fetch(url: String, file: File, onProgress: (Float?) -> Unit) {
+    private suspend fun fetch(url: String, file: File, onProgress: (Float?) -> Unit) {
         file.parentFile?.mkdirs()
         val part = File(file.path + ".part")
         assetClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
             val length = response.body.contentLength().takeIf { it > 0 }
             onProgress(if (length == null) null else 0f)
-            part.outputStream().use { out ->
-                val input = response.body.byteStream()
-                val buffer = ByteArray(64 * 1024)
-                var done = 0L
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    out.write(buffer, 0, read)
-                    done += read
-                    if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
+            try {
+                part.outputStream().use { out ->
+                    val input = response.body.byteStream()
+                    val buffer = ByteArray(64 * 1024)
+                    var done = 0L
+                    while (true) {
+                        // A cancelled fetch stops here instead of downloading to the end.
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        out.write(buffer, 0, read)
+                        done += read
+                        if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
+                    }
                 }
+            } catch (e: CancellationException) {
+                part.delete()
+                throw e
             }
         }
         if (!part.renameTo(file)) throw IOException("couldn't save it")

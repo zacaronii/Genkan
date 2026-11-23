@@ -49,11 +49,14 @@ class PlayManualTest {
 
         override fun has(game: GameEntity) = game.manualPath != null
         var cachedFile: File? = null
+        /** The fetch's progress report, kept to call late, as a cancelled copy still running would. */
+        var report: ((Float?) -> Unit)? = null
         override fun cached(game: GameEntity): File? = cachedFile
         override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File {
             fetches++
             cachedFile?.let { return it }
             // Half of it, then whatever the test answers.
+            report = onProgress
             onProgress(0.5f)
             return answer.await().getOrThrow()
         }
@@ -180,5 +183,18 @@ class PlayManualTest {
         assertEquals(source.cachedFile, manual.open.value)
         assertEquals(listOf<ManualFetch?>(null), seen)
         watch.cancel()
+    }
+
+    @Test
+    fun `hide during a fetch leaves the chip and the header empty, whatever the fetch still does`() {
+        val manual = playing(game(1))
+        manual.show()
+        val late = source.report!!
+        manual.hide()
+        late(0.8f)
+        source.answer.complete(Result.failure(kotlinx.coroutines.CancellationException("cancelled")))
+        assertNull(manual.fetch.value)
+        assertNull(manual.notice.value)
+        assertNull(manual.open.value)
     }
 }

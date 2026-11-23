@@ -5,7 +5,6 @@ import app.genkan.library.LibraryDao
 import app.genkan.reader.NowPlaying
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +14,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -46,9 +44,9 @@ class PlayManual internal constructor(
     /** The manual on the bottom screen now, or null. */
     val open: StateFlow<File?> = _open.asStateFlow()
 
-    private val _fetch = MutableStateFlow<ManualFetch?>(null)
-    /** The manual being fetched, or why it couldn't be: for the reader's Manual chip to show. */
-    val fetch: StateFlow<ManualFetch?> = _fetch.asStateFlow()
+    private val fetcher = ManualFetcher(manuals, scope, failedLabel = "Couldn't fetch")
+    /** The manual being fetched, or that it couldn't be: for the reader's Manual chip to show. */
+    val fetch: StateFlow<ManualFetch?> = fetcher.state
 
     private val _notice = MutableStateFlow<String?>(null)
     /** While the manual is fetched, or why it couldn't be: for the reader to say. */
@@ -56,7 +54,6 @@ class PlayManual internal constructor(
 
     /** The page each manual was left at (the first one on screen), by file. */
     private val pages = HashMap<String, Int>()
-    private var fetching: Job? = null
 
     init {
         // Another game: its own manual, from its first page.
@@ -71,30 +68,20 @@ class PlayManual internal constructor(
     /** Opens the manual (fetched first when it isn't cached); nothing when the game has none. */
     fun show() {
         val game = game.value ?: return
-        if (_open.value != null || fetching?.isActive == true) return
-        fetching = scope.launch {
-            if (manuals.cached(game) == null) {
-                _notice.value = "Fetching the manual…"
-                _fetch.value = ManualFetch.Busy()
-            }
-            val file = runCatching { manuals.file(game) { progress -> _fetch.value = ManualFetch.Busy(progress) } }
-                .getOrElse {
-                    _notice.value = "Couldn't fetch the manual: ${it.message}"
-                    val failed = ManualFetch.Failed("Couldn't fetch")
-                    _fetch.value = failed
-                    delay(FAILED_MS)
-                    _fetch.compareAndSet(failed, null)
-                    return@launch
-                }
-            _notice.value = null
-            _fetch.value = null
-            _open.value = file
-        }
+        if (_open.value != null || fetcher.state.value is ManualFetch.Busy) return
+        if (manuals.cached(game) == null) _notice.value = "Fetching the manual…"
+        fetcher.open(
+            game,
+            onFile = { file ->
+                _notice.value = null
+                _open.value = file
+            },
+            onFailed = { _notice.value = "Couldn't fetch the manual: ${it.message}" },
+        )
     }
 
     fun hide() {
-        fetching?.cancel()
-        _fetch.value = null
+        fetcher.cancel()
         _notice.value = null
         _open.value = null
     }
@@ -115,10 +102,5 @@ class PlayManual internal constructor(
 
     fun keepPage(file: File, page: Int) {
         pages[file.name] = page
-    }
-
-    private companion object {
-        /** How long the chip says a fetch failed before it can be pressed again. */
-        const val FAILED_MS = 4_000L
     }
 }

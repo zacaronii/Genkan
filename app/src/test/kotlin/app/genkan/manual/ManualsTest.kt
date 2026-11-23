@@ -9,6 +9,8 @@ import app.genkan.romm.RomMAccount
 import app.genkan.romm.RomMSession
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -93,5 +95,16 @@ class ManualsTest {
         assertEquals(0f, seen.first())
         assertEquals(1f, seen.last())
         assertTrue(seen.filterNotNull().zipWithNext().all { (a, b) -> b >= a })
+    }
+
+    @Test
+    fun `a fetch cancelled mid-copy stops and leaves no file`() = runBlocking {
+        // A slow download: 1 MB at 64 KB every 50 ms.
+        server.enqueue(MockResponse.Builder().code(200).body("x".repeat(1_000_000)).throttleBody(64 * 1024, 50, java.util.concurrent.TimeUnit.MILLISECONDS).build())
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fetch = launch(kotlinx.coroutines.Dispatchers.Default) { manuals.file(game("2")) { if (it != null && it > 0f) started.complete(Unit) } }
+        started.await()
+        fetch.cancelAndJoin()
+        assertEquals(emptyList<String>(), folder.listFiles().orEmpty().map { it.name })
     }
 }
