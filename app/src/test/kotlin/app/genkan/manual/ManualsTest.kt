@@ -33,16 +33,20 @@ import java.io.IOException
 class ManualsTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val server = MockWebServer()
-    private val folder = File(context.cacheDir, "manuals")
+    private val folder = File(context.noBackupFilesDir, "manuals")
+    private val oldFolder = File(context.cacheDir, "manuals")
+    private val signedOut = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     @Before fun start() {
         server.start()
         folder.deleteRecursively()
+        oldFolder.deleteRecursively()
     }
 
     @After fun stop() {
         server.close()
         folder.deleteRecursively()
+        oldFolder.deleteRecursively()
     }
 
     /** A test that waits on the network or a flow fails instead of hanging the run. */
@@ -50,6 +54,7 @@ class ManualsTest {
 
     private val session = mockk<RomMSession>(relaxed = true) {
         every { currentAccount() } answers { RomMAccount(server.url("/").toString(), "token", null, 1, "player", "4.0.0") }
+        every { signedOut } returns this@ManualsTest.signedOut
         every { credentials() } answers { server.url("/").toString() to "token" }
     }
     private val manuals = Manuals(context, session, OkHttpClient())
@@ -267,5 +272,152 @@ class ManualsTest {
         server.takeRequest()
         assertEquals("HEAD", server.takeRequest().method)
         assertEquals("no download", 2, server.requestCount)
+    }
+
+    private fun gameNumbered(id: Long) = GameEntity(
+        id, 1, "psx", "Game $id", "game $id", "g$id.chd", 10, null, false, manualPath = "/assets/romm/resources/roms/1/$id/manual/$id.pdf?ts=1",
+    )
+
+    /** A manual stored for [game], [bytes] long, last opened at [openedAt]. */
+    private fun stored(game: GameEntity, bytes: Int, openedAt: Long): File {
+        val file = File(folder, Manuals.fileName(game)).apply { parentFile?.mkdirs(); writeBytes(ByteArray(bytes)) }
+        File(file.path + ".meta").writeText("e\n\n0\n$openedAt\n")
+        return file
+    }
+
+    @Test
+    fun `manuals move from the cache folder once, a half-done move finishes, and nothing else there is touched`() {
+        val other = File(context.cacheDir, "other/keep.bin").apply { parentFile?.mkdirs(); writeText("x") }
+        oldFolder.mkdirs()
+        File(oldFolder, "1-aaa.pdf").writeText("one")
+        File(oldFolder, "1-aaa.pdf.meta").writeText("m")
+        File(oldFolder, "2-bbb.pdf").writeText("two")
+        // Cut off halfway last time: one is already in the new folder.
+        folder.mkdirs()
+        File(folder, "2-bbb.pdf").writeText("two")
+        manuals.moveFromCache()
+        assertEquals(setOf("1-aaa.pdf", "1-aaa.pdf.meta", "2-bbb.pdf"), folder.list()!!.toSet())
+        assertEquals("one", File(folder, "1-aaa.pdf").readText())
+        assertTrue(!oldFolder.exists())
+        assertEquals("x", other.readText())
+        other.parentFile!!.deleteRecursively()
+    }
+
+    @Test
+    fun `manuals of games gone from the library go, never one in use`() {
+        val kept = stored(gameNumbered(1), 10, 0)
+        val gone = stored(gameNumbered(2), 10, 0)
+        val open = stored(gameNumbered(3), 10, 0)
+        manuals.use("details", open)
+        manuals.removeGone(setOf(1L))
+        assertTrue(kept.exists())
+        assertTrue(!gone.exists() && !File(gone.path + ".meta").exists())
+        assertTrue("in use", open.exists())
+    }
+
+    @Test
+    fun `over the cap, games that aren't installed lose theirs, least recently opened first, never installed or in use`() {
+        val installed = stored(gameNumbered(1), 1000, 1)
+        val oldest = stored(gameNumbered(2), 1000, 2)
+        val inUse = stored(gameNumbered(3), 1000, 3)
+        val newer = stored(gameNumbered(4), 1000, 4)
+        val newest = stored(gameNumbered(5), 1000, 5)
+        manuals.use("reader", inUse)
+        // Opening it just now made it the newest; set its time back for the test.
+        File(inUse.path + ".meta").writeText("e\n\n0\n3\n")
+        manuals.trim(installed = setOf(1L), cap = 3200)
+        assertTrue(installed.exists())
+        assertTrue("the least recently opened goes first", !oldest.exists())
+        assertTrue(inUse.exists())
+        assertTrue("then the next", !newer.exists())
+        assertTrue("under the cap now", newest.exists())
+    }
+
+    @Test
+    fun `a manual in use is never replaced, and nothing is asked while it's open`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("English", "en"))
+        val file = manuals.file(game("1"))
+        manuals.use("reader", file)
+        clock += Manuals.CHECK_EVERY_MS + 1
+        assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
+        assertEquals("nothing asked", 1, server.requestCount)
+        assertEquals("English", file.content())
+    }
+
+    @Test
+    fun `a replaced manual says so once, on its next open`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("English", "en"))
+        manuals.file(game("1"))
+        assertTrue(!manuals.takeReplacedNote(game("1")))
+        clock += Manuals.CHECK_EVERY_MS + 1
+        server.enqueue(pdf("Japanese", "ja"))
+        manuals.refresh(game("1"))
+        assertTrue(manuals.takeReplacedNote(game("1")))
+        assertTrue("once", !manuals.takeReplacedNote(game("1")))
+    }
+
+    @Test
+    fun `a manual opened by hand is fetched, and the housekeeping runs after`() = runBlocking {
+        var stored = 0
+        manuals.onStored = { stored++ }
+        server.enqueue(pdf("manual", "m1"))
+        manuals.file(game("1"))
+        assertEquals(1, stored)
+    }
+
+    @Test
+    fun `signing out empties the folder`() = runBlocking {
+        server.enqueue(pdf("manual", "m1"))
+        manuals.file(game("1"))
+        signedOut.emit(Unit)
+        kotlinx.coroutines.withTimeout(5_000) { while (folder.list().orEmpty().isNotEmpty()) kotlinx.coroutines.delay(20) }
+        assertEquals(null, manuals.cached(game("1")))
+    }
+
+    @Test
+    fun `fetching ahead leaves out a manual over the limit, and one already cached`() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Length", "${100L shl 20}").build())
+        assertTrue(!manuals.prefetch(game("1"), maxBytes = 64L shl 20))
+        assertEquals("only the HEAD", 1, server.requestCount)
+        server.enqueue(MockResponse.Builder().code(200).addHeader("Content-Length", "13").build())
+        server.enqueue(pdf("manual", "m1"))
+        assertTrue(manuals.prefetch(game("1"), maxBytes = 64L shl 20))
+        assertTrue("cached now: nothing to do", !manuals.prefetch(game("1"), maxBytes = 64L shl 20))
+    }
+
+    @Test
+    fun `an empty library removes nothing`() {
+        val kept = stored(gameNumbered(1), 10, 0)
+        manuals.removeGone(emptySet())
+        assertTrue(kept.exists())
+    }
+
+    @Test
+    fun `a check skipped while a manual is open runs when it's closed, and the next open says it's newer`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("English", "en"))
+        val file = manuals.file(game("1"))
+        manuals.use("details", file)
+        clock += Manuals.CHECK_EVERY_MS + 1
+        assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
+        server.enqueue(pdf("Japanese", "ja"))
+        // Closed: the skipped check runs, in the background.
+        manuals.use("details", null)
+        kotlinx.coroutines.withTimeout(10_000) { while (file.content() != "Japanese") kotlinx.coroutines.delay(20) }
+        assertTrue(manuals.takeReplacedNote(game("1")))
+    }
+
+    @Test
+    fun `a manual still in the old folder is found by the very first lookup, with no request`() {
+        val fresh = Manuals(context, session, okhttp3.OkHttpClient())
+        File(oldFolder, Manuals.fileName(game("1"))).apply { parentFile?.mkdirs(); writeText("%PDF manual") }
+        val found = fresh.cached(game("1"))
+        assertEquals("manual", found?.content())
+        assertEquals(0, server.requestCount)
     }
 }

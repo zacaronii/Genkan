@@ -69,6 +69,7 @@ data class SetupState(
     val dictionaries: List<DictionaryEntity>,
     val insertAnimation: Boolean = true,
     val fullBox: Boolean = true,
+    val prefetchManuals: Boolean = true,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -76,6 +77,7 @@ data class SetupState(
         SwitchKey.BUILT_IN_PLAYER -> builtInPlayer
         SwitchKey.INSERT_ANIMATION -> insertAnimation
         SwitchKey.FULL_BOX -> fullBox
+        SwitchKey.PREFETCH_MANUALS -> prefetchManuals
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
     }
@@ -317,6 +319,11 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         "Starting a game slides its disc or cartridge into the machine first. Any button skips it."
     } else {
         "Games start without the animation."
+    }
+    SwitchKey.PREFETCH_MANUALS -> if (state.prefetchManuals) {
+        "After each sync, installed games' manuals are fetched in the background, so they open offline."
+    } else {
+        "Manuals are fetched when you open them."
     }
     SwitchKey.FULL_BOX -> if (state.fullBox) {
         "The focused game is drawn as its box, front and spine, where its scans have both."

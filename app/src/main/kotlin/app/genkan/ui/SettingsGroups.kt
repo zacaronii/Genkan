@@ -19,7 +19,7 @@ data class SettingsGroup(
 enum class SettingsInfo { ROMM_ACCOUNT, YOMIKATA_SAMPLES, SECOND_SCREEN, COMPANION }
 
 /** The on/off settings a switch row can show. */
-enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, FULL_BOX }
+enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, FULL_BOX, PREFETCH_MANUALS }
 
 /** A row of a group, the only things the gamepad lands on. */
 sealed interface SettingsRow {
@@ -59,6 +59,7 @@ object SettingsGroups {
             rows = listOf(
                 SettingsRow.Button("Sync library now", SetupAction.SYNC_LIBRARY),
                 SettingsRow.Switch("Full box", SwitchKey.FULL_BOX, SetupAction.FULL_BOX),
+                SettingsRow.Switch("Fetch manuals of installed games", SwitchKey.PREFETCH_MANUALS, SetupAction.PREFETCH_MANUALS),
                 SettingsRow.Button("Sign out of RomM", SetupAction.SIGN_OUT),
             ),
         ),

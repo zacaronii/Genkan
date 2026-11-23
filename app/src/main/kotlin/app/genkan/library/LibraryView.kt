@@ -52,6 +52,13 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         context.libraryStore.edit { it[INSERT_ANIMATION] = on }
     }
 
+    /** Whether installed games' manuals are fetched in the background after a sync; on by default. */
+    val prefetchManuals: Flow<Boolean> = context.libraryStore.data.map { it[PREFETCH_MANUALS] != false }
+
+    suspend fun setPrefetchManuals(on: Boolean) {
+        context.libraryStore.edit { it[PREFETCH_MANUALS] = on }
+    }
+
     /**
      * Whether the shelf draws the focused game as a full box from its scans (where it has a front
      * and a spine): on unless switched off.
@@ -84,5 +91,6 @@ class LibraryViewSettings @Inject constructor(@ApplicationContext private val co
         private val VIEW = stringPreferencesKey("view")
         private val INSERT_ANIMATION = booleanPreferencesKey("insert_animation")
         private val FULL_BOX = booleanPreferencesKey("full_box")
+        private val PREFETCH_MANUALS = booleanPreferencesKey("prefetch_manuals")
     }
 }

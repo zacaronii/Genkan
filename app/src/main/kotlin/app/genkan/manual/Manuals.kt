@@ -38,6 +38,12 @@ interface ManualSource {
 
     /** [game]'s manual, fetched first when it isn't cached; throws when it can't be had. */
     suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit = {}): File
+
+    /** [owner] (the details, the reader) has [file] open now, or none: a manual in use is never replaced. */
+    fun use(owner: String, file: File?) {}
+
+    /** Whether [game]'s manual was replaced by a newer one since it was last opened; true once. */
+    fun takeReplacedNote(game: GameEntity): Boolean = false
 }
 
 /**
@@ -45,7 +51,9 @@ interface ManualSource {
  * for the reader during play. A cached manual opens at once, offline too. Once a day at most, in
  * the background, the server is asked whether it changed (with the ETag it gave, kept beside the
  * file): a manual replaced on the server (another language at the same path, say) is fetched and
- * takes the cached one's place, and [replaced] says so.
+ * takes the cached one's place, and [replaced] says so (and [takeReplacedNote], on the next open).
+ * The folder is in app storage the system doesn't clear, so it keeps its own house: see [removeGone]
+ * and [trim]; signing out empties it.
  */
 @Singleton
 class Manuals @Inject constructor(
@@ -58,7 +66,24 @@ class Manuals @Inject constructor(
         .addInterceptor(RomMImageAuthInterceptor(session::credentials))
         .build()
 
-    private val folder: File get() = File(context.cacheDir, FOLDER)
+    /** The folder, once the manuals cached before are moved into it: the first use waits for the move (a handful of renames). */
+    private val folder: File get() = moved
+
+    private val moved: File by lazy {
+        File(context.noBackupFilesDir, FOLDER).also { moveFromCache(it) }
+    }
+
+    /** Where manuals were kept before: the cache folder, which Android may empty. Moved once. */
+    private val oldFolder: File get() = File(context.cacheDir, FOLDER)
+
+    /** The files each owner has open (the details, the reader). */
+    private val inUse = java.util.concurrent.ConcurrentHashMap<String, File>()
+
+    /** Games whose manual was replaced since it was last opened, for a note on the next open. */
+    private val replacedNotes = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
+    /** Called after a manual is stored (fetched by hand or ahead): the folder's housekeeping runs. */
+    @Volatile var onStored: (() -> Unit)? = null
 
     /**
      * One fetch or check of a game's manual at a time (the details and the reader can ask for the
@@ -78,7 +103,30 @@ class Manuals @Inject constructor(
      */
     val replaced: SharedFlow<Long> = _replaced
 
+    init {
+        scope.launch {
+            // Signing out empties the folder, like the art: another account's manuals aren't kept.
+            session.signedOut.collect { clear() }
+        }
+    }
+
     override fun has(game: GameEntity): Boolean = game.manualPath != null && session.currentAccount() != null
+
+    override fun use(owner: String, file: File?) {
+        val before = if (file == null) inUse.remove(owner) else inUse.put(owner, file)
+        if (file != null && file != before) markOpened(file)
+        // Let go of: a check skipped while it was open runs now (a game that isn't installed gets no other).
+        if (before != null && before != file && !inUse(before)) {
+            skipped.remove(before)?.let { game -> scope.launch { refresh(game) } }
+        }
+    }
+
+    /** Manuals whose check was skipped because they were open, by file: checked when they're let go of. */
+    private val skipped = java.util.concurrent.ConcurrentHashMap<File, GameEntity>()
+
+    override fun takeReplacedNote(game: GameEntity): Boolean = replacedNotes.remove(game.id)
+
+    private fun inUse(file: File) = inUse.values.any { it == file }
 
     override fun cached(game: GameEntity): File? = File(folder, fileName(game)).takeIf { it.isFile && it.length() > 0L }
 
@@ -92,7 +140,29 @@ class Manuals @Inject constructor(
             scope.launch { refresh(game) }
             return cached
         }
-        return lockFor(game).withLock { fetchFile(game, onProgress) }
+        // Opened by hand, it's always fetched, even with the folder over its cap: the trim follows.
+        return lockFor(game).withLock { fetchFile(game, onProgress) }.also { onStored?.invoke() }
+    }
+
+    /**
+     * [game]'s manual fetched ahead (not opened): nothing when it's cached, or when the server's file
+     * is over [maxBytes] (it's logged, and opening it by hand still works). True when one was stored.
+     */
+    suspend fun prefetch(game: GameEntity, maxBytes: Long): Boolean = lockFor(game).withLock {
+        if (cached(game) != null) return@withLock false
+        withContext(Dispatchers.IO) {
+            val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return@withContext false
+            val length = try {
+                assetClient.newCall(Request.Builder().url(url).head().build()).execute().use { it.header("Content-Length")?.toLongOrNull() }
+            } catch (e: IOException) {
+                return@withContext false
+            }
+            if (length != null && length > maxBytes) {
+                Log.i(TAG, "Manual of rom ${game.id} not fetched ahead: ${length / MB} MB, over ${maxBytes / MB} MB")
+                return@withContext false
+            }
+            runCatching { fetchFile(game) {} }.isSuccess
+        }
     }
 
     private suspend fun fetchFile(game: GameEntity, onProgress: (Float?) -> Unit): File {
@@ -137,6 +207,12 @@ class Manuals @Inject constructor(
         val file = File(folder, fileName(game)).takeIf { it.isFile && it.length() > 0L } ?: return Refresh.NOT_DUE
         val meta = readMeta(file)
         if (meta != null && now() - meta.checkedAt < CHECK_EVERY_MS) return Refresh.NOT_DUE
+        // Open in the details or the reader: never replaced under it; checked when it's let go of.
+        if (inUse(file)) {
+            skipped[file] = game
+            if (!inUse(file)) skipped.remove(file)?.let { scope.launch { refresh(it) } }
+            return Refresh.NOT_DUE
+        }
         val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return Refresh.NOT_DUE
         return try {
             if (meta?.etag == null && meta?.lastModified == null) {
@@ -167,6 +243,7 @@ class Manuals @Inject constructor(
             }
             if (!part.renameTo(file)) throw IOException("couldn't save it")
             writeMeta(file, validator)
+            replacedNotes.add(game.id)
             _replaced.tryEmit(game.id)
             Refresh.REPLACED
         } catch (e: IOException) {
@@ -203,7 +280,7 @@ class Manuals @Inject constructor(
     /** What the server gave to ask about a file again: its ETag and Last-Modified. */
     private data class Validator(val etag: String?, val lastModified: String?)
 
-    private class Meta(val validator: Validator, val checkedAt: Long) {
+    private class Meta(val validator: Validator, val checkedAt: Long, val openedAt: Long) {
         val etag get() = validator.etag
         val lastModified get() = validator.lastModified
     }
@@ -211,11 +288,94 @@ class Manuals @Inject constructor(
     private fun metaFile(file: File) = File(file.path + ".meta")
 
     private fun readMeta(file: File): Meta? = metaFile(file).takeIf { it.isFile }?.readLines()?.let { lines ->
-        Meta(Validator(lines.getOrNull(0)?.ifEmpty { null }, lines.getOrNull(1)?.ifEmpty { null }), lines.getOrNull(2)?.toLongOrNull() ?: 0L)
+        Meta(
+            Validator(lines.getOrNull(0)?.ifEmpty { null }, lines.getOrNull(1)?.ifEmpty { null }),
+            lines.getOrNull(2)?.toLongOrNull() ?: 0L,
+            lines.getOrNull(3)?.toLongOrNull() ?: 0L,
+        )
     }
 
-    private fun writeMeta(file: File, validator: Validator) {
-        metaFile(file).writeText("${validator.etag.orEmpty()}\n${validator.lastModified.orEmpty()}\n${now()}\n")
+    /** Keeps [validator] and the check's time beside [file], and when it was last opened ([openedAt], else as it was). */
+    private fun writeMeta(file: File, validator: Validator, openedAt: Long? = null) = synchronized(metaLock) {
+        val opened = openedAt ?: readMeta(file)?.openedAt ?: 0L
+        val checked = readMeta(file)?.takeIf { openedAt != null }?.checkedAt ?: now()
+        putMeta(file, "${validator.etag.orEmpty()}\n${validator.lastModified.orEmpty()}\n$checked\n$opened\n")
+    }
+
+    /** The meta files are read and written whole, one writer at a time: the check and an open never lose each other's line. */
+    private val metaLock = Any()
+
+    /** Writes [text] as [file]'s meta through a temporary file, renamed over it. */
+    private fun putMeta(file: File, text: String) {
+        val temp = File(metaFile(file).path + ".tmp")
+        temp.writeText(text)
+        if (!temp.renameTo(metaFile(file))) temp.delete()
+    }
+
+    /** Notes [file] was opened now, for the trim (least recently opened goes first). */
+    private fun markOpened(file: File) = synchronized(metaLock) {
+        if (!file.isFile) return@synchronized
+        val meta = readMeta(file)
+        // A file with no meta yet gets none of a check: it stays due, as before.
+        if (meta == null) putMeta(file, "\n\n0\n${now()}\n") else writeMeta(file, meta.validator, openedAt = now())
+    }
+
+    /** The manuals in the folder by game, with when each was last opened. */
+    private fun stored(): List<Triple<Long, File, Long>> =
+        folder.listFiles { f -> f.name.endsWith(".pdf") }.orEmpty().mapNotNull { f ->
+            f.name.substringBefore('-').toLongOrNull()?.let { id -> Triple(id, f, readMeta(f)?.openedAt ?: 0L) }
+        }
+
+    /** How much the folder holds. */
+    fun size(): Long = folder.listFiles().orEmpty().sumOf { it.length() }
+
+    /** Removes the manuals of games no longer in the library ([libraryIds]), never one in use. */
+    fun removeGone(libraryIds: Set<Long>) {
+        // An empty list says nothing about the library (a sync that brought nothing, a database rebuilt).
+        if (libraryIds.isEmpty()) return
+        stored().filter { (id, file) -> id !in libraryIds && !inUse(file) }.forEach { (_, file) -> remove(file) }
+    }
+
+    /**
+     * Brings the folder under [cap]: manuals of games that aren't [installed] go, least recently
+     * opened first, never one in use; installed games' manuals are never trimmed.
+     */
+    fun trim(installed: Set<Long>, cap: Long) {
+        var size = size()
+        for ((_, file) in stored().filter { (id, file) -> id !in installed && !inUse(file) }.sortedBy { it.third }) {
+            if (size <= cap) break
+            size -= file.length() + metaFile(file).length()
+            remove(file)
+        }
+    }
+
+    private fun remove(file: File) {
+        Log.i(TAG, "Removed manual ${file.name}")
+        file.delete()
+        metaFile(file).delete()
+    }
+
+    /** Empties the folder (signed out). */
+    private fun clear() {
+        folder.listFiles()?.forEach { it.delete() }
+        replacedNotes.clear()
+    }
+
+    /**
+     * Moves the manuals (and what's kept beside them) from the cache folder, once, by their exact
+     * names; a move cut off halfway finishes on the next start. A file already in the new folder wins.
+     */
+    internal fun moveFromCache(to: File = folder) {
+        val old = oldFolder.takeIf { it.isDirectory } ?: return
+        to.mkdirs()
+        old.listFiles()?.forEach { f ->
+            val target = File(to, f.name)
+            if (target.exists() || f.name.endsWith(".part")) f.delete() else if (!f.renameTo(target)) {
+                f.copyTo(target)
+                f.delete()
+            }
+        }
+        old.delete()
     }
 
     /** The newest earlier version of [game]'s manual in the folder, whole (not a part, not empty), if any. */
@@ -278,6 +438,9 @@ class Manuals @Inject constructor(
     companion object {
         private const val TAG = "Manuals"
         private const val FOLDER = "manuals"
+        private const val MB = 1L shl 20
+        /** Said once, on the next open of a manual the server replaced. */
+        const val REPLACED_NOTE = "A newer manual was fetched"
         /** How often a cached manual is asked about on the server, at most. */
         const val CHECK_EVERY_MS = 24L * 60 * 60 * 1000
 

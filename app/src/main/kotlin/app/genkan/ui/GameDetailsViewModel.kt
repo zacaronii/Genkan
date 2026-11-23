@@ -186,6 +186,8 @@ class GameDetailsViewModel @Inject constructor(
                 _notice.value = null
             }
         }
+        // The manual open here is in use: a newer one from the server waits until it's closed.
+        viewModelScope.launch { _manual.collect { manuals.use("details", it) } }
         // A manual open when a game starts stays closed after it, rather than coming back at page 1.
         viewModelScope.launch {
             mode.collect { if (it == CompanionMode.READER) _manual.value = null }
@@ -231,7 +233,14 @@ class GameDetailsViewModel @Inject constructor(
         val game = details.value?.focus?.game ?: return
         if (!manuals.has(game)) return
         // Shown on the button that was pressed; the reason goes to the notice below the buttons.
-        manualFetcher.open(game, onFile = { _manual.value = it }, onFailed = { show("Couldn't fetch the manual: ${it.message}") })
+        manualFetcher.open(
+            game,
+            onFile = {
+                _manual.value = it
+                if (manuals.takeReplacedNote(game)) show(Manuals.REPLACED_NOTE)
+            },
+            onFailed = { show("Couldn't fetch the manual: ${it.message}") },
+        )
     }
 
     /**
