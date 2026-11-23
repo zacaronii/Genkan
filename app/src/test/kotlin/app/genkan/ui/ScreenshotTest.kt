@@ -172,7 +172,7 @@ class ScreenshotTest {
         val games = FakeData.psxGames.mapIndexed { i, game ->
             if (i == 3) game.copy(box2dPath = "/covers/psx/${game.id}.png", box2dBackPath = "/covers/psx/${game.id + 1}.png") else game
         }
-        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 3, staticMedia = false, turn = ShelfTurn(turned = true) { it.box2dBackPath != null })
+        library(LibraryView.SHELF, platformIndex = 1, games, gameIndex = 3, staticMedia = false, turn = ShelfTurn(turnedId = games[3].id) { it.box2dBackPath != null })
     }
 
     /** A full box whose game isn't downloaded: the case's download badge, in the box's corner. */

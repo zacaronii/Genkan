@@ -78,12 +78,13 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
     val view by viewModel.view.collectAsStateWithLifecycle()
     val insert by viewModel.insert.collectAsStateWithLifecycle()
     val favourites by viewModel.favouriteIds.collectAsStateWithLifecycle()
-    val boxTurned by viewModel.boxTurned.collectAsStateWithLifecycle()
+    val turnedId by viewModel.turnedId.collectAsStateWithLifecycle()
+    val fullBox by viewModel.fullBox.collectAsStateWithLifecycle()
     val order by viewModel.order.collectAsStateWithLifecycle()
     val orderPanel by viewModel.orderPanel.collectAsStateWithLifecycle()
     LibraryContent(
         favourites = favourites,
-        turn = ShelfTurn(boxTurned, viewModel::canTurn),
+        turn = ShelfTurn(turnedId) { BoxTurn.canTurn(it, fullBox) },
         order = order,
         orderPanel = orderPanel,
         onToggleOrderPanel = viewModel::toggleOrderPanel,
@@ -323,7 +324,7 @@ private fun ShelfLibrary(
                     onSelect = onSelectGame,
                     staticMedia = staticMedia,
                     shelfId = platforms.getOrNull(focus.platformIndex)?.id ?: 0L,
-                    boxTurned = turn.turned,
+                    boxTurned = BoxTurn.isTurned(turn.turnedId, games.getOrNull(focus.gameIndex)),
                 )
             }
         }
@@ -338,7 +339,7 @@ private fun ShelfLibrary(
             emulatorFor = emulatorFor,
             favourite = game?.id in favourites,
             canTurn = game != null && turn.canTurn(game),
-            turned = turn.turned,
+            turned = BoxTurn.isTurned(turn.turnedId, game),
             downloadedOnly = downloadedOnly,
         )
     }
@@ -799,5 +800,5 @@ internal fun formatSize(bytes: Long): String = when {
     else -> "—"
 }
 
-/** The focused game's full box turned to its back ([turned], by R3), and which games R3 can turn ([canTurn]). */
-data class ShelfTurn(val turned: Boolean = false, val canTurn: (GameEntity) -> Boolean = { false })
+/** The game whose full box is turned to its back ([turnedId], by R3), and which games R3 can turn ([canTurn]). */
+data class ShelfTurn(val turnedId: Long? = null, val canTurn: (GameEntity) -> Boolean = { false })

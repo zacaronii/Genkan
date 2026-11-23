@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * The shelf's full box: while [on] (the "Full box" setting, mirrored here by HomeActivity), the
@@ -210,6 +211,6 @@ internal const val SPINE_TAG = "full-box-spine"
  * once: their hypotenuse) would then be wider than the slot. One size at every angle.
  */
 internal fun boxHeight(maxWidth: Dp, maxHeight: Dp, frontAspect: Float, spineAspect: Float): Dp {
-    val widest = kotlin.math.sqrt(frontAspect * frontAspect + spineAspect * spineAspect)
+    val widest = sqrt(frontAspect * frontAspect + spineAspect * spineAspect)
     return if (maxHeight * widest > maxWidth) maxWidth / widest else maxHeight
 }

@@ -84,8 +84,8 @@ class HintsTest {
     @Test
     fun `R3 turns a box that has a back, and says which way`() {
         val game = FakeData.psxGames.first()
-        assertEquals("A Download | R2 Favourite | R3 Back | B Back", Hints.library(game, null, onGames = true, emulatorFor = { "DuckStation" }, canTurn = true).text())
-        assertEquals("A Download | R2 Favourite | R3 Front | B Back", Hints.library(game, null, onGames = true, emulatorFor = { "DuckStation" }, canTurn = true, turned = true).text())
+        assertEquals("A Download | R2 Favourite | R3 Box back | B Back", Hints.library(game, null, onGames = true, emulatorFor = { "DuckStation" }, canTurn = true).text())
+        assertEquals("A Download | R2 Favourite | R3 Box front | B Back", Hints.library(game, null, onGames = true, emulatorFor = { "DuckStation" }, canTurn = true, turned = true).text())
         assertEquals("A Download | R2 Favourite | B Back", Hints.library(game, null, onGames = true, emulatorFor = { "DuckStation" }).text())
     }
 }

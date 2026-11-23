@@ -109,7 +109,7 @@ object Hints {
                 primary(game, download, emulatorFor)?.let { add(ButtonHint(PadButton.A, it)) }
                 if (download?.state == DownloadState.INSTALLED) add(ButtonHint(PadButton.X, "Delete"))
                 if (Favourites.canMark(game)) add(ButtonHint(PadButton.R2, if (favourite) "Unfavourite" else "Favourite"))
-                if (canTurn) add(ButtonHint(PadButton.R3, if (turned) "Front" else "Back"))
+                if (canTurn) add(ButtonHint(PadButton.R3, if (turned) "Box front" else "Box back"))
                 add(ButtonHint(PadButton.B, "Back"))
             } else if (game != null) {
                 add(ButtonHint(PadButton.A, "Choose"))
