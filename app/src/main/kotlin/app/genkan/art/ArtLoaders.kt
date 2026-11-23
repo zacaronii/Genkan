@@ -44,9 +44,16 @@ class ArtLoaders @Inject constructor(
     /** When each file (by key) was last fetched or checked in the background: not again until its check is due. */
     private val done = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    /** Whether [path] was fetched or checked within the day, so the background can leave it. */
-    fun recentlyDone(path: String, now: Long = System.currentTimeMillis()): Boolean =
-        done[RomMArt.keyOf(path)]?.let { now - it < ArtCacheStrategy.CHECK_EVERY_MS } ?: false
+    /**
+     * Whether [path] was fetched or checked within the day, so the background can leave it without
+     * reading or decoding it: noted in this process, or on disk with its entry written within the day
+     * (a fetch and a 304 both rewrite the entry's metadata), which holds across a restart.
+     */
+    fun recentlyDone(path: String, now: Long = System.currentTimeMillis()): Boolean {
+        val key = RomMArt.keyOf(path)
+        val at = done[key] ?: ArtCache.writtenAt(diskCache, key)?.also { done[key] = it } ?: return false
+        return now - at < ArtCacheStrategy.CHECK_EVERY_MS
+    }
 
     /**
      * Fetches [path] into the disk cache on [background] (checking it on the server once a day),
