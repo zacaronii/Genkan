@@ -97,18 +97,30 @@ class RomMArtFetcher(private val baseUrl: () -> String?, private val network: Fe
 
 /**
  * A RomM file on disk that won't decode (a broken download) is dropped, so the next load asks the
- * server again. Only a decoding failure does it: a network error, offline or during the daily
- * check, leaves the copy alone.
+ * server again. It's decided by what happened, per request: only a failure while the file was being
+ * decoded counts, never a missing fetcher (signed out), a network error, a cancellation or memory
+ * running out.
  */
 private class DropUndecodable(private val diskCache: DiskCache) : coil3.EventListener() {
+    @Volatile private var decoding = false
+
+    override fun decodeStart(request: coil3.request.ImageRequest, decoder: coil3.decode.Decoder, options: Options) {
+        decoding = true
+    }
+
+    override fun decodeEnd(request: coil3.request.ImageRequest, decoder: coil3.decode.Decoder, options: Options, result: coil3.decode.DecodeResult?) {
+        decoding = false
+    }
+
     override fun onError(request: coil3.request.ImageRequest, result: coil3.request.ErrorResult) {
         val art = request.data as? RomMArt ?: return
         val error = result.throwable
-        // The platform's decoder fails with an IOException of its own: that one is the file's fault.
-        val undecodable = error is android.graphics.ImageDecoder.DecodeException ||
-            !(error is java.io.IOException || error is coil3.network.HttpException || error is kotlinx.coroutines.CancellationException)
-        if (!undecodable) return
+        if (!decoding || error is kotlinx.coroutines.CancellationException || error is OutOfMemoryError) return
         diskCache.remove(art.key)
+    }
+
+    class Factory(private val diskCache: DiskCache) : coil3.EventListener.Factory {
+        override fun create(request: coil3.request.ImageRequest): coil3.EventListener = DropUndecodable(diskCache)
     }
 }
 
@@ -157,7 +169,7 @@ object ArtCache {
         val network = OkHttpNetworkFetcherFactory(callFactory = callFactory, cacheStrategy = { strategy })
         return ImageLoader.Builder(context)
             .diskCache { diskCache }
-            .eventListener(DropUndecodable(diskCache))
+            .eventListenerFactory(DropUndecodable.Factory(diskCache))
             .apply { if (!memory) memoryCache(null as MemoryCache?) }
             .components {
                 add(network)

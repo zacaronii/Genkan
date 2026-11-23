@@ -78,11 +78,12 @@ class ArtCacheTest {
     @After fun stop() = server.close()
 
     private var baseUrl: String? = null
+    private var signedOut = false
     private val disk by lazy { DiskCache.Builder().directory(temp.newFolder("art").toOkioPath()).maxSizeBytes(50L shl 20).build() }
     private val strategy = ArtCacheStrategy(now = { clock })
 
     private fun loader(client: OkHttpClient = OkHttpClient(), memory: Boolean = false): ImageLoader =
-        ArtCache.loader(context, disk, { client }, { baseUrl ?: server.url("/").toString() }, strategy, memory)
+        ArtCache.loader(context, disk, { client }, { if (signedOut) null else baseUrl ?: server.url("/").toString() }, strategy, memory)
 
     private fun request(path: String, check: Boolean = false) = ImageRequest.Builder(context).data(RomMArt(path))
         .apply { if (check) extras[ArtCacheStrategy.REVALIDATE] = true }
@@ -180,6 +181,19 @@ class ArtCacheTest {
         assertEquals(2, server.requestCount)
         server.takeRequest()
         assertEquals(null, server.takeRequest().headers["If-None-Match"])
+    }
+
+    @Test
+    fun `signed out, a load fails but the copy on disk stays`() {
+        val loader = loader()
+        assertEquals(10, loader.width(cover))
+        // No account: no URL can be made. The load isn't drawn from disk either (the fetcher is
+        // where a RomM file is found), but the copy is kept for when the account is back.
+        signedOut = true
+        assertTrue(runBlocking { loader.execute(request(cover)) } is coil3.request.ErrorResult)
+        signedOut = false
+        assertEquals(10, loader.width(cover))
+        assertEquals("still on disk: no request", 1, server.requestCount)
     }
 
     @Test

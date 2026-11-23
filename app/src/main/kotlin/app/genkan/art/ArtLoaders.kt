@@ -39,6 +39,9 @@ class ArtLoaders @Inject constructor(
 
     val strategy = ArtCacheStrategy()
 
+    /** Whether there's a server to fetch art from. */
+    fun signedIn(): Boolean = session.currentAccount() != null
+
     /**
      * After a background request for [key] has finished: if its check found the file replaced
      * (now on disk), the screens draw it again. The old bitmap goes from memory first.

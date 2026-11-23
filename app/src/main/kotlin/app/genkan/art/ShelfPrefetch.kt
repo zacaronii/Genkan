@@ -42,7 +42,8 @@ class ShelfPrefetch @Inject constructor(
         job?.cancel()
         job = scope.launch {
             delay(SETTLE_MS)
-            if (metered()) return@launch
+            // Signed out (or the session not loaded yet): there is no server to ask.
+            if (metered() || !loaders.signedIn()) return@launch
             val now = System.currentTimeMillis()
             // On disk and checked lately: nothing to do for it (a sync starts the shelf over).
             val paths = pathsFrom(games, index, fullBox).filter { path ->
