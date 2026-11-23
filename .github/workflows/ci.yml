@@ -46,6 +46,17 @@ jobs:
           key: cores-${{ hashFiles('app/build.gradle.kts') }}
           restore-keys: cores-
 
+      # bsnes-mercury, the Super Famicom core, is built from its submodule (third_party/bsnes-mercury):
+      # once per pinned commit, kept here so later runs only copy it.
+      - name: Note the bsnes-mercury commit
+        run: echo "BSNES_COMMIT=$(git rev-parse HEAD:third_party/bsnes-mercury)" >> "$GITHUB_ENV"
+
+      - name: Cache the built bsnes-mercury
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores/libbsnes_mercury_libretro_android-${{ env.BSNES_COMMIT }}
+          key: bsnes-mercury-${{ env.BSNES_COMMIT }}
+
       # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
       # the proxy and host; LunaHook comes from LunaTranslator's pinned release.
       - name: Cache LunaHook

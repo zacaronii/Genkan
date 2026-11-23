@@ -4,3 +4,6 @@
 [submodule "libretrodroid/src/main/cpp/libretro/libretro-common"]
 	path = libretrodroid/src/main/cpp/libretro/libretro-common
 	url = https://github.com/libretro/libretro-common
+[submodule "third_party/bsnes-mercury"]
+	path = third_party/bsnes-mercury
+	url = https://github.com/libretro/bsnes-mercury

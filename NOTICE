@@ -124,6 +124,18 @@ Pinned commit: fee2e824525daa22bcf318f96127fe43fa8a15ad
   here; their sources are at the links above.
 
 --------------------------------------------------------------------------
+bsnes-mercury (GPL-3.0), the Super Famicom core
+https://github.com/libretro/bsnes-mercury
+Pinned commit: 79d7f9de218b6ffa65a80bbdc5828532bc239232
+License: GPL-3.0 (LICENSE at that commit; sfc/sfc.hpp states GPLv3)
+
+  A submodule at third_party/bsnes-mercury, unmodified. Built for arm64-v8a by
+  the buildBsnes task in app/build.gradle.kts with the NDK's ndk-build
+  (target-libretro/jni, PROFILE=balanced) and bundled as
+  libbsnes_mercury_libretro_android.so. The binary is not committed; the
+  source it is built from is the submodule at that commit.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

@@ -41,6 +41,7 @@ val LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "gb" to "Game Boy",
     "gbc" to "Game Boy Color",
     "gba" to "Game Boy Advance",
+    "snes" to "Super Famicom",
     "nds" to "Nintendo DS",
     "psx" to "PlayStation",
     "psp" to "PlayStation Portable",
@@ -141,7 +142,7 @@ fun ScreenLookContent(
         Text("Screen look and sound", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "How the built-in player draws each console's picture on the top screen. A press opens the looks to pick from. " +
-                "Until you choose, PlayStation and DS are Sharp, the Game Boys LCD and the PSP Default. " +
+                "Until you choose, PlayStation, Super Famicom and DS are Sharp, the Game Boys LCD and the PSP Default. " +
                 "A game can have its own in its details, and the reader's Look chip tries others while playing; " +
                 "Keep then makes the one on screen that game's own.",
             style = MaterialTheme.typography.bodyMedium,

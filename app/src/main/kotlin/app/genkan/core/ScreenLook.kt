@@ -84,6 +84,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          */
         private val DEFAULTS = mapOf(
             "psx" to SHARP,
+            "snes" to SHARP,
             "nds" to SHARP,
             "gb" to LCD,
             "gbc" to LCD,
@@ -105,7 +106,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          * a long way (PlayStation, Game Boys, DS), not the PSP, already drawn at 3x.
          */
         fun suiting(platform: String?): Set<ScreenLook>? = when (platform) {
-            "psx" -> family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
+            "psx", "snes" -> family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
             "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
             "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)
             "psp" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_PSP
