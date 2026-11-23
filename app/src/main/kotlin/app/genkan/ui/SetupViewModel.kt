@@ -45,6 +45,8 @@ enum class SetupAction {
     FULL_BOX,
     PREFETCH_MANUALS,
     FACE_A_ON_RIGHT,
+    /** The bonded Bluetooth headphones, a press to connect one. */
+    HEADPHONES,
     WORDS,
     YOMIKATA,
     SIGN_OUT,

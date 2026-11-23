@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class Screen { LOADING, LOGIN, LIBRARY, SETTINGS, DICTIONARIES, ANKI, READING_LOG, YOMIKATA, WORDS, SCREEN_LOOK }
+enum class Screen { LOADING, LOGIN, LIBRARY, SETTINGS, DICTIONARIES, ANKI, READING_LOG, YOMIKATA, WORDS, SCREEN_LOOK, HEADPHONES }
 
 /** Top-screen navigation: the library when signed in, the login otherwise, settings on Start. */
 @HiltViewModel

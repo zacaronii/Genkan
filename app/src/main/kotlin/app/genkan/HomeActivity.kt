@@ -60,6 +60,7 @@ import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
 import app.genkan.ui.BottomBack
 import app.genkan.ui.ScreenLookScreen
+import app.genkan.ui.HeadphonesScreen
 import app.genkan.ui.ScreenLookViewModel
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -69,7 +70,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK, Screen.HEADPHONES)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -91,6 +92,7 @@ class HomeActivity : ComponentActivity() {
     private val yomikataSettingsViewModel: YomikataSettingsViewModel by viewModels()
     private val wordsSettingsViewModel: WordsSettingsViewModel by viewModels()
     private val screenLookViewModel: ScreenLookViewModel by viewModels()
+    private val headphonesViewModel: app.genkan.ui.HeadphonesViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d(TAG, "ROLE_HOME request returned ${it.resultCode}")
@@ -138,6 +140,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.YOMIKATA -> YomikataSettingsScreen(yomikataSettingsViewModel)
                     Screen.WORDS -> WordsSettingsScreen(wordsSettingsViewModel)
                     Screen.SCREEN_LOOK -> ScreenLookScreen(screenLookViewModel)
+                    Screen.HEADPHONES -> HeadphonesScreen(headphonesViewModel)
                 }
             }
         }
@@ -267,7 +270,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK, Screen.HEADPHONES -> when (pad) {
                 // B closes the keyboard first, or the screen look list, and only then the page.
                 PadKey.B -> if (!hideKeyboard() && !(screen == Screen.SCREEN_LOOK && screenLookViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -308,6 +311,7 @@ class HomeActivity : ComponentActivity() {
             SetupAction.YOMIKATA -> appViewModel.openPage(Screen.YOMIKATA)
             SetupAction.WORDS -> appViewModel.openPage(Screen.WORDS)
             SetupAction.SCREEN_LOOK -> appViewModel.openPage(Screen.SCREEN_LOOK)
+            SetupAction.HEADPHONES -> appViewModel.openPage(Screen.HEADPHONES)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

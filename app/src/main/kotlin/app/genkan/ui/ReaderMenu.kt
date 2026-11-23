@@ -35,7 +35,7 @@ import app.genkan.manual.ManualFetch
 import app.genkan.ppsspp.HookFinderState
 
 /** What a row of the reader's menu does. */
-enum class ReaderAction { GAME, MANUAL, OCR_AREA, OCR_ENGINE, AUDIO, FIND_HOOK, STOP_HOOK, HOOK_DONE, OVERLAY, LOOK, KEEP_LOOK, THREAD }
+enum class ReaderAction { GAME, MANUAL, OCR_AREA, OCR_ENGINE, AUDIO, FIND_HOOK, STOP_HOOK, HOOK_DONE, OVERLAY, LOOK, KEEP_LOOK, THREAD, HEADPHONES }
 
 /**
  * A row of the reader's menu: [state] shows on its right (on or off, the look or engine in use);
@@ -73,6 +73,8 @@ data class ReaderBarState(
     val look: Pair<String, Boolean>? = null,
     val hasThreads: Boolean = false,
     val thread: String? = null,
+    /** The headphones list can open here. */
+    val headphones: Boolean = false,
 )
 
 object ReaderMenu {
@@ -111,6 +113,7 @@ object ReaderMenu {
             if (!kept) add(ReaderMenuItem(ReaderAction.KEEP_LOOK, "Keep $label for this game", attention = true))
         }
         if (s.hasThreads || s.thread != null) add(ReaderMenuItem(ReaderAction.THREAD, "Thread", state = s.thread ?: "choose", opens = true))
+        if (s.headphones) add(ReaderMenuItem(ReaderAction.HEADPHONES, "Bluetooth headphones", opens = true))
     }
 }
 

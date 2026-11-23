@@ -12,4 +12,10 @@ interface IFileService {
     boolean copy(String from, String to) = 2;
 
     boolean deleteRecursively(String path) = 3;
+
+    /**
+     * Connects the bonded Bluetooth device at address (all its audio profiles), as tapping it in
+     * Settings does; the shell user may. Bluetooth's status code: 0 asked, else why not; -1 failed here.
+     */
+    int connectBluetooth(String address) = 4;
 }
