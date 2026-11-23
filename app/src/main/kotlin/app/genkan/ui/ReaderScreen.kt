@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.genkan.manual.ManualFetch
@@ -107,6 +108,43 @@ fun ReaderScreen(
     val manualNotice by viewModel.manual.notice.collectAsStateWithLifecycle()
     val manualFetch by viewModel.manual.fetch.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
+    val menuItems = ReaderMenu.items(
+        ReaderBarState(
+            canShowGame = onShowGame != null,
+            manual = manualGame != null && manualOpen == null,
+            manualFetch = manualFetch,
+            ocrOn = ocrOn,
+            capturing = capturing,
+            engine = engine.name,
+            recording = recording,
+            finder = finder,
+            canFindHook = ppsspp is PpssppStatus.NoProfile,
+            overlayAvailable = overlayAvailable,
+            overlayOn = overlayOn,
+            look = look?.let { (now, kept) -> now.label to kept },
+            hasThreads = threads.isNotEmpty(),
+            thread = chosen?.thread,
+        ),
+    )
+    var menuOpen by remember { mutableStateOf(false) }
+    if (menuItems.isEmpty()) menuOpen = false
+    val pick: (ReaderMenuItem) -> Unit = { item ->
+        if (item.closes) menuOpen = false
+        when (item.action) {
+            ReaderAction.GAME -> onShowGame?.invoke()
+            ReaderAction.MANUAL -> viewModel.manual.show()
+            ReaderAction.OCR_AREA -> viewModel.editArea()
+            ReaderAction.OCR_ENGINE -> viewModel.ocr.nextEngine()
+            ReaderAction.AUDIO -> onAskAudioPermission()
+            ReaderAction.FIND_HOOK -> viewModel.hookFinder.start()
+            ReaderAction.STOP_HOOK -> viewModel.hookFinder.stop()
+            ReaderAction.HOOK_DONE -> viewModel.hookFinder.dismiss()
+            ReaderAction.OVERLAY -> viewModel.overlay.toggle()
+            ReaderAction.LOOK -> viewModel.openLookPicker()
+            ReaderAction.KEEP_LOOK -> viewModel.keepLook()
+            ReaderAction.THREAD -> viewModel.openPicker()
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
         Row(
@@ -154,38 +192,18 @@ fun ReaderScreen(
                     color = colors.onSurfaceVariant,
                 )
             }
-            // The chips take what they need, up to most of the bar, and scroll sideways past that;
-            // the game's title gets the rest.
+            // OCR and Snapshot stay on the bar, one press away; the rest is in the menu, each
+            // row with its state. The chips take what they need, up to most of the bar.
             Row(
                 Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp * 0.6f).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                onShowGame?.let { Chip("Game", it) }
-                // The playing game's manual, over the reader until Back to reader.
-                // A fetch shows on the chip (a ring, then why it failed), here on the bottom screen, never over the game.
-                if (manualGame != null && manualOpen == null) ManualChip(manualFetch) { viewModel.manual.show() }
                 Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
-                if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
-                if (ocrOn) Chip(engine.name) { viewModel.ocr.nextEngine() }
-                // Sentence audio rides on the capture; it needs the recording permission once.
-                if (capturing && !recording) Chip("Audio") { onAskAudioPermission() }
-                // The hook finder, for a PSP game without a hook; it needs OCR to compare lines with.
-                when (finder) {
-                    is HookFinderState.Working -> Chip("Stop") { viewModel.hookFinder.stop() }
-                    is HookFinderState.Found, is HookFinderState.Failed -> Chip("OK") { viewModel.hookFinder.dismiss() }
-                    HookFinderState.Idle -> if (ppsspp is PpssppStatus.NoProfile) Chip("Find hook") { viewModel.hookFinder.start() }
-                }
-                // Boxes over the game's text, to tap there (the built-in player's games).
-                if (overlayAvailable) Chip(if (overlayOn) "Overlay on" else "Overlay") { viewModel.overlay.toggle() }
-                // The looks to try while playing; Keep makes the one on screen the game's own.
-                look?.let { (now, kept) ->
-                    Chip("Look: ${now.label}") { viewModel.openLookPicker() }
-                    if (!kept) Chip("Keep ${now.label}") { viewModel.keepLook() }
-                }
                 // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
                 if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
-                if (threads.isNotEmpty() || chosen != null) {
-                    Chip("Thread: ${chosen?.thread ?: "choose"}") { viewModel.openPicker() }
+                if (menuItems.isNotEmpty()) {
+                    ReaderMenuButton(menuOpen, attention = menuItems.any { it.attention }) { menuOpen = !menuOpen }
                 }
             }
         }
@@ -225,6 +243,17 @@ fun ReaderScreen(
                     onClose = viewModel::closeLookup,
                     modifier = Modifier.align(Alignment.BottomCenter).height(panelHeight),
                 ) { DictionaryPopup(popup, viewModel.dictionaries, viewModel, Modifier.fillMaxSize()) }
+            }
+            if (menuOpen) {
+                BottomBackHandler { menuOpen = false }
+                // A tap outside the menu closes it, and goes no further.
+                Box(
+                    Modifier.fillMaxSize().clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { menuOpen = false },
+                )
+                ReaderMenuPanel(menuItems, onPick = pick, modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp))
             }
         }
     }
