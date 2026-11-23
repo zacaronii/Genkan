@@ -40,4 +40,23 @@ class LowLatencyRowsTest {
         compose.onNodeWithText("PlayStation: off").performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(listOf("psx"), pressed)
     }
+
+    @Test
+    fun `the face-button rows say the layout and each console's swap, and a press switches them`() {
+        var layout = 0
+        val swapped = mutableListOf<String>()
+        compose.setContent {
+            GenkanTheme {
+                ScreenLookContent(
+                    emptyMap(), aOnRight = false, onToggleAOnRight = { layout++ },
+                    faceSwapped = setOf("snes"), onToggleFaceSwap = { swapped += it },
+                )
+            }
+        }
+        compose.onNodeWithText("Face buttons: A at the bottom (Xbox layout)").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, layout)
+        compose.onNodeWithText("Game Boy: as the device").assertExists()
+        compose.onNodeWithText("Super Famicom: swapped").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf("snes"), swapped)
+    }
 }

@@ -44,6 +44,7 @@ enum class SetupAction {
     /** The shelf's focused game as a full box, or its case. */
     FULL_BOX,
     PREFETCH_MANUALS,
+    FACE_A_ON_RIGHT,
     WORDS,
     YOMIKATA,
     SIGN_OUT,
@@ -84,6 +85,7 @@ class SetupViewModel @Inject constructor(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
+        playerSettings.aOnRight,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -99,6 +101,7 @@ class SetupViewModel @Inject constructor(
             insertAnimation = v[10] as Boolean,
             fullBox = v[11] as Boolean,
             prefetchManuals = v[12] as Boolean,
+            faceAOnRight = v[13] as Boolean,
         )
     }.stateIn(
         viewModelScope,

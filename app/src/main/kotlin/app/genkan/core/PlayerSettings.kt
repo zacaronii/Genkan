@@ -53,7 +53,29 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         }
     }
 
+    /** The device's A is its right button (Nintendo layout); no: the bottom one (Xbox layout, as before). */
+    val aOnRight: Flow<Boolean> = context.playerStore.data.map { it[A_ON_RIGHT] == true }
+
+    suspend fun setAOnRight(on: Boolean) {
+        context.playerStore.edit { it[A_ON_RIGHT] = on }
+    }
+
+    /** The consoles (platform slugs) whose A/B and X/Y are swapped from the device's layout. */
+    val faceSwapped: Flow<Set<String>> = context.playerStore.data.map { it[FACE_SWAPPED].orEmpty() }
+
+    suspend fun toggleFaceSwap(platform: String) {
+        context.playerStore.edit { prefs ->
+            val on = prefs[FACE_SWAPPED].orEmpty()
+            prefs[FACE_SWAPPED] = if (platform in on) on - platform else on + platform
+        }
+    }
+
+    /** Whether [platform]'s game is played with A on the right ([FaceButtons.aOnRight]). */
+    suspend fun aOnRight(platform: String): Boolean = FaceButtons.aOnRight(aOnRight.first(), platform in faceSwapped.first())
+
     private companion object {
+        val A_ON_RIGHT = booleanPreferencesKey("a_on_right")
+        val FACE_SWAPPED = stringSetPreferencesKey("face_swapped")
         val LOW_LATENCY_OFF = stringSetPreferencesKey("low_latency_off")
         val ENABLED = booleanPreferencesKey("enabled")
         val SAMPLES = booleanPreferencesKey("yomikata_samples")

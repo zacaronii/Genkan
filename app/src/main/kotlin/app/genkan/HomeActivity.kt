@@ -318,6 +318,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.AZAHAR_RPC -> lifecycleScope.launch {
                 viewModel.azaharText.setEnabled(!viewModel.azaharText.enabled.first())
             }
+            SetupAction.FACE_A_ON_RIGHT -> lifecycleScope.launch {
+                viewModel.playerSettings.setAOnRight(!viewModel.playerSettings.aOnRight.first())
+            }
             SetupAction.BUILT_IN_PLAYER -> lifecycleScope.launch {
                 viewModel.playerSettings.setEnabled(!viewModel.playerSettings.isEnabled())
             }

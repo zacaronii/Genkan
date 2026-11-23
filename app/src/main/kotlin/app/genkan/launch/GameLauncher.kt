@@ -145,6 +145,7 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_PLATFORM, game.platformSlug)
             .putExtra(CoreActivity.EXTRA_LOOK, screenLooks.forLaunch(game.id, game.platformSlug).name)
             .putExtra(CoreActivity.EXTRA_LOW_LATENCY, playerSettings.lowLatency(game.platformSlug))
+            .putExtra(CoreActivity.EXTRA_A_ON_RIGHT, playerSettings.aOnRight(game.platformSlug))
         return LaunchPlan.Ready(builtIn = true) {
             Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
             try {
