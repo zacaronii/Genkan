@@ -87,4 +87,20 @@ class ManualTextTest {
         engine.fail = false
         assertEquals(1, text.hit("manual.pdf", Pages(), 0, 175f / 600, 220f / 800, 600)!!.offset)
     }
+
+    @Test
+    fun `a manual replaced under the same name is read again, not taken for the old one`() = runTest {
+        val engine = FakeEngine()
+        val text = ManualText(engine)
+        val pages = Pages()
+        val manual = java.io.File.createTempFile("manual", ".pdf").apply { writeText("%PDF English"); setLastModified(1_000_000_000L) }
+        text.hit(manual.path, pages, 0, 0.3f, 0.27f, 600)
+        assertEquals(1, engine.reads)
+        // A newer manual from the server takes its place, by the same name.
+        manual.writeText("%PDF Japanese!"); manual.setLastModified(2_000_000_000L)
+        assertTrue(!text.isRead(manual.path, 0))
+        text.hit(manual.path, pages, 0, 0.3f, 0.27f, 600)
+        assertEquals(2, engine.reads)
+        manual.delete()
+    }
 }

@@ -176,12 +176,15 @@ class GameDetailsFormatTest {
     }
 
     @Test
-    fun `a cached manual's name changes with the manual`() {
-        val first = game().copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf")
+    fun `a cached manual's name stays with a new ts, and changes with the manual's path or the game's file`() {
+        val first = game().copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf?ts=2026-11-20")
         val name = Manuals.fileName(first)
         assertTrue(name, name.startsWith("1-") && name.endsWith(".pdf"))
         assertEquals(name, Manuals.fileName(first.copy(name = "Renamed")))
-        assertNotEquals(name, Manuals.fileName(first.copy(manualPath = first.manualPath + "?ts=2026-11-21")))
+        // The rom's update time moves for any change to the game: a manual replaced at the same path
+        // is found by the daily check, not by its name.
+        assertEquals(name, Manuals.fileName(first.copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1.pdf?ts=2026-11-21")))
+        assertNotEquals(name, Manuals.fileName(first.copy(manualPath = "/assets/romm/resources/roms/7/1/manual/1-ja.pdf")))
         assertNotEquals(name, Manuals.fileName(first.copy(fsSizeBytes = 42)))
     }
 
