@@ -136,7 +136,12 @@ class BuiltInText @Inject constructor(
                 // Genkan can't hash the executable: the release id's only listed version stands in.
                 // A version may have several layouts (one per chapter's program); the watch reads
                 // whichever's `when` is true.
-                val layouts = Layouts.layoutsFor(entry, id, cartridge?.headerCrc32?.takeIf { cartridge.id == id }).ifEmpty { return }
+                val crc = cartridge?.headerCrc32?.takeIf { cartridge.id == id }
+                if (crc != null) {
+                    val version = Layouts.versionFor(entry, id, crc)
+                    Log.i(TAG, "${game.title} ($id): header CRC $crc, ${if (version != null) "its version" else "no version listed: the general layouts"}")
+                }
+                val layouts = Layouts.layoutsFor(entry, id, crc).ifEmpty { return }
                 val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
                 setLayoutActive(watching)
                 if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")

@@ -70,6 +70,7 @@ data class SetupState(
     val insertAnimation: Boolean = true,
     val fullBox: Boolean = true,
     val prefetchManuals: Boolean = true,
+    val faceAOnRight: Boolean = false,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -78,6 +79,7 @@ data class SetupState(
         SwitchKey.INSERT_ANIMATION -> insertAnimation
         SwitchKey.FULL_BOX -> fullBox
         SwitchKey.PREFETCH_MANUALS -> prefetchManuals
+        SwitchKey.FACE_A_ON_RIGHT -> faceAOnRight
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
     }
@@ -291,7 +293,7 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
             "Play time is approximate: sleep and other apps are counted too."
         }
         SetupAction.YOMIKATA -> "Memory samples and the inbox they go to."
-        SetupAction.SCREEN_LOOK -> "How the built-in player draws each console (smoothed, sharp, scanlines or an LCD grid), and whether it asks for low-latency sound."
+        SetupAction.SCREEN_LOOK -> "How the built-in player draws each console (smoothed, sharp, scanlines or an LCD grid), its low-latency sound, and per-console button swaps."
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
             if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"
         }
@@ -324,6 +326,13 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         "After each sync, installed games' manuals are fetched in the background, so they open offline."
     } else {
         "Manuals are fetched when you open them."
+    }
+    SwitchKey.FACE_A_ON_RIGHT -> if (state.faceAOnRight) {
+        "Your device's A is its right button (Nintendo layout). The built-in player gives each game the buttons where its " +
+            "console's pad had them: the right one is A on Nintendo consoles and circle on PlayStation."
+    } else {
+        "The built-in player assumes your device's A is its bottom button (Xbox layout). The launcher follows your device's " +
+            "own button labels; if its A is on the right, switch this on so games get A (circle on PlayStation) on the right too."
     }
     SwitchKey.FULL_BOX -> if (state.fullBox) {
         "The focused game is drawn as its box, front and spine, where its scans have both."

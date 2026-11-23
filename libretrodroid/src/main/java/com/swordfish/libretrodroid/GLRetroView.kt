@@ -60,6 +60,9 @@ class GLRetroView(
         LibretroDroid.setFrameSpeed(value)
     }
 
+    /** Genkan: an Android key code to the one sent to the core; by default the A/B and X/Y swap. */
+    var keyMap: (Int) -> Int = GamepadsManager::getGamepadKeyEvent
+
     var shader: ShaderConfig by Delegates.observable(data.shader) { _, _, value ->
         LibretroDroid.setShaderConfig(buildShader(value))
     }
@@ -257,7 +260,7 @@ class GLRetroView(
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val mappedKey = GamepadsManager.getGamepadKeyEvent(keyCode)
+        val mappedKey = keyMap(keyCode)
         val port = (event?.device?.controllerNumber ?: 0) - 1
 
         if (event != null && port >= 0 && keyCode in GamepadsManager.GAMEPAD_KEYS) {
@@ -268,7 +271,7 @@ class GLRetroView(
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        val mappedKey = GamepadsManager.getGamepadKeyEvent(keyCode)
+        val mappedKey = keyMap(keyCode)
         val port = (event?.device?.controllerNumber ?: 0) - 1
 
         if (event != null && port >= 0 && keyCode in GamepadsManager.GAMEPAD_KEYS) {

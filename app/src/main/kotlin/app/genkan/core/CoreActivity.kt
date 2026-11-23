@@ -171,6 +171,9 @@ class CoreActivity : ComponentActivity() {
             // Touch mode (the bottom screen was tapped last) must not leave it without focus.
             isFocusableInTouchMode = true
             setOnKeyListener { _, _, event -> onPadKey(event) }
+            // Settings > Playing: which of the device's face buttons is the core's A.
+            val aOnRight = intent.getBooleanExtra(EXTRA_A_ON_RIGHT, false)
+            keyMap = { FaceButtons.map(it, aOnRight) }
             // The upper screen of a DS takes no touches: the lower one does, on the bottom display.
             if (def.splitScreens) setOnTouchListener(ignoreTouches)
         }
@@ -653,6 +656,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_LOOK = "look"
         /** Whether to ask for a low-latency sound stream (the console's setting); yes when absent. */
         const val EXTRA_LOW_LATENCY = "low_latency"
+        /** Whether the device's A is its right button; no (the bottom one) when absent. */
+        const val EXTRA_A_ON_RIGHT = "a_on_right"
         private const val MAX_READ = 64 * 1024
         private const val FRAME_WAIT_MS = 500L
         /** How long Back waits for the launcher to say whether it closed something on the bottom screen. */

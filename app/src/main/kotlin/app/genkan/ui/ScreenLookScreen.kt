@@ -61,6 +61,20 @@ class ScreenLookViewModel @Inject constructor(
         viewModelScope.launch { player.setLowLatency(platform, platform in lowLatencyOff.value) }
     }
 
+    /** The device's A is its right button. */
+    val aOnRight: StateFlow<Boolean> = player.aOnRight.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun toggleAOnRight() {
+        viewModelScope.launch { player.setAOnRight(!aOnRight.value) }
+    }
+
+    /** The consoles whose A/B and X/Y are swapped. */
+    val faceSwapped: StateFlow<Set<String>> = player.faceSwapped.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun toggleFaceSwap(platform: String) {
+        viewModelScope.launch { player.toggleFaceSwap(platform) }
+    }
+
 
     /** The looks chosen for consoles; a console that isn't in it has its default. */
     val consoles: StateFlow<Map<String, ScreenLook>> =
@@ -88,11 +102,15 @@ fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
     val consoles by viewModel.consoles.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
     val lowLatencyOff by viewModel.lowLatencyOff.collectAsStateWithLifecycle()
+    val aOnRight by viewModel.aOnRight.collectAsStateWithLifecycle()
+    val faceSwapped by viewModel.faceSwapped.collectAsStateWithLifecycle()
     // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
     DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
     ScreenLookContent(
         consoles, picking, onOpen = viewModel::open, onPick = viewModel::pick, onClose = { viewModel.closePicker() },
         lowLatencyOff = lowLatencyOff, onToggleLowLatency = viewModel::toggleLowLatency,
+        aOnRight = aOnRight, onToggleAOnRight = viewModel::toggleAOnRight,
+        faceSwapped = faceSwapped, onToggleFaceSwap = viewModel::toggleFaceSwap,
     )
 }
 
@@ -110,6 +128,12 @@ fun ScreenLookContent(
     /** The consoles whose sound is played without asking for low latency, and a press on one's row. */
     lowLatencyOff: Set<String> = emptySet(),
     onToggleLowLatency: (String) -> Unit = {},
+    /** The device's A is its right button, and a press on that row. */
+    aOnRight: Boolean = false,
+    onToggleAOnRight: () -> Unit = {},
+    /** The consoles whose A/B and X/Y are swapped, and a press on one's row. */
+    faceSwapped: Set<String> = emptySet(),
+    onToggleFaceSwap: (String) -> Unit = {},
 ) {
     // The console whose list was opened last: the pad comes back to its row.
     var returnTo by remember { mutableStateOf<String?>(null) }
@@ -172,6 +196,33 @@ fun ScreenLookContent(
                     "$name: ${if (platform in lowLatencyOff) "off" else "on"}",
                     focused = null,
                     onClick = { onToggleLowLatency(platform) },
+                )
+            }
+        }
+        Text("Face buttons", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
+        Text(
+            "The launcher follows your device's own button labels; the built-in player goes by position, giving each game " +
+                "the buttons where its console's pad had them: the right one is A on Nintendo consoles and circle on " +
+                "PlayStation, the bottom one B and cross. It assumes your device's A is at the bottom unless you switch it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        ActionRow(
+            if (aOnRight) "Face buttons: A on the right (Nintendo layout)" else "Face buttons: A at the bottom (Xbox layout)",
+            focused = null,
+            onClick = onToggleAOnRight,
+        )
+        Text(
+            "Swap A/B and X/Y for one console only, on top of the layout above. Select + Start and the stick clicks are not changed.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LOOK_CONSOLES.forEach { (platform, name) ->
+                ActionRow(
+                    "$name: ${if (platform in faceSwapped) "swapped" else "as the device"}",
+                    focused = null,
+                    onClick = { onToggleFaceSwap(platform) },
                 )
             }
         }
