@@ -80,4 +80,15 @@ class ManualPrefetchTest {
         assertEquals(1, fetched)
         assertEquals(1, trims)
     }
+
+    @Test
+    fun `games gone from the library are removed only after a sync, and never for an empty library`() {
+        val removed = mutableListOf<Set<Long>>()
+        ManualPrefetch.housekeep(afterSync = false, libraryIds = setOf(1L), removeGone = { removed += it })
+        assertTrue("a pass a download started", removed.isEmpty())
+        ManualPrefetch.housekeep(afterSync = true, libraryIds = emptySet(), removeGone = { removed += it })
+        assertTrue("an empty library", removed.isEmpty())
+        ManualPrefetch.housekeep(afterSync = true, libraryIds = setOf(1L), removeGone = { removed += it })
+        assertEquals(listOf(setOf(1L)), removed)
+    }
 }

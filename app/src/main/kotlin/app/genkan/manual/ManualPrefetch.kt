@@ -61,21 +61,21 @@ class ManualPrefetch @Inject constructor(
         // A manual opened by hand is always fetched; the folder is brought back under its cap after.
         manuals.onStored = { scope.launch { manuals.trim(installedIds(), CAP_BYTES) } }
         scope.launch {
-            val synced = sync.status.filterIsInstance<SyncStatus.Done>().map { }
+            val synced = sync.status.filterIsInstance<SyncStatus.Done>().map { true }
             // A game whose download finishes gets its manual then.
             val installed = downloads.downloads.map { all -> all.values.count { it.state == DownloadState.INSTALLED } }
-                .distinctUntilChanged().drop(1).filter { it > 0 }.map { }
-            merge(synced, installed).collect { scope.launch { pass() } }
+                .distinctUntilChanged().drop(1).filter { it > 0 }.map { false }
+            merge(synced, installed).collect { afterSync -> scope.launch { pass(afterSync) } }
         }
     }
 
     /** The installed games' ids: a download INSTALLED with its file on the device. */
     private fun installedIds(): Set<Long> = installed(downloads.downloads.value.values).toSet()
 
-    private suspend fun pass() = running.withLock {
+    /** A pass; [afterSync] when a finished sync started it, the only time games gone from the library are known. */
+    private suspend fun pass(afterSync: Boolean) = running.withLock {
         if (!settings.prefetchManuals.first() || session.currentAccount() == null) return@withLock
-        // Games gone from the library (the sync just dropped them): their manuals go too.
-        manuals.removeGone(dao.allGames().map { it.id }.toSet())
+        housekeep(afterSync, dao.allGames().map { it.id }.toSet(), manuals::removeGone)
         val games = installedIds().mapNotNull { dao.game(it) }
         val started = System.currentTimeMillis()
         val fetched = prefetchAll(
@@ -99,6 +99,15 @@ class ManualPrefetch @Inject constructor(
         const val CAP_BYTES = 300L shl 20
         /** The largest manual fetched ahead; a larger one is still fetched when opened. */
         const val MAX_BYTES = 64L shl 20
+
+        /**
+         * Removes the manuals of games gone from the library ([libraryIds]), but only in a pass a
+         * finished sync started, and never for an empty list (a sync that brought nothing, a database
+         * rebuilt, a new sign-in before its first sync): that would remove every manual.
+         */
+        fun housekeep(afterSync: Boolean, libraryIds: Set<Long>, removeGone: (Set<Long>) -> Unit) {
+            if (afterSync && libraryIds.isNotEmpty()) removeGone(libraryIds)
+        }
 
         /** The ids of [all]'s downloads that are installed with their file on the device. */
         fun installed(all: Collection<DownloadEntity>): List<Long> =

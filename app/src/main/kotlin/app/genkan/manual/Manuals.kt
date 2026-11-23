@@ -66,7 +66,12 @@ class Manuals @Inject constructor(
         .addInterceptor(RomMImageAuthInterceptor(session::credentials))
         .build()
 
-    private val folder: File get() = File(context.noBackupFilesDir, FOLDER)
+    /** The folder, once the manuals cached before are moved into it: the first use waits for the move (a handful of renames). */
+    private val folder: File get() = moved
+
+    private val moved: File by lazy {
+        File(context.noBackupFilesDir, FOLDER).also { moveFromCache(it) }
+    }
 
     /** Where manuals were kept before: the cache folder, which Android may empty. Moved once. */
     private val oldFolder: File get() = File(context.cacheDir, FOLDER)
@@ -100,7 +105,6 @@ class Manuals @Inject constructor(
 
     init {
         scope.launch {
-            moveFromCache()
             // Signing out empties the folder, like the art: another account's manuals aren't kept.
             session.signedOut.collect { clear() }
         }
@@ -109,11 +113,16 @@ class Manuals @Inject constructor(
     override fun has(game: GameEntity): Boolean = game.manualPath != null && session.currentAccount() != null
 
     override fun use(owner: String, file: File?) {
-        if (file == null) inUse.remove(owner) else {
-            inUse[owner] = file
-            markOpened(file)
+        val before = if (file == null) inUse.remove(owner) else inUse.put(owner, file)
+        if (file != null && file != before) markOpened(file)
+        // Let go of: a check skipped while it was open runs now (a game that isn't installed gets no other).
+        if (before != null && before != file && !inUse(before)) {
+            skipped.remove(before)?.let { game -> scope.launch { refresh(game) } }
         }
     }
+
+    /** Manuals whose check was skipped because they were open, by file: checked when they're let go of. */
+    private val skipped = java.util.concurrent.ConcurrentHashMap<File, GameEntity>()
 
     override fun takeReplacedNote(game: GameEntity): Boolean = replacedNotes.remove(game.id)
 
@@ -198,8 +207,12 @@ class Manuals @Inject constructor(
         val file = File(folder, fileName(game)).takeIf { it.isFile && it.length() > 0L } ?: return Refresh.NOT_DUE
         val meta = readMeta(file)
         if (meta != null && now() - meta.checkedAt < CHECK_EVERY_MS) return Refresh.NOT_DUE
-        // Open in the details or the reader: never replaced under it; still due, asked about next time.
-        if (inUse(file)) return Refresh.NOT_DUE
+        // Open in the details or the reader: never replaced under it; checked when it's let go of.
+        if (inUse(file)) {
+            skipped[file] = game
+            if (!inUse(file)) skipped.remove(file)?.let { scope.launch { refresh(it) } }
+            return Refresh.NOT_DUE
+        }
         val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) } ?: return Refresh.NOT_DUE
         return try {
             if (meta?.etag == null && meta?.lastModified == null) {
@@ -283,18 +296,28 @@ class Manuals @Inject constructor(
     }
 
     /** Keeps [validator] and the check's time beside [file], and when it was last opened ([openedAt], else as it was). */
-    private fun writeMeta(file: File, validator: Validator, openedAt: Long? = null) {
+    private fun writeMeta(file: File, validator: Validator, openedAt: Long? = null) = synchronized(metaLock) {
         val opened = openedAt ?: readMeta(file)?.openedAt ?: 0L
         val checked = readMeta(file)?.takeIf { openedAt != null }?.checkedAt ?: now()
-        metaFile(file).writeText("${validator.etag.orEmpty()}\n${validator.lastModified.orEmpty()}\n$checked\n$opened\n")
+        putMeta(file, "${validator.etag.orEmpty()}\n${validator.lastModified.orEmpty()}\n$checked\n$opened\n")
+    }
+
+    /** The meta files are read and written whole, one writer at a time: the check and an open never lose each other's line. */
+    private val metaLock = Any()
+
+    /** Writes [text] as [file]'s meta through a temporary file, renamed over it. */
+    private fun putMeta(file: File, text: String) {
+        val temp = File(metaFile(file).path + ".tmp")
+        temp.writeText(text)
+        if (!temp.renameTo(metaFile(file))) temp.delete()
     }
 
     /** Notes [file] was opened now, for the trim (least recently opened goes first). */
-    private fun markOpened(file: File) {
-        if (!file.isFile) return
+    private fun markOpened(file: File) = synchronized(metaLock) {
+        if (!file.isFile) return@synchronized
         val meta = readMeta(file)
         // A file with no meta yet gets none of a check: it stays due, as before.
-        if (meta == null) metaFile(file).writeText("\n\n0\n${now()}\n") else writeMeta(file, meta.validator, openedAt = now())
+        if (meta == null) putMeta(file, "\n\n0\n${now()}\n") else writeMeta(file, meta.validator, openedAt = now())
     }
 
     /** The manuals in the folder by game, with when each was last opened. */
@@ -308,6 +331,8 @@ class Manuals @Inject constructor(
 
     /** Removes the manuals of games no longer in the library ([libraryIds]), never one in use. */
     fun removeGone(libraryIds: Set<Long>) {
+        // An empty list says nothing about the library (a sync that brought nothing, a database rebuilt).
+        if (libraryIds.isEmpty()) return
         stored().filter { (id, file) -> id !in libraryIds && !inUse(file) }.forEach { (_, file) -> remove(file) }
     }
 
@@ -340,11 +365,11 @@ class Manuals @Inject constructor(
      * Moves the manuals (and what's kept beside them) from the cache folder, once, by their exact
      * names; a move cut off halfway finishes on the next start. A file already in the new folder wins.
      */
-    internal fun moveFromCache() {
+    internal fun moveFromCache(to: File = folder) {
         val old = oldFolder.takeIf { it.isDirectory } ?: return
-        folder.mkdirs()
+        to.mkdirs()
         old.listFiles()?.forEach { f ->
-            val target = File(folder, f.name)
+            val target = File(to, f.name)
             if (target.exists() || f.name.endsWith(".part")) f.delete() else if (!f.renameTo(target)) {
                 f.copyTo(target)
                 f.delete()

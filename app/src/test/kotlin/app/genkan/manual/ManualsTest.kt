@@ -334,7 +334,7 @@ class ManualsTest {
     }
 
     @Test
-    fun `a manual in use is never replaced, and the check stays due`() = runBlocking {
+    fun `a manual in use is never replaced, and nothing is asked while it's open`() = runBlocking {
         var clock = 1_000_000_000_000L
         manuals.now = { clock }
         server.enqueue(pdf("English", "en"))
@@ -343,10 +343,7 @@ class ManualsTest {
         clock += Manuals.CHECK_EVERY_MS + 1
         assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
         assertEquals("nothing asked", 1, server.requestCount)
-        manuals.use("reader", null)
-        server.enqueue(pdf("Japanese", "ja"))
-        assertEquals(Manuals.Refresh.REPLACED, manuals.refresh(game("1")))
-        assertEquals("Japanese", file.content())
+        assertEquals("English", file.content())
     }
 
     @Test
@@ -390,5 +387,37 @@ class ManualsTest {
         server.enqueue(pdf("manual", "m1"))
         assertTrue(manuals.prefetch(game("1"), maxBytes = 64L shl 20))
         assertTrue("cached now: nothing to do", !manuals.prefetch(game("1"), maxBytes = 64L shl 20))
+    }
+
+    @Test
+    fun `an empty library removes nothing`() {
+        val kept = stored(gameNumbered(1), 10, 0)
+        manuals.removeGone(emptySet())
+        assertTrue(kept.exists())
+    }
+
+    @Test
+    fun `a check skipped while a manual is open runs when it's closed, and the next open says it's newer`() = runBlocking {
+        var clock = 1_000_000_000_000L
+        manuals.now = { clock }
+        server.enqueue(pdf("English", "en"))
+        val file = manuals.file(game("1"))
+        manuals.use("details", file)
+        clock += Manuals.CHECK_EVERY_MS + 1
+        assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
+        server.enqueue(pdf("Japanese", "ja"))
+        // Closed: the skipped check runs, in the background.
+        manuals.use("details", null)
+        kotlinx.coroutines.withTimeout(10_000) { while (file.content() != "Japanese") kotlinx.coroutines.delay(20) }
+        assertTrue(manuals.takeReplacedNote(game("1")))
+    }
+
+    @Test
+    fun `a manual still in the old folder is found by the very first lookup, with no request`() {
+        val fresh = Manuals(context, session, okhttp3.OkHttpClient())
+        File(oldFolder, Manuals.fileName(game("1"))).apply { parentFile?.mkdirs(); writeText("%PDF manual") }
+        val found = fresh.cached(game("1"))
+        assertEquals("manual", found?.content())
+        assertEquals(0, server.requestCount)
     }
 }
