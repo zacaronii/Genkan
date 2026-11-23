@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.util.zip.CRC32
 
 /** Made-up cartridges: a header written where a LoROM or HiROM game keeps it. */
@@ -67,8 +68,32 @@ class SnesCartridgeTest {
 
     @Test
     fun `a header with a bad checksum is still found by its map mode`() {
-        val h = header("ZQXJ", 0x21, badChecksum = true)
-        assertEquals("SHVC-ZQXJ", SnesCartridge.of(rom(h, hi = true), 0x20000)!!.id)
+        // Against an empty HiROM place, whose map byte 0 fits LoROM: a tie, which LoROM takes.
+        val h = header("ZQXJ", 0x20, badChecksum = true)
+        assertEquals("SHVC-ZQXJ", SnesCartridge.of(rom(h, hi = false), 0x20000)!!.id)
+    }
+
+    @Test
+    fun `a code that isn't letters and digits is no code`() {
+        val h = header("A-Q ", 0x20)
+        assertEquals("SFC-%08X".format(crc(h)), SnesCartridge.of(rom(h, hi = false), 0x20000)!!.id)
+    }
+
+    /** Yomikata's identify vectors (test resources/identify-vectors): each made-up image and the id every client computes. */
+    @Test
+    fun `the catalog's vectors give the catalog's ids`() {
+        val vectors = org.json.JSONArray(File(javaClass.classLoader!!.getResource("identify-vectors/sfc.json")!!.toURI()).readText())
+        assertEquals(5, vectors.length())
+        for (i in 0 until vectors.length()) {
+            val v = vectors.getJSONObject(i)
+            val skip = if (v.getBoolean("copier_header")) 512 else 0
+            val size = v.getInt("size") + skip
+            val header = v.getString("header").chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val image = ByteArray(size).also { header.copyInto(it, skip + Integer.decode(v.getString("header_at"))) }
+            val id = SnesCartridge.of(image, size.toLong())!!
+            assertEquals(v.getString("name"), v.getString("id"), id.id)
+            assertEquals(v.getString("name"), v.getString("header_crc32"), id.headerCrc32)
+        }
     }
 
     @Test

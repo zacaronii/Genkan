@@ -8,6 +8,7 @@ import java.util.zip.CRC32
  * A Super Famicom cartridge's id for the Yomikata catalog, from the internal header in its file:
  * `SHVC-` and the game code where the header has one (an extended header, maker 0x33), else
  * `SFC-` and the header's CRC-32. The same CRC-32 picks the entry's version (`header_crc32`).
+ * Yomikata's rule (docs/format.md, "Super Famicom"), checked against its identify vectors.
  */
 object SnesCartridge {
 
@@ -38,26 +39,24 @@ object SnesCartridge {
             // The better score; LoROM on a tie, as it comes first.
             .maxByOrNull { it.second }?.first ?: return null
         val crc = CRC32().apply { update(header) }.value
-        val code = header.copyOfRange(2, 6)
-        val id = if ((header[0x2A].toInt() and 0xFF) == 0x33 && code.all { (it.toInt() and 0xFF) in 0x20..0x7E } && code.any { it != ' '.code.toByte() }) {
-            "SHVC-" + String(code, Charsets.US_ASCII).trimEnd()
+        val code = String(header, 2, 4, Charsets.ISO_8859_1).trimEnd(' ')
+        val id = if ((header[0x2A].toInt() and 0xFF) == 0x33 && GAME_CODE.matches(code)) {
+            "SHVC-$code"
         } else {
             "SFC-%08X".format(crc)
         }
         return Id(id, "%08x".format(crc))
     }
 
+    /** A game code: 2 to 4 letters and digits, once trailing spaces are dropped. */
+    private val GAME_CODE = Regex("[A-Z0-9]{2,4}")
+
     /** How much [header] looks like the real one, for a HiROM ([hi]) or LoROM game. */
     private fun score(header: ByteArray, hi: Boolean): Int {
         var score = 0
-        val complement = u16(header, 0x2C)
-        val checksum = u16(header, 0x2E)
-        if (complement xor checksum == 0xFFFF) score += 4
-        val map = header[0x25].toInt() and 0xFF
-        // 0x20/0x30 LoROM, 0x21/0x31 HiROM (0x25/0x35 ExHiROM, read as HiROM here).
-        if (map and 0xE0 == 0x20 && (map and 0x01 == 1) == hi) score += 2
-        // A title of printable bytes (ASCII, or the half-width katakana Japanese titles use).
-        if (header.copyOfRange(0x10, 0x25).all { val b = it.toInt() and 0xFF; b in 0x20..0x7E || b in 0xA1..0xDF }) score += 1
+        if (u16(header, 0x2C) xor u16(header, 0x2E) == 0xFFFF) score += 2
+        // The map mode's bit 0: 0 on LoROM, 1 on HiROM.
+        if ((header[0x25].toInt() and 0x01 == 1) == hi) score += 1
         return score
     }
 
