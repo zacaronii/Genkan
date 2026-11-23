@@ -136,6 +136,11 @@ object ArtCache {
     /** Coil's own folder before this: in the cache folder, which Android may empty. Removed once. */
     fun oldDirectory(context: Context) = File(context.cacheDir, "coil3_disk_cache")
 
+    /** When [key]'s entry in [diskCache] was last written (fetched, or checked with a 304), or null without one. */
+    fun writtenAt(diskCache: DiskCache, key: String): Long? = diskCache.openSnapshot(key)?.use { snapshot ->
+        diskCache.fileSystem.metadataOrNull(snapshot.metadata)?.lastModifiedAtMillis
+    }
+
     /** Removes [oldDirectory], by that exact path; true when there was one to remove. */
     fun removeOldDirectory(context: Context): Boolean = oldDirectory(context).let { it.isDirectory && it.deleteRecursively() }
 

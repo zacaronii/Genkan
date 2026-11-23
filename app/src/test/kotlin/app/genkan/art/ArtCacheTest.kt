@@ -184,6 +184,21 @@ class ArtCacheTest {
     }
 
     @Test
+    fun `the entry's write time tells a later run it was done, with no decode, and a 304 renews it`() {
+        val key = RomMArt(cover).key
+        assertEquals(null, ArtCache.writtenAt(disk, key))
+        val loader = loader()
+        loader.width(cover)
+        val first = ArtCache.writtenAt(disk, key)!!
+        assertTrue(System.currentTimeMillis() - first < 60_000)
+        java.io.File(disk.directory.toString()).walk().filter { it.isFile && it.name.startsWith(okio.ByteString.Companion.run { key.encodeUtf8().sha256().hex() }) }
+            .forEach { it.setLastModified(first - 10 * 60_000) }
+        clock += ArtCacheStrategy.CHECK_EVERY_MS + 1
+        loader.width(cover, check = true)
+        assertTrue("checked with a 304: written again", ArtCache.writtenAt(disk, key)!! > first - 10 * 60_000)
+    }
+
+    @Test
     fun `signed out, a load fails but the copy on disk stays`() {
         val loader = loader()
         assertEquals(10, loader.width(cover))

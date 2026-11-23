@@ -6,6 +6,8 @@ import app.genkan.romm.RomMImageAuthInterceptor
 import app.genkan.romm.RomMSession
 import coil3.ImageLoader
 import coil3.disk.DiskCache
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,42 @@ class ArtLoaders @Inject constructor(
     val versions: StateFlow<Map<String, Int>> = _versions.asStateFlow()
 
     val strategy = ArtCacheStrategy()
+
+    /** When each file (by key) was last fetched or checked in the background: not again until its check is due. */
+    private val done = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * Whether [path] was fetched or checked within the day, so the background can leave it without
+     * reading or decoding it: noted in this process, or on disk with its entry written within the day
+     * (a fetch and a 304 both rewrite the entry's metadata), which holds across a restart.
+     */
+    fun recentlyDone(path: String, now: Long = System.currentTimeMillis()): Boolean {
+        val key = RomMArt.keyOf(path)
+        val at = done[key] ?: ArtCache.writtenAt(diskCache, key)?.also { done[key] = it } ?: return false
+        return now - at < ArtCacheStrategy.CHECK_EVERY_MS
+    }
+
+    /**
+     * Fetches [path] into the disk cache on [background] (checking it on the server once a day),
+     * notes it done, and lets the screens draw a replaced file once it's on disk. True when it's there.
+     */
+    suspend fun fetchToDisk(path: String): Boolean {
+        val key = RomMArt.keyOf(path)
+        val request = ImageRequest.Builder(context)
+            .data(RomMArt(path))
+            // Only the disk is filled: a token decode, thrown away.
+            .size(DECODE_PX)
+            .apply { extras[ArtCacheStrategy.REVALIDATE] = true }
+            .build()
+        val ok = runCatching { background.execute(request) }.getOrNull() is SuccessResult
+        if (ok) done[key] = System.currentTimeMillis()
+        // Only now is a replaced file on disk for the screen to load.
+        settle(key)
+        return ok
+    }
+
+    /** How full the disk cache is, as a share of its limit. */
+    fun diskFill(): Double = diskCache.size.toDouble() / diskCache.maxSize.coerceAtLeast(1)
 
     /** Whether there's a server to fetch art from. */
     fun signedIn(): Boolean = session.currentAccount() != null
@@ -92,5 +130,6 @@ class ArtLoaders @Inject constructor(
         const val SCREEN_REQUESTS_PER_HOST = 12
         /** Fetching ahead and checking: a few at a time. */
         const val BACKGROUND_REQUESTS = 2
+        const val DECODE_PX = 32
     }
 }

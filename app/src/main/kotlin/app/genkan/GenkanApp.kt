@@ -2,6 +2,7 @@ package app.genkan
 
 import android.app.Application
 import app.genkan.art.ArtLoaders
+import app.genkan.art.LibraryArtFetch
 import app.genkan.download.DownloadQueue
 import app.genkan.anki.AnkiMiner
 import app.genkan.reader.ReaderSession
@@ -34,6 +35,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var wordMarks: Lazy<WordMarks>
     @Inject lateinit var hachidori: Lazy<HachidoriLink>
     @Inject lateinit var artLoaders: Lazy<ArtLoaders>
+    @Inject lateinit var libraryArt: Lazy<LibraryArtFetch>
 
     override fun onCreate() {
         super.onCreate()
@@ -55,6 +57,8 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         hachidori.get().start()
         downloadQueue.get().resume()
         artLoaders.get().start()
+        // After each library sync, the whole library's shelf art, in the background.
+        libraryArt.get().start()
     }
 
     /** The screen's image loader: see [ArtLoaders]. */
