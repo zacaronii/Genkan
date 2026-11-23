@@ -406,9 +406,12 @@ class ManualsTest {
         clock += Manuals.CHECK_EVERY_MS + 1
         assertEquals(Manuals.Refresh.NOT_DUE, manuals.refresh(game("1")))
         server.enqueue(pdf("Japanese", "ja"))
-        // Closed: the skipped check runs, in the background.
+        // Closed: the skipped check runs, in the background. Its end is the replaced signal, sent
+        // after the note: the file itself is swapped a moment before the note is set.
+        val replaced = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { manuals.replaced.first() }
         manuals.use("details", null)
-        kotlinx.coroutines.withTimeout(10_000) { while (file.content() != "Japanese") kotlinx.coroutines.delay(20) }
+        assertEquals(7L, kotlinx.coroutines.withTimeout(10_000) { replaced.await() })
+        assertEquals("Japanese", file.content())
         assertTrue(manuals.takeReplacedNote(game("1")))
     }
 

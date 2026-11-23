@@ -16,7 +16,24 @@ class LauncherPresence @Inject constructor() {
     private val _inFront = MutableStateFlow(false)
     val inFront: StateFlow<Boolean> = _inFront.asStateFlow()
 
-    fun set(inFront: Boolean) {
-        _inFront.value = inFront
+    /**
+     * The launcher instances started now. More than one at a time: when the home task is swiped
+     * away, Android starts a new one, and the old one's stop can come after the new one's start;
+     * a single flag set by each would then say "not in front" with the new launcher on screen.
+     */
+    private val started = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+
+    /** [launcher] (an activity) is started on the top screen. */
+    @Synchronized
+    fun started(launcher: Any) {
+        started.add(launcher)
+        _inFront.value = true
+    }
+
+    /** [launcher] stopped: in front only while another instance is still started. */
+    @Synchronized
+    fun stopped(launcher: Any) {
+        started.remove(launcher)
+        _inFront.value = started.isNotEmpty()
     }
 }

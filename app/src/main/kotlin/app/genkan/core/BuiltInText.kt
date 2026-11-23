@@ -100,6 +100,10 @@ class BuiltInText @Inject constructor(
     /** The choice up now (null: none), while a layout gives the game's text. */
     val choice: StateFlow<Choice?> = _choice.asStateFlow()
 
+    private val _notListed = MutableStateFlow(false)
+    /** The playing game's id isn't in the Yomikata catalog: no text reader for it yet (OCR still works). */
+    val notListed: StateFlow<Boolean> = _notListed.asStateFlow()
+
     private val _layoutActive = MutableStateFlow(false)
     /** The game's lines come from its Yomikata layout: no OCR needed. */
     val layoutActive: StateFlow<Boolean> = _layoutActive.asStateFlow()
@@ -111,6 +115,7 @@ class BuiltInText @Inject constructor(
      */
     private suspend fun watchLayout() {
         val game = session.game.value
+        _notListed.value = false
         val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
         repeat(LAYOUT_TRIES) { attempt ->
             val id = withContext(Dispatchers.IO) {
@@ -151,7 +156,10 @@ class BuiltInText @Inject constructor(
         )
         return when (result) {
             is EntryLookup.Found -> result.entry
-            EntryLookup.NotListed -> null.also { Log.i(TAG, "$title ($id): not in the Yomikata catalog") }
+            EntryLookup.NotListed -> null.also {
+                Log.i(TAG, "$title ($id): not in the Yomikata catalog")
+                _notListed.value = true
+            }
             is EntryLookup.Failed -> null.also { Log.w(TAG, "$title ($id): no catalog entry, ${result.reason}; no layout this play") }
         }
     }
