@@ -71,6 +71,10 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_GenkanTap_drainAudio(JNI
     return static_cast<jint>(n);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_clearAudioProblem(JNIEnv *, jclass) {
+    GenkanTap::getInstance().setAudioProblem("");
+}
+
 JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_GenkanTap_audioProblem(JNIEnv *env, jclass) {
     std::string problem = GenkanTap::getInstance().audioProblem();
     return problem.empty() ? nullptr : env->NewStringUTF(problem.c_str());
