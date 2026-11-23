@@ -77,6 +77,8 @@ data class RomMRom(
     @Json(name = "languages") val languages: List<String>? = null,
     @Json(name = "revision") val revision: String? = null,
 
+    /** When the rom last changed on the server (a re-match included): the version of its art. */
+    @Json(name = "updated_at") val updatedAt: String? = null,
     @Json(name = "merged_screenshots") val screenshotPaths: List<String>? = null,
     @Json(name = "user_screenshots") val userScreenshots: List<RomMUserScreenshot>? = null,
     @Json(name = "all_user_screenshots") val allUserScreenshots: List<RomMUserScreenshot>? = null,

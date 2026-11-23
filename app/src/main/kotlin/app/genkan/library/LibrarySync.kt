@@ -114,6 +114,21 @@ class LibrarySync @Inject constructor(
             logoPath = platform.logoUrl,
         )
 
+        /**
+         * [path] as an asset path, carrying [rom]'s version. ScreenScraper's art, screenshots and
+         * the manual keep the same path when a game is re-matched in RomM, so without it the disk
+         * cache would go on serving the old file; RomM versions covers the same way (their `ts` is
+         * the rom's `updated_at`).
+         */
+        fun art(rom: RomMRom, path: String?): String? = versioned(RomMApiFactory.resourcePath(path), rom.updatedAt)
+
+        /** [path] with `ts` (the digits of [updatedAt]) added to its query; as it was without a version. */
+        fun versioned(path: String?, updatedAt: String?): String? {
+            if (path == null) return null
+            val version = updatedAt?.filter(Char::isDigit)?.take(14)?.takeIf { it.isNotEmpty() } ?: return path
+            return path + (if ('?' in path) "&" else "?") + "ts=" + version
+        }
+
         fun toEntity(rom: RomMRom) = GameEntity(
             id = rom.id,
             platformId = rom.platformId,
@@ -129,17 +144,17 @@ class LibrarySync @Inject constructor(
             releaseYear = rom.firstReleaseDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).year },
             developer = rom.developerName,
             coverLargePath = rom.coverLarge,
-            physicalPath = RomMApiFactory.resourcePath(rom.ssMetadata?.physicalPath),
-            logoPath = RomMApiFactory.resourcePath(rom.ssMetadata?.logoPath),
-            box2dPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dPath),
-            box2dSidePath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dSidePath),
-            box2dBackPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box2dBackPath),
-            box3dPath = RomMApiFactory.resourcePath(rom.ssMetadata?.box3dPath),
-            titleScreenPath = RomMApiFactory.resourcePath(rom.ssMetadata?.titleScreenPath),
-            marqueePath = RomMApiFactory.resourcePath(rom.ssMetadata?.marqueePath),
-            fanartPath = RomMApiFactory.resourcePath(rom.ssMetadata?.fanartPath),
-            screenshotPaths = GameEntity.joinList(rom.screenshotPaths?.mapNotNull(RomMApiFactory::resourcePath)),
-            manualPath = rom.manualPath.takeIf { rom.hasManual }?.let(RomMApiFactory::resourcePath),
+            physicalPath = art(rom, rom.ssMetadata?.physicalPath),
+            logoPath = art(rom, rom.ssMetadata?.logoPath),
+            box2dPath = art(rom, rom.ssMetadata?.box2dPath),
+            box2dSidePath = art(rom, rom.ssMetadata?.box2dSidePath),
+            box2dBackPath = art(rom, rom.ssMetadata?.box2dBackPath),
+            box3dPath = art(rom, rom.ssMetadata?.box3dPath),
+            titleScreenPath = art(rom, rom.ssMetadata?.titleScreenPath),
+            marqueePath = art(rom, rom.ssMetadata?.marqueePath),
+            fanartPath = art(rom, rom.ssMetadata?.fanartPath),
+            screenshotPaths = GameEntity.joinList(rom.screenshotPaths?.mapNotNull { art(rom, it) }),
+            manualPath = rom.manualPath.takeIf { rom.hasManual }?.let { art(rom, it) },
             regions = GameEntity.joinList(rom.regions),
             franchises = GameEntity.joinList(rom.metadatum?.franchises),
             publishers = GameEntity.joinList(rom.metadatum?.publishers),

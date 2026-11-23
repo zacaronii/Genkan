@@ -89,4 +89,16 @@ class ArtworkWarmerFetchTest {
         // Only game 18 is new to the window; everything else finished.
         assertEquals(listOf("https://romm.example.com/c/18.png"), requests.drop(count).map { it.url })
     }
+
+    @Test
+    fun `a game's art at a new version is fetched again, though the old one is on disk`() {
+        val v1 = games.map { it.copy(coverPath = "${it.coverPath}?ts=1") }
+        warmer.warmAround(v1, 10)
+        requests.forEach { it.onDone() }
+        val count = requests.size
+        // Game 10 changed on the server: its path is new, the rest are the same.
+        val v2 = v1.map { if (it.id == 10L) it.copy(coverPath = "/c/10.png?ts=2") else it }
+        warmer.warmAround(v2, 10)
+        assertEquals(listOf("https://romm.example.com/c/10.png?ts=2"), requests.drop(count).map { it.url })
+    }
 }
