@@ -15,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -47,9 +48,13 @@ class PlayManualTest {
         var answer = CompletableDeferred<Result<File>>()
 
         override fun has(game: GameEntity) = game.manualPath != null
-        override fun cached(game: GameEntity): File? = null
-        override suspend fun file(game: GameEntity): File {
+        var cachedFile: File? = null
+        override fun cached(game: GameEntity): File? = cachedFile
+        override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File {
             fetches++
+            cachedFile?.let { return it }
+            // Half of it, then whatever the test answers.
+            onProgress(0.5f)
             return answer.await().getOrThrow()
         }
     }
@@ -146,5 +151,34 @@ class PlayManualTest {
         nowPlaying.started(2, "Game 2", "psx")
         assertNull(manual.open.value)
         assertEquals(0, manual.pageOf(file))
+    }
+
+    @Test
+    fun `while the manual is fetched the chip is busy, with how far along it is`() {
+        val manual = playing(game(1))
+        manual.show()
+        assertEquals(ManualFetch.Busy(0.5f), manual.fetch.value)
+        source.answer.complete(Result.success(pdf("1-a.pdf")))
+        assertNull(manual.fetch.value)
+    }
+
+    @Test
+    fun `a failed fetch shows on the chip`() {
+        val manual = playing(game(1))
+        manual.show()
+        source.answer.complete(Result.failure(IOException("the server answered 500")))
+        assertEquals(ManualFetch.Failed("Couldn't fetch"), manual.fetch.value)
+    }
+
+    @Test
+    fun `a cached manual opens without the chip ever being busy`() {
+        val manual = playing(game(1))
+        val seen = mutableListOf<ManualFetch?>()
+        val watch = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.test.UnconfinedTestDispatcher()).launch { manual.fetch.collect { seen += it } }
+        source.cachedFile = pdf("1-a.pdf")
+        manual.show()
+        assertEquals(source.cachedFile, manual.open.value)
+        assertEquals(listOf<ManualFetch?>(null), seen)
+        watch.cancel()
     }
 }

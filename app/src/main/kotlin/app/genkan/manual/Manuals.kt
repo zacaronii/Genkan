@@ -27,7 +27,7 @@ interface ManualSource {
     fun cached(game: GameEntity): File?
 
     /** [game]'s manual, fetched first when it isn't cached; throws when it can't be had. */
-    suspend fun file(game: GameEntity): File
+    suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit = {}): File
 }
 
 /**
@@ -58,14 +58,14 @@ class Manuals @Inject constructor(
      * [game]'s manual, fetched first when it isn't cached; throws when it can't be had. A second
      * caller waits for a fetch under way and then finds the file cached.
      */
-    override suspend fun file(game: GameEntity): File = lock.withLock {
+    override suspend fun file(game: GameEntity, onProgress: (Float?) -> Unit): File = lock.withLock {
         cached(game)?.let { return@withLock it }
         val file = File(folder, fileName(game))
         withContext(Dispatchers.IO) {
             try {
                 val url = session.currentAccount()?.let { RomMApiFactory.assetUrl(it.baseUrl, game.manualPath) }
                     ?: throw IOException("no manual on the server")
-                fetch(url, file)
+                fetch(url, file, onProgress)
             } catch (e: IOException) {
                 // This version can't be had (offline, say): an earlier one of the game's manual
                 // still opens, until a fetch succeeds.
@@ -82,13 +82,29 @@ class Manuals @Inject constructor(
         folder.listFiles { old -> old.name.startsWith("${game.id}-") && old.name.endsWith(".pdf") && old.length() > 0L }
             ?.maxByOrNull { it.lastModified() }
 
-    /** Downloads [url] to [file] through a .part file, so a cut-off download is never opened. */
-    private fun fetch(url: String, file: File) {
+    /**
+     * Downloads [url] to [file] through a .part file, so a cut-off download is never opened,
+     * telling [onProgress] the share done when the server gives the length (null when it doesn't).
+     */
+    private fun fetch(url: String, file: File, onProgress: (Float?) -> Unit) {
         file.parentFile?.mkdirs()
         val part = File(file.path + ".part")
         assetClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("the server answered ${response.code}")
-            part.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+            val length = response.body.contentLength().takeIf { it > 0 }
+            onProgress(if (length == null) null else 0f)
+            part.outputStream().use { out ->
+                val input = response.body.byteStream()
+                val buffer = ByteArray(64 * 1024)
+                var done = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    done += read
+                    if (length != null) onProgress((done.toFloat() / length).coerceAtMost(1f))
+                }
+            }
         }
         if (!part.renameTo(file)) throw IOException("couldn't save it")
     }

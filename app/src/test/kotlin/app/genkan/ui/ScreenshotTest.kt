@@ -337,6 +337,20 @@ class ScreenshotTest {
         )
     }
 
+    /** "Open manual" while the manual is fetched: a ring filled to how far along it is, on the button, in view. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsManualFetching() = shoot("game_details_manual_fetching", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, manualFetch = app.genkan.manual.ManualFetch.Busy(0.42f))
+    }
+
+    /** A fetch that failed, said on the same button for a few seconds. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsManualFailed() = shoot("game_details_manual_failed", BOTTOM_PIXELS) {
+        GameDetailsContent(details = FakeData.fullDetails, onShowReader = {}, manualFetch = app.genkan.manual.ManualFetch.Failed("Couldn't fetch the manual"))
+    }
+
     /** The same five buttons at rest: the first three whole, the art smaller, the column fading where it goes on. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)

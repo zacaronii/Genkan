@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.genkan.manual.ManualFetch
 import app.genkan.words.WordMarkState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -103,6 +104,7 @@ fun ReaderScreen(
     val manualGame by viewModel.manual.game.collectAsStateWithLifecycle()
     val manualOpen by viewModel.manual.open.collectAsStateWithLifecycle()
     val manualNotice by viewModel.manual.notice.collectAsStateWithLifecycle()
+    val manualFetch by viewModel.manual.fetch.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
@@ -157,7 +159,8 @@ fun ReaderScreen(
             ) {
                 onShowGame?.let { Chip("Game", it) }
                 // The playing game's manual, over the reader until Back to reader.
-                if (manualGame != null && manualOpen == null) Chip("Manual") { viewModel.manual.show() }
+                // A fetch shows on the chip (a ring, then why it failed), here on the bottom screen, never over the game.
+                if (manualGame != null && manualOpen == null) ManualChip(manualFetch) { viewModel.manual.show() }
                 Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
                 if (ocrOn && capturing) Chip("Area") { viewModel.editArea() }
                 if (ocrOn) Chip(engine.name) { viewModel.ocr.nextEngine() }
@@ -279,6 +282,31 @@ fun ChoiceList(
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
+    }
+}
+
+/** The reader's Manual chip: while the manual is fetched, a ring and no presses; after a failure, why. */
+@Composable
+private fun ManualChip(fetch: ManualFetch?, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(colors.secondaryContainer)
+            .clickable(enabled = fetch !is ManualFetch.Busy, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (fetch is ManualFetch.Busy) BusyRing(fetch.progress, colors.onSecondaryContainer, size = 14.dp)
+        Text(
+            when (fetch) {
+                is ManualFetch.Failed -> fetch.message
+                else -> "Manual"
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = if (fetch is ManualFetch.Failed) colors.error else colors.onSecondaryContainer,
+        )
     }
 }
 

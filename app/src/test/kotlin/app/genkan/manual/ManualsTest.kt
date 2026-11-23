@@ -83,4 +83,15 @@ class ManualsTest {
         assertEquals("manual 2", opened.readText())
         assertTrue(!earlier.exists())
     }
+
+    @Test
+    fun `a fetch says how far along it is, from the length the server gives`() = runBlocking {
+        val body = "x".repeat(200_000)
+        server.enqueue(MockResponse.Builder().code(200).body(body).build())
+        val seen = mutableListOf<Float?>()
+        manuals.file(game("2")) { seen += it }
+        assertEquals(0f, seen.first())
+        assertEquals(1f, seen.last())
+        assertTrue(seen.filterNotNull().zipWithNext().all { (a, b) -> b >= a })
+    }
 }

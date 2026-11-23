@@ -1,6 +1,8 @@
 package app.genkan.ui
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyDescendant
@@ -96,5 +98,16 @@ class GameDetailsActionsTest {
         compose.waitForIdle()
         val bottom = column().fetchSemanticsNode().boundsInRoot.bottom
         assertTrue("Delete ends at ${span("Delete download").endInclusive}, the column at $bottom", span("Delete download").endInclusive <= bottom + 0.5f)
+    }
+
+    @Test
+    fun `a manual being fetched, or failing to, shows on its button, whole on screen at rest`() {
+        var fetch by androidx.compose.runtime.mutableStateOf<app.genkan.manual.ManualFetch?>(app.genkan.manual.ManualFetch.Busy(0.42f))
+        compose.setContent { GameDetailsContent(details = fiveButtons(), onShowReader = {}, manualFetch = fetch) }
+        val bottom = column().fetchSemanticsNode().boundsInRoot.bottom
+        assertTrue("busy: ends at ${span("Fetching… 42%").endInclusive}, column at $bottom", span("Fetching… 42%").endInclusive <= bottom)
+        fetch = app.genkan.manual.ManualFetch.Failed("Couldn't fetch the manual")
+        compose.waitForIdle()
+        assertTrue(span("Couldn't fetch the manual").endInclusive <= bottom)
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -45,6 +46,10 @@ class PlayManual internal constructor(
     /** The manual on the bottom screen now, or null. */
     val open: StateFlow<File?> = _open.asStateFlow()
 
+    private val _fetch = MutableStateFlow<ManualFetch?>(null)
+    /** The manual being fetched, or why it couldn't be: for the reader's Manual chip to show. */
+    val fetch: StateFlow<ManualFetch?> = _fetch.asStateFlow()
+
     private val _notice = MutableStateFlow<String?>(null)
     /** While the manual is fetched, or why it couldn't be: for the reader to say. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
@@ -68,16 +73,28 @@ class PlayManual internal constructor(
         val game = game.value ?: return
         if (_open.value != null || fetching?.isActive == true) return
         fetching = scope.launch {
-            if (manuals.cached(game) == null) _notice.value = "Fetching the manual…"
-            val file = runCatching { manuals.file(game) }
-                .getOrElse { _notice.value = "Couldn't fetch the manual: ${it.message}"; return@launch }
+            if (manuals.cached(game) == null) {
+                _notice.value = "Fetching the manual…"
+                _fetch.value = ManualFetch.Busy()
+            }
+            val file = runCatching { manuals.file(game) { progress -> _fetch.value = ManualFetch.Busy(progress) } }
+                .getOrElse {
+                    _notice.value = "Couldn't fetch the manual: ${it.message}"
+                    val failed = ManualFetch.Failed("Couldn't fetch")
+                    _fetch.value = failed
+                    delay(FAILED_MS)
+                    _fetch.compareAndSet(failed, null)
+                    return@launch
+                }
             _notice.value = null
+            _fetch.value = null
             _open.value = file
         }
     }
 
     fun hide() {
         fetching?.cancel()
+        _fetch.value = null
         _notice.value = null
         _open.value = null
     }
@@ -98,5 +115,10 @@ class PlayManual internal constructor(
 
     fun keepPage(file: File, page: Int) {
         pages[file.name] = page
+    }
+
+    private companion object {
+        /** How long the chip says a fetch failed before it can be pressed again. */
+        const val FAILED_MS = 4_000L
     }
 }

@@ -57,6 +57,7 @@ import androidx.tv.material3.Text
 import app.genkan.core.ScreenLook
 import app.genkan.download.DownloadState
 import app.genkan.launch.LocalShelves
+import app.genkan.manual.ManualFetch
 import app.genkan.library.Favourites
 import coil3.compose.AsyncImage
 import java.io.File
@@ -84,6 +85,7 @@ fun GameDetailsScreen(
 ) {
     val details by viewModel.details.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val manualFetch by viewModel.manualFetch.collectAsStateWithLifecycle()
     // Each game's details start at the top.
     val scroll = remember(details?.focus?.game?.id) { ScrollState(0) }
     GameDetailsContent(
@@ -95,6 +97,7 @@ fun GameDetailsScreen(
         onToggleFavourite = viewModel::toggleFavourite,
         onLook = viewModel::openLookPicker,
         notice = notice,
+        manualFetch = manualFetch,
         factsScroll = scroll,
     )
     val pickingLook by viewModel.pickingLook.collectAsStateWithLifecycle()
@@ -130,6 +133,8 @@ fun GameDetailsContent(
     onToggleFavourite: () -> Unit = {},
     onLook: () -> Unit = {},
     notice: String? = null,
+    /** The manual being fetched for "Open manual", or why it couldn't be. */
+    manualFetch: ManualFetch? = null,
     initialScreenshot: Int? = null,
     factsScroll: ScrollState = rememberScrollState(),
     /** The art and buttons column's scroll, for a test to start it scrolled. */
@@ -161,7 +166,7 @@ fun GameDetailsContent(
                 Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ArtAndActions(current, notice, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, actionsScroll, Modifier.width(176.dp).fillMaxHeight())
+                ArtAndActions(current, notice, manualFetch, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, actionsScroll, Modifier.width(176.dp).fillMaxHeight())
                 Facts(current, factsScroll, onScreenshot = { viewing = it }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -203,6 +208,7 @@ private fun Backdrop(details: GameDetails) {
 private fun ArtAndActions(
     details: GameDetails,
     notice: String?,
+    manualFetch: ManualFetch?,
     onPlay: () -> Unit,
     onOpenManual: () -> Unit,
     onDelete: () -> Unit,
@@ -270,7 +276,17 @@ private fun ArtAndActions(
             }
             Spacer(Modifier.height(4.dp))
             DetailsButton(GameDetailsFormat.primaryLabel(game, details.download), ButtonStyle.PRIMARY, onPlay)
-            if (details.art.hasManual) DetailsButton("Open manual", ButtonStyle.PLAIN, onOpenManual)
+            if (details.art.hasManual) {
+                // A fetch shows on the button itself, in view without scrolling (it's one of the first three).
+                when (manualFetch) {
+                    is ManualFetch.Busy -> BusyDetailsButton(
+                        manualFetch.progress?.let { "Fetching… ${(it * 100).toInt()}%" } ?: "Fetching the manual…",
+                        ButtonStyle.PLAIN, manualFetch.progress, isBusy = true, onClick = onOpenManual,
+                    )
+                    is ManualFetch.Failed -> DetailsButton(manualFetch.message, ButtonStyle.DANGER, onOpenManual)
+                    null -> DetailsButton("Open manual", ButtonStyle.PLAIN, onOpenManual)
+                }
+            }
             if (Favourites.canMark(game)) {
                 DetailsButton(if (details.favourite) "Remove from favourites" else "Add to favourites", ButtonStyle.PLAIN, onToggleFavourite)
             }
@@ -318,7 +334,11 @@ private enum class ButtonStyle { PRIMARY, PLAIN, DANGER }
 
 /** A full-width button sized for a thumb. */
 @Composable
-private fun DetailsButton(label: String, style: ButtonStyle, onClick: () -> Unit) {
+private fun DetailsButton(label: String, style: ButtonStyle, onClick: () -> Unit) = BusyDetailsButton(label, style, null, false, onClick)
+
+/** A details button that, while [isBusy], shows a ring filled to [progress] (or turning, unknown) and takes no presses. */
+@Composable
+private fun BusyDetailsButton(label: String, style: ButtonStyle, progress: Float?, isBusy: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     val (fill, text) = when (style) {
@@ -333,10 +353,14 @@ private fun DetailsButton(label: String, style: ButtonStyle, onClick: () -> Unit
             .clip(shape)
             .background(fill)
             .border(1.dp, if (style == ButtonStyle.DANGER) colors.error.copy(alpha = 0.5f) else Color.Transparent, shape)
-            .clickable(onClick = onClick),
+            // Busy, it takes no presses: one fetch at a time.
+            .clickable(enabled = !isBusy, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = text, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (isBusy) BusyRing(progress, text)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = text, maxLines = 1)
+        }
     }
 }
 
