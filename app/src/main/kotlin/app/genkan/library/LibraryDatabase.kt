@@ -148,6 +148,10 @@ interface LibraryDao {
     @Query("SELECT * FROM games WHERE id = :id")
     suspend fun game(id: Long): GameEntity?
 
+    /** Every game, console by console in the library's order: for fetching the whole library's art. */
+    @Query("SELECT * FROM games ORDER BY platformId, sortTitle")
+    suspend fun allGames(): List<GameEntity>
+
     @Query("SELECT COUNT(*) FROM games")
     suspend fun gameCount(): Int
 

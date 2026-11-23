@@ -6,7 +6,6 @@ import android.util.Log
 import app.genkan.launch.LocalShelves
 import app.genkan.library.GameEntity
 import app.genkan.library.hasBoxFaces
-import coil3.request.ImageRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +33,9 @@ class ShelfPrefetch @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
-    /** When each file (by key) was last fetched or checked: not again until its check is due. */
-    private val seen = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Whether it's fetching the opened shelf now: the whole library's fetch waits for it. */
+    fun busy(): Boolean = job?.isActive == true
 
     /** Fetches [games]' art from [index] outwards; [fullBox] adds the box's front and back. */
     fun start(games: List<GameEntity>, index: Int, fullBox: Boolean) {
@@ -44,22 +44,15 @@ class ShelfPrefetch @Inject constructor(
             delay(SETTLE_MS)
             // Signed out (or the session not loaded yet): there is no server to ask.
             if (metered() || !loaders.signedIn()) return@launch
-            val now = System.currentTimeMillis()
             // On disk and checked lately: nothing to do for it (a sync starts the shelf over).
-            val paths = pathsFrom(games, index, fullBox).filter { path ->
-                seen[RomMArt.keyOf(path)]?.let { now - it >= ArtCacheStrategy.CHECK_EVERY_MS } ?: true
-            }
+            val paths = pathsFrom(games, index, fullBox).filterNot { loaders.recentlyDone(it) }
             val queue = Channel<String>(Channel.UNLIMITED).apply { paths.forEach(::trySend); close() }
             Log.i(TAG, "Fetching ahead: ${paths.size} files")
             repeat(WORKERS) {
                 launch {
                     for (path in queue) {
                         ensureActive()
-                        val key = RomMArt.keyOf(path)
-                        val done = runCatching { loaders.background.execute(request(path)) }.getOrNull()
-                        if (done is coil3.request.SuccessResult) seen[key] = System.currentTimeMillis()
-                        // Only now is a replaced file on disk for the screen to load.
-                        loaders.settle(key)
+                        loaders.fetchToDisk(path)
                     }
                 }
             }
@@ -72,13 +65,6 @@ class ShelfPrefetch @Inject constructor(
         job = null
     }
 
-    private fun request(path: String) = ImageRequest.Builder(context)
-        .data(RomMArt(path))
-        // Only the disk is filled: a token decode, thrown away.
-        .size(DECODE_PX)
-        .apply { extras[ArtCacheStrategy.REVALIDATE] = true }
-        .build()
-
     private fun metered(): Boolean = context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
 
     companion object {
@@ -86,7 +72,6 @@ class ShelfPrefetch @Inject constructor(
         /** How long after the shelf opens or the focus rests before fetching ahead starts. */
         const val SETTLE_MS = 2_000L
         private const val WORKERS = 2
-        private const val DECODE_PX = 32
 
         /**
          * What the shelf draws for each of [games], nearest [index] first: the cover (the large one,
