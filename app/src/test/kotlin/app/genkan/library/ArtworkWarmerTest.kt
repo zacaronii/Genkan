@@ -110,6 +110,13 @@ class ArtworkWarmerTest {
     }
 
     @Test
+    fun `no back while the focus moves, even for the focused game`() {
+        for (direction in listOf(1, -1)) {
+            assertTrue(ArtworkWarmer.warmPaths(boxes, 20, direction, fullBox = true, showsBack = true).none { it.startsWith("B") })
+        }
+    }
+
+    @Test
     fun `no front for a game the full box can't draw`() {
         // No spine: it keeps its case, so its front isn't wanted.
         val games = (0L until 10L).map { game(it, front = "F$it") }

@@ -114,8 +114,9 @@ class ArtworkWarmer @Inject constructor(
          * [AHEAD] games that way and [BEHIND] the other, with no cut-outs. With the [fullBox]
          * setting on, each of those games it can draw also has its box's front warmed with its
          * spine, since any of them may be the next focused; the back only for the focused game,
-         * and only when the box is turned to show it ([showsBack]). Games from local shelves have
-         * no RomM artwork.
+         * once the focus rests, and only when it may be shown ([showsBack]: R3 can turn the box at
+         * any time), never for the games a moving focus passes. Games from local shelves have no
+         * RomM artwork.
          */
         fun warmPaths(
             games: List<GameEntity>,
@@ -137,7 +138,7 @@ class ArtworkWarmer @Inject constructor(
                     val physical = game.physicalPath.takeIf { direction == 0 && kotlin.math.abs(offset) <= RADIUS }
                     val box = fullBox && game.hasBoxFaces()
                     val front = game.box2dPath.takeIf { box }
-                    val back = game.box2dBackPath.takeIf { box && showsBack && offset == 0 }
+                    val back = game.box2dBackPath.takeIf { box && showsBack && direction == 0 && offset == 0 }
                     listOfNotNull(cover, game.logoPath.takeIf { cover == null }, game.box2dSidePath, front, back, physical)
                 }
                 .distinct()

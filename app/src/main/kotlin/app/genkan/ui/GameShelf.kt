@@ -199,13 +199,22 @@ internal fun GameShelf(
     staticMedia: Boolean? = null,
     /** Which shelf this is, for what it remembers; "Continue playing" mixes consoles. */
     shelfId: Long = games.firstOrNull()?.platformId ?: 0L,
+    /** The focused game's full box turned round to its back (R3). */
+    boxTurned: Boolean = false,
 ) {
     if (games.isEmpty()) return
     val focused = focusedIndex.coerceIn(0, games.lastIndex)
 
     // The Full box setting, and the box's turn.
     val fullBox by FullBoxShelf.on.collectAsState()
-    val fullBoxAngle by FullBoxShelf.angle.collectAsState()
+    val restAngle by FullBoxShelf.angle.collectAsState()
+    // Turned round, the box goes on the same way to show its back; animated both ways. Each focused
+    // game starts facing front (keyed on the game, so a game that comes under an unmoved focus
+    // doesn't take the last one's turn). Read only by the focused box ([Turning]), so a turn
+    // recomposes that box, not the shelf.
+    val turn = remember(shelfId, games[focused].id) { Animatable(if (boxTurned) 180f else 0f) }
+    LaunchedEffect(turn, boxTurned) { turn.animateTo(if (boxTurned) 180f else 0f, tween(TURN_MS)) }
+    val turnNow = rememberTurnNow(turn)
 
     // Read once per shelf: whether to log what each step costs (see ShelfTrace).
     val trace = remember { ShelfTrace.enabled() }
@@ -349,26 +358,28 @@ internal fun GameShelf(
                             if (fullBox && index == focused && FullBoxShelf.canDraw(game)) {
                                 // The full box: the focused game as a box from its scans, its case in the
                                 // meantime, with the case's download badge (the focused game's is on the right).
-                                FullBox(
-                                    front = art.front,
-                                    spine = art.spine,
-                                    back = art.back,
-                                    maxWidth = maxCaseWidth,
-                                    maxHeight = maxCaseHeight,
-                                    angle = fullBoxAngle,
-                                    modifier = transform.then(select),
-                                    fallback = { case(Modifier) },
-                                    // The disc or cartridge peeks out of the box as it does from the case.
-                                    behind = if (active) { boxWidth, boxHeight ->
-                                        PhysicalMedia(
-                                            MediaKind.forSlug(game.platformSlug), art.physical, art.logo, game.name,
-                                            Color(GameCase.specFor(game.platformSlug).color), boxWidth, boxHeight, mediaNow,
-                                        )
-                                    } else null,
-                                    // The case's badge and dimming, on the box's own faces: the badge on the facing one.
-                                    faceOverlay = { DownloadMark(game, downloads[game.id], onLeft = false) },
-                                    spineOverlay = { downloadDim(game, downloads[game.id])?.let { Box(Modifier.fillMaxSize().background(it)) } },
-                                )
+                                Turning({ restAngle + turnNow() }) { fullBoxAngle ->
+                                    FullBox(
+                                        front = art.front,
+                                        spine = art.spine,
+                                        back = art.back,
+                                        maxWidth = maxCaseWidth,
+                                        maxHeight = maxCaseHeight,
+                                        angle = fullBoxAngle,
+                                        modifier = transform.then(select),
+                                        fallback = { case(Modifier) },
+                                        // The disc or cartridge peeks out of the box as it does from the case.
+                                        behind = if (active) { boxWidth, boxHeight ->
+                                            PhysicalMedia(
+                                                MediaKind.forSlug(game.platformSlug), art.physical, art.logo, game.name,
+                                                Color(GameCase.specFor(game.platformSlug).color), boxWidth, boxHeight, mediaNow,
+                                            )
+                                        } else null,
+                                        // The case's badge and dimming, on the box's own faces: the badge on the facing one.
+                                        faceOverlay = { DownloadMark(game, downloads[game.id], onLeft = false) },
+                                        spineOverlay = { downloadDim(game, downloads[game.id])?.let { Box(Modifier.fillMaxSize().background(it)) } },
+                                    )
+                                }
                             } else {
                                 case(transform.then(select))
                             }
@@ -906,6 +917,22 @@ private fun LogoOrTitle(logo: Any?, title: String, ink: Color, style: androidx.c
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** How long the full box takes to turn round. */
+private const val TURN_MS = 700
+
+/** The current [turn]'s angle, through one accessor for the shelf's life, as [rememberMediaOut] does for the media. */
+@Composable
+private fun rememberTurnNow(turn: Animatable<Float, *>): () -> Float {
+    val current = rememberUpdatedState(turn)
+    return remember { { current.value.value } }
+}
+
+/** Reads [angle] here, in its own scope, not in the shelf's: a turning box recomposes itself only. */
+@Composable
+private fun Turning(angle: () -> Float, content: @Composable (angle: Float) -> Unit) {
+    content(angle())
+}
 
 /**
  * The focused game's disc or cartridge sliding out of its case: 0 in, 1 out. It rests in for a

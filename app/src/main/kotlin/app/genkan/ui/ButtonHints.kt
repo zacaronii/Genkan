@@ -40,6 +40,7 @@ enum class PadButton(val label: String, val face: Boolean = false) {
     START("Start"),
     SELECT("Select"),
     L3("L3"),
+    R3("R3"),
 }
 
 /** One hint: what [buttons] (pressed alone, or either of them) do here. */
@@ -99,12 +100,16 @@ object Hints {
         onGames: Boolean,
         emulatorFor: (String) -> String?,
         favourite: Boolean = false,
+        /** The focused game's full box can be turned round (it has a back), and whether it is now. */
+        canTurn: Boolean = false,
+        turned: Boolean = false,
     ): List<ButtonHint> =
         buildList {
             if (game != null && onGames) {
                 primary(game, download, emulatorFor)?.let { add(ButtonHint(PadButton.A, it)) }
                 if (download?.state == DownloadState.INSTALLED) add(ButtonHint(PadButton.X, "Delete"))
                 if (Favourites.canMark(game)) add(ButtonHint(PadButton.R2, if (favourite) "Unfavourite" else "Favourite"))
+                if (canTurn) add(ButtonHint(PadButton.R3, if (turned) "Box front" else "Box back"))
                 add(ButtonHint(PadButton.B, "Back"))
             } else if (game != null) {
                 add(ButtonHint(PadButton.A, "Choose"))
