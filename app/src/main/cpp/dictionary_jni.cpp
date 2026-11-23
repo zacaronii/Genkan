@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "hoshidicts_c.h"
+#include "frequency_sorting.h"
 
 namespace {
 
@@ -292,11 +293,10 @@ JNIEXPORT jint JNICALL Java_app_genkan_dictionary_NativeDictionaries_scanLength(
 }
 
 JNIEXPORT jbyteArray JNICALL Java_app_genkan_dictionary_NativeDictionaries_lookup(
-    JNIEnv* env, jobject, jlong handle, jbyteArray text, jint maxResults, jint scanLength, jbyteArray frequencyDictionary) {
+    JNIEnv* env, jobject, jlong handle, jbyteArray text, jint maxResults, jint scanLength, jbyteArray frequencyDictionary,
+    jint frequencyOrder) {
     const std::string input = Utf8(env, text), freq = Utf8(env, frequencyDictionary);
-    hd_lookup_options options{};
-    options.frequency_dictionary = hd_str{freq.data(), freq.size()};
-    options.frequency_order = freq.empty() ? HD_LOOKUP_FREQUENCY_ORDER_DISABLED : HD_LOOKUP_FREQUENCY_ORDER_AUTO;
+    const hd_lookup_options options = Sorting(freq, frequencyOrder);
     const hd_lookup_result* results = nullptr;
     size_t count = 0;
     hd_lookup_results* r = hd_lookup_run_with_options(Of(handle)->lookup, input.c_str(), maxResults,
@@ -327,12 +327,11 @@ JNIEXPORT jbyteArray JNICALL Java_app_genkan_dictionary_NativeDictionaries_looku
  * as {"s": UTF-16 start, "l": UTF-16 length, "e": headword, "r": reading}.
  */
 JNIEXPORT jbyteArray JNICALL Java_app_genkan_dictionary_NativeDictionaries_scan(
-    JNIEnv* env, jobject, jlong handle, jbyteArray text, jint scanLength, jbyteArray frequencyDictionary) {
+    JNIEnv* env, jobject, jlong handle, jbyteArray text, jint scanLength, jbyteArray frequencyDictionary,
+    jint frequencyOrder) {
     const std::string input = Utf8(env, text), freq = Utf8(env, frequencyDictionary);
     const std::vector<CodePoint> points = Decode(input);
-    hd_lookup_options options{};
-    options.frequency_dictionary = hd_str{freq.data(), freq.size()};
-    options.frequency_order = freq.empty() ? HD_LOOKUP_FREQUENCY_ORDER_DISABLED : HD_LOOKUP_FREQUENCY_ORDER_AUTO;
+    const hd_lookup_options options = Sorting(freq, frequencyOrder);
     Json json;
     json.Open('[');
     size_t i = 0;

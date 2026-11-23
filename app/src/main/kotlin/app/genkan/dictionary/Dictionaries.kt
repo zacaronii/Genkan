@@ -38,6 +38,7 @@ class Dictionaries @Inject constructor(
     private var handle = 0L
     private var scanLength = 24
     private var frequencyDictionary = ""
+    private var frequencyOrder = FrequencyOrder.DISABLED
     private var loaded = false
 
     private val importAdapter = moshi.adapter(ImportReport::class.java)
@@ -201,6 +202,13 @@ class Dictionaries @Inject constructor(
             field = value
         }
 
+    /** A linked Hachidori's frequency order ("auto", "ascending", …); null: by the dictionary's mode. */
+    @Volatile var preferredFrequencyOrder: String? = null
+        set(value) {
+            if (field != value) loaded = false
+            field = value
+        }
+
     /** Looks up the start of [text]: the longest dictionary words it begins with, deinflected. */
     suspend fun lookup(text: String, maxResults: Int = MAX_RESULTS): LookupResult = withContext(native) {
         lock.withLock {
@@ -212,6 +220,7 @@ class Dictionaries @Inject constructor(
                     maxResults,
                     scanLength,
                     frequencyDictionary.encodeToByteArray(),
+                    frequencyOrder.native,
                 ),
             )
             LookupResult(text, hitsAdapter.fromJson(json).orEmpty(), json)
@@ -225,7 +234,7 @@ class Dictionaries @Inject constructor(
     suspend fun scan(text: String): List<ScannedWord> = withContext(native) {
         lock.withLock {
             val session = session() ?: return@withLock emptyList()
-            val json = String(NativeDictionaries.scan(session, text.encodeToByteArray(), SCAN_LENGTH, frequencyDictionary.encodeToByteArray()))
+            val json = String(NativeDictionaries.scan(session, text.encodeToByteArray(), SCAN_LENGTH, frequencyDictionary.encodeToByteArray(), frequencyOrder.native))
             scannedAdapter.fromJson(json).orEmpty()
         }
     }
@@ -276,12 +285,23 @@ class Dictionaries @Inject constructor(
             }
             scanLength = if (handle != 0L) NativeDictionaries.scanLength(handle) else 24
             // Results are sorted by the chosen frequency dictionary when it's here (a linked
-            // Hachidori's), else by the first one, the way Yomitan does.
-            val frequencyTitles = enabled.filter { it.frequencies > 0 }.map { it.title }
-            frequencyDictionary = preferredFrequency?.takeIf { it in frequencyTitles } ?: frequencyTitles.firstOrNull().orEmpty()
+            // Hachidori's), else by the first one, the way Yomitan does; in the order its mode
+            // says (or Hachidori's own), since the engine's AUTO is no sort at all.
+            val frequencies = enabled.filter { it.frequencies > 0 }
+            val chosen = frequencies.firstOrNull { it.title == preferredFrequency } ?: frequencies.firstOrNull()
+            frequencyDictionary = chosen?.title.orEmpty()
+            frequencyOrder = if (chosen == null) FrequencyOrder.DISABLED else FrequencyOrder.of(preferredFrequencyOrder, frequencyMode(chosen))
             loaded = true
         }
         return handle.takeIf { it != 0L }
+    }
+
+    /** The dictionary's frequencyMode from its index ("rank-based", "occurrence-based"), if it says. */
+    private fun frequencyMode(dictionary: DictionaryEntity): String? = try {
+        val index = File(dictionary.folder, "index.json").readText()
+        moshi.adapter(Map::class.java).fromJson(index)?.get("frequencyMode") as? String
+    } catch (e: Exception) {
+        null
     }
 
     private companion object {

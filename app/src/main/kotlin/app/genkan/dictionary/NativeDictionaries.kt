@@ -23,10 +23,18 @@ internal object NativeDictionaries {
 
     external fun scanLength(handle: Long): Int
 
-    external fun lookup(handle: Long, text: ByteArray, maxResults: Int, scanLength: Int, frequencyDictionary: ByteArray): ByteArray
+    /** [frequencyOrder]: how [frequencyDictionary] sorts the results ([FrequencyOrder.native]). */
+    external fun lookup(
+        handle: Long,
+        text: ByteArray,
+        maxResults: Int,
+        scanLength: Int,
+        frequencyDictionary: ByteArray,
+        frequencyOrder: Int,
+    ): ByteArray
 
     /** The words of a line, for marking them: JSON [{"s", "l", "e", "r"}] (see dictionary_jni.cpp). */
-    external fun scan(handle: Long, text: ByteArray, scanLength: Int, frequencyDictionary: ByteArray): ByteArray
+    external fun scan(handle: Long, text: ByteArray, scanLength: Int, frequencyDictionary: ByteArray, frequencyOrder: Int): ByteArray
 
     external fun kanji(handle: Long, character: ByteArray): ByteArray
 

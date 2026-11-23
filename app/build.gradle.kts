@@ -292,6 +292,51 @@ val downloadCoreAssets = tasks.register<DownloadPinnedFiles>("downloadCoreAssets
     outputDir.set(layout.buildDirectory.dir("generated/core-assets"))
 }
 
+/**
+ * Host tests of the native lookup (src/test/cpp): hoshidicts and the test built for this machine
+ * with the SDK's CMake (the version the app's native build uses), then run. The unit tests wait
+ * for it, so CI and the local check run it.
+ */
+abstract class NativeLookupTest : DefaultTask() {
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val testSources: DirectoryProperty
+    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sorting: RegularFileProperty
+    @get:Input abstract val hoshidictsCommit: Property<String>
+    @get:Internal abstract val cmakeDir: DirectoryProperty
+    @get:Internal abstract val buildDir: DirectoryProperty
+    @get:OutputFile abstract val passed: RegularFileProperty
+    @get:Inject abstract val exec: ExecOperations
+
+    @TaskAction
+    fun run() {
+        val bin = cmakeDir.get().asFile
+        val cmake = File(bin, "cmake")
+        check(cmake.canExecute()) { "No CMake at $cmake: the app's native build installs it" }
+        val build = buildDir.get().asFile.path
+        exec.exec {
+            commandLine(
+                cmake.path, "-S", testSources.get().asFile.path, "-B", build, "-G", "Ninja",
+                "-DCMAKE_MAKE_PROGRAM=${File(bin, "ninja").path}", "-DCMAKE_BUILD_TYPE=Release",
+            )
+        }
+        exec.exec { commandLine(cmake.path, "--build", build, "--target", "frequency_sorting_test") }
+        exec.exec { commandLine(File(build, "frequency_sorting_test").path) }
+        passed.get().asFile.writeText("passed\n")
+    }
+}
+
+val nativeLookupTest = tasks.register<NativeLookupTest>("nativeLookupTest") {
+    testSources.set(layout.projectDirectory.dir("src/test/cpp"))
+    sorting.set(layout.projectDirectory.file("src/main/cpp/frequency_sorting.h"))
+    hoshidictsCommit.set(providers.exec { commandLine("git", "-C", rootProject.file("third_party/hoshidicts").path, "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("native-tests"))
+    passed.set(layout.buildDirectory.file("native-tests/passed"))
+    // After the app's native configure, which installs the SDK's CMake when it's missing.
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest) }
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
