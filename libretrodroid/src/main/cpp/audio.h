@@ -50,6 +50,7 @@ public:
         int32_t numFrames
     ) override;
 
+    bool onError(oboe::AudioStream *oboeStream, oboe::Result result) override;
     void onErrorAfterClose(oboe::AudioStream *oldStream, oboe::Result result) override;
 
 public:
@@ -84,6 +85,13 @@ private:
     double baseConversionFactor = 1.0;
 
     double framesToSubmit = 0.0;
+    // Genkan: frames played since the stream's state was last logged (see onAudioReady).
+    int64_t framesSinceReport = 0;
+    // Genkan: since the last report, the data callbacks, the frames they read from the FIFO, and
+    // the loudest sample they wrote out after the resampler.
+    int32_t callbacksSinceReport = 0;
+    int64_t framesReadSinceReport = 0;
+    int32_t peakOutSinceReport = 0;
     double errorIntegral = 0.0;
 
     double playbackSpeed = 1.0;

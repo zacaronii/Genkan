@@ -510,7 +510,7 @@ class LibraryViewModel @Inject constructor(
                         launched = true
                         sessionTracker.begin(game.id, result.emulator.packageName)
                         nowPlaying.started(game.id, game.name, game.platformSlug)
-                        show("Starting ${game.name} in ${result.emulator.displayName}…")
+                        show("Starting ${game.name} in ${result.emulator.displayName}…" + (result.note?.let { " ($it)" } ?: ""))
                     }
                     is LaunchResult.NoEmulator -> show(
                         if (result.suggestions.isEmpty()) "Genkan can't launch this platform yet"

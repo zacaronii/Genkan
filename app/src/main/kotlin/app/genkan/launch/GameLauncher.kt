@@ -10,6 +10,7 @@ import android.content.Intent
 import app.genkan.core.BuiltInPlayer
 import app.genkan.core.CoreActivity
 import app.genkan.core.CoreCatalog
+import app.genkan.core.GameFile
 import app.genkan.core.CoreDef
 import app.genkan.core.CoreFirmware
 import app.genkan.core.PlayerSettings
@@ -30,7 +31,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class LaunchResult {
-    data class Launched(val emulator: EmulatorDef) : LaunchResult()
+    /** Started in [emulator]; [note] says why it isn't the one the player would have used, if so. */
+    data class Launched(val emulator: EmulatorDef, val note: String? = null) : LaunchResult()
     /** None of the emulators that play this platform is installed. */
     data class NoEmulator(val suggestions: List<EmulatorDef>) : LaunchResult()
     data class Failed(val message: String) : LaunchResult()
@@ -96,7 +98,10 @@ class GameLauncher @Inject constructor(
         val installed = File(download.path)
         val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) else installed
         if (rom == null || !rom.exists()) return@withContext LaunchPlan.Unavailable(LaunchResult.Failed("The game's files are missing; download it again"))
-        builtInFor(game.platformSlug)?.let { core -> return@withContext prepareBuiltIn(game, rom, core) }
+        val builtIn = builtInFor(game.platformSlug)
+        if (builtIn != null && GameFile.takes(builtIn, rom)) return@withContext prepareBuiltIn(game, rom, builtIn)
+        // A file the built-in core can't play (nor a zip holding one) goes to the emulator below, saying so.
+        val note = builtIn?.let { "${it.displayName} can't play this file" }
 
         val (emulator, version) = installedEmulatorFor(game.platformSlug)
             ?: return@withContext LaunchPlan.Unavailable(LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug)))
@@ -112,7 +117,7 @@ class GameLauncher @Inject constructor(
                     if (command.method == LaunchMethod.INTENT || !launchViaShell(command)) {
                         withContext(Dispatchers.Main) { context.startActivity(command.toIntent(), topScreenOptions()) }
                     }
-                    LaunchResult.Launched(emulator)
+                    LaunchResult.Launched(emulator, note)
                 } catch (e: Exception) {
                     Log.w(TAG, "Launch failed", e)
                     LaunchResult.Failed(e.message ?: "Launch failed")

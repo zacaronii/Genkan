@@ -33,6 +33,7 @@ class DownloadQueueTest {
         // Signed out: a game the queue takes up fails with "Not signed in", without any network.
         session = RomMSession(RomMAccountStore(RuntimeEnvironment.getApplication()), OkHttpClient()),
         httpClient = OkHttpClient(),
+        unpacked = app.genkan.core.UnpackedGames(java.io.File("build/unpacked-test")),
     )
 
     private val game = GameEntity(

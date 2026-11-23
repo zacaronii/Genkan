@@ -5,6 +5,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Process
@@ -16,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
@@ -52,7 +56,10 @@ class CoreActivity : ComponentActivity() {
     /** What the game is drawn with: the launcher's choice, or the reader's while it plays. */
     private var look = ScreenLook.DEFAULT
     private var host: ICoreHost? = null
-    private var lastSaved: ByteArray? = null
+    private lateinit var saver: SramSaver
+    /** The line of text over the game: unpacking, a failed load, a muted volume. */
+    private lateinit var notice: TextView
+    private lateinit var root: FrameLayout
     @Volatile private var quitting = false
 
     /** A Yomikata layout the reader asked for, read between frames. */
@@ -98,6 +105,18 @@ class CoreActivity : ComponentActivity() {
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
 
+        notice = TextView(this).apply {
+            setTextColor(android.graphics.Color.WHITE)
+            setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
+            textSize = 18f
+            setPadding(32, 24, 32, 24)
+            visibility = View.GONE
+        }
+        root = FrameLayout(this).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            addView(notice, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM or android.view.Gravity.START))
+        }
+        setContentView(root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -105,6 +124,23 @@ class CoreActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
+        // A zipped game is unpacked first: the cores read the file as it is.
+        lifecycleScope.launch {
+            val cacheRoot = GameFile.cacheRoot(noBackupFilesDir)
+            if (!def.takes(rom.name)) say("Unpacking…")
+            val prepared = kotlinx.coroutines.withContext(Dispatchers.IO) { GameFile.prepare(def, rom, cacheRoot, GameFile.keyFor(romId, rom)) }
+            when (prepared) {
+                is GameFile.Prepared.Unplayable -> fail(prepared.reason)
+                is GameFile.Prepared.Ready -> {
+                    say(prepared.note, NOTE_MS)
+                    play(def, rom, prepared.file)
+                }
+            }
+        }
+    }
+
+    /** Starts [def] on [game], the file it plays (unpacked from [rom] when that is a zip). */
+    private fun play(def: CoreDef, rom: File, game: File) {
         val system = File(filesDir, "system").apply { mkdirs() }
         def.assets?.let { (zip, folder) -> CoreAssets.unpack(this, zip, File(system, folder)) }
 
@@ -112,15 +148,16 @@ class CoreActivity : ComponentActivity() {
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
             coreFilePath = def.library
-            gameFilePath = rom.absolutePath
+            gameFilePath = game.absolutePath
             systemDirectory = system.absolutePath
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
-            saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()?.also { lastSaved = it }
+            saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
             shader = look.shader(::readAsset)
             preferLowLatencyAudio = true
             rumbleEventsEnabled = false
         }
+        saver = SramSaver(saveFile, loaded = ::gameLoaded, read = { retroView.serializeSRAM(useEmulationThread = false) }, last = data.saveRAMState)
         retroView = GLRetroView(this, data).apply {
             isFocusable = true
             // Touch mode (the bottom screen was tapped last) must not leave it without focus.
@@ -135,11 +172,13 @@ class CoreActivity : ComponentActivity() {
         lifecycle.addObserver(retroView)
         // OCR reads the view's own frame (see frame()), so its fractions are the view's.
         if (!def.splitScreens) overlay = OverlayView(this) { hit -> tapped(hit) }
-        setContentView(FrameLayout(this).apply {
-            addView(retroView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            this@CoreActivity.overlay?.let { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
-        })
+        root.addView(retroView, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        overlay?.let { root.addView(it, 1, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
         retroView.requestFocus()
+        // A load that fails says why on screen, then closes: never a silent black screen.
+        lifecycleScope.launch { retroView.getGLRetroErrors().collect { code -> fail(PlayerMessages.loadError(code, def.displayName)) } }
+        logOutputs()
+        watchVolume()
         retroView.afterFrame = {
             layoutWatch.afterFrame()
             capture?.let { if (it()) capture = null }
@@ -158,6 +197,77 @@ class CoreActivity : ComponentActivity() {
             }
         }
         Log.i(TAG, "Playing ${rom.name} in ${def.displayName}; save at $saveFile")
+    }
+
+    /** Whether the core has a game in it: until then (and for good, when the load failed) it isn't asked for its memory. */
+    private fun gameLoaded(): Boolean = ::retroView.isInitialized && retroView.gameLoaded
+
+    /**
+     * Says "Media volume is off" while it is: at the start and whenever it goes to zero or mute
+     * while the game runs (another app on the device may set it as the player starts), and hides
+     * it when the volume comes back.
+     */
+    private fun watchVolume() {
+        val audio = getSystemService(AudioManager::class.java)
+        lifecycleScope.launch {
+            var off = false
+            while (isActive) {
+                val now = PlayerMessages.volumeOff(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.isStreamMute(AudioManager.STREAM_MUSIC))
+                if (now != off && !quitting) {
+                    off = now
+                    Log.i(TAG, if (now) "Media volume is off" else "Media volume is back")
+                    if (now) say(PlayerMessages.MEDIA_VOLUME_OFF) else if (notice.text == PlayerMessages.MEDIA_VOLUME_OFF) say(null)
+                }
+                delay(VOLUME_EVERY_MS)
+            }
+        }
+    }
+
+    /** Shows [text] over the game, for [forMs] or until the next; null hides it. */
+    private fun say(text: String?, forMs: Long? = null) {
+        notice.text = text
+        notice.visibility = if (text == null) View.GONE else View.VISIBLE
+        if (text != null && forMs != null) {
+            lifecycleScope.launch {
+                delay(forMs)
+                if (notice.text == text) say(null)
+            }
+        }
+    }
+
+    /** The game can't be played: says why, then closes. Nothing is saved: nothing was played. */
+    private fun fail(reason: String) {
+        if (quitting) return
+        quitting = true
+        Log.w(TAG, "Can't play: $reason")
+        say(reason)
+        lifecycleScope.launch {
+            delay(FAIL_SHOW_MS)
+            finish()
+        }
+    }
+
+    /**
+     * The outputs sound can go to, by id and type, and where media goes now; and each output
+     * added or removed while the game runs. The audio log names the stream's device by id: the
+     * two together say whether the stream plays where media is routed.
+     */
+    private fun logOutputs() {
+        val audio = getSystemService(AudioManager::class.java)
+        fun describe(devices: Array<AudioDeviceInfo>) = devices.joinToString { "${it.id} ${PlayerMessages.outputType(it.type)}" }
+        fun mediaRoute() = audio.getAudioDevicesForAttributes(
+            android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).build(),
+        ).joinToString { "${it.id} ${PlayerMessages.outputType(it.type)}" }
+        Log.i(TAG, "Audio outputs: ${describe(audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS))}; media goes to ${mediaRoute()}")
+        audio.registerAudioDeviceCallback(object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(added: Array<AudioDeviceInfo>) {
+                Log.i(TAG, "Audio outputs added: ${describe(added.filter { it.isSink }.toTypedArray())}; media goes to ${mediaRoute()}")
+            }
+
+            override fun onAudioDevicesRemoved(removed: Array<AudioDeviceInfo>) {
+                Log.i(TAG, "Audio outputs removed: ${describe(removed.filter { it.isSink }.toTypedArray())}; media goes to ${mediaRoute()}")
+            }
+        }, null)
     }
 
     /** A tap on the overlay: the reader looks the word up. */
@@ -220,6 +330,7 @@ class CoreActivity : ComponentActivity() {
         override fun frame(): Bundle? {
             // Both of a DS's screens, as the core drew them: the reader looks at either.
             if (core.splitScreens) return keptFrameBundle()
+            if (!gameLoaded()) return null
             val result = AtomicReference<Bundle?>()
             val done = CountDownLatch(1)
             retroView.grabFrame { pixels, width, height ->
@@ -272,6 +383,7 @@ class CoreActivity : ComponentActivity() {
             // Only into Genkan's own snapshot folder, which both processes share.
             val file = java.io.File(path)
             if (file.parentFile?.canonicalPath != java.io.File(filesDir, "yomikata-snapshots").canonicalPath) return -1
+            if (!gameLoaded()) return -1
             return try {
                 val state = retroView.serializeState()
                 if (state.isEmpty()) return -1
@@ -395,24 +507,9 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
-    /** Writes the game's battery save when it changed since the last write. */
-    @Synchronized
+    /** Writes the game's battery save when it changed since the last write; not before a game has loaded. */
     private fun save() {
-        if (!::retroView.isInitialized) return
-        val sram = try {
-            retroView.serializeSRAM(useEmulationThread = false)
-        } catch (e: Exception) {
-            Log.w(TAG, "No save from the core: $e")
-            return
-        }
-        if (sram.isEmpty() || sram.contentEquals(lastSaved)) return
-        val part = File(saveFile.parentFile, saveFile.name + ".part")
-        saveFile.parentFile?.mkdirs()
-        part.writeBytes(sram)
-        if (part.renameTo(saveFile)) {
-            lastSaved = sram
-            Log.i(TAG, "Saved ${sram.size} bytes to $saveFile")
-        }
+        if (::saver.isInitialized) saver.save()
     }
 
     private fun quit() {
@@ -530,6 +627,12 @@ class CoreActivity : ComponentActivity() {
         private const val CAPTURE_WAIT_MS = 2_000L
         private const val CAPTURE_CHUNK = 1 shl 20
         private const val AUDIO_EVERY_MS = 100L
+        /** How long a failed load's reason stays up before the player closes. */
+        private const val FAIL_SHOW_MS = 5_000L
+        /** How long a note (which file of a zip is played) stays up. */
+        private const val NOTE_MS = 4_000L
+        /** How often the media volume is looked at, for the note while it's off. */
+        private const val VOLUME_EVERY_MS = 1_000L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L
         /** A kept frame is enlarged to at least this wide for the reader's OCR. */
