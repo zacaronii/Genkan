@@ -82,6 +82,8 @@ class CoreActivity : ComponentActivity() {
     /** The slot the state shortcuts save to and load from; [SaveStates.BEFORE_LOAD] undoes a load. */
     private var slot = 1
     private var fastForward = 1
+    /** A state being saved or loaded: a quit waits for it, so the process isn't ended halfway through its file. */
+    private var stateWork: kotlinx.coroutines.Job? = null
     /** Whether a Back closes something on the bottom screen first ([closedOnBottom]). */
     private val backPress = BackPress(::closedOnBottom)
     /** Whether the stick clicks step the bottom screen: on consoles whose own pad has none. */
@@ -553,6 +555,14 @@ class CoreActivity : ComponentActivity() {
             return
         }
         if (quitting) return
+        // A state still being written finishes first: the process ends with the activity.
+        stateWork?.takeIf { it.isActive }?.let { work ->
+            lifecycleScope.launch {
+                work.join()
+                quit()
+            }
+            return
+        }
         quitting = true
         save()
         finish()
@@ -636,8 +646,8 @@ class CoreActivity : ComponentActivity() {
     private fun startShortcut(shortcut: PadChords.Shortcut) {
         when (shortcut) {
             PadChords.Shortcut.QUIT -> quit()
-            PadChords.Shortcut.SAVE_STATE -> lifecycleScope.launch(Dispatchers.IO) { saveState() }
-            PadChords.Shortcut.LOAD_STATE -> lifecycleScope.launch(Dispatchers.IO) { loadState() }
+            PadChords.Shortcut.SAVE_STATE -> if (stateWork?.isActive != true) stateWork = lifecycleScope.launch(Dispatchers.IO) { saveState() }
+            PadChords.Shortcut.LOAD_STATE -> if (stateWork?.isActive != true) stateWork = lifecycleScope.launch(Dispatchers.IO) { loadState() }
             PadChords.Shortcut.NEXT_SLOT -> pickSlot(slot + 1)
             PadChords.Shortcut.PREVIOUS_SLOT -> pickSlot(slot - 1)
             PadChords.Shortcut.FAST_FORWARD -> if (gameLoaded()) {
