@@ -139,20 +139,24 @@ class BuiltInPlayer @Inject constructor() {
      * addresses) as they were right after it, nothing run in between. The memory passes through
      * [file] (in the snapshot folder), which is gone after. Null when the player can't.
      */
-    fun moment(range: LongRange, file: java.io.File): Pair<Bitmap?, ByteArray>? {
+    fun moment(range: LongRange, file: java.io.File): app.genkan.memory.RamSnapshots.Moment? {
         val game = _game.value ?: return null
         val length = (range.last - range.first + 1).toInt()
+        // The player puts the video RAM of the same frame beside it, when the core gives one.
+        val video = java.io.File(file.path + VRAM_SUFFIX)
         return try {
             if (!game.session.captureTo(file.absolutePath, range.first - game.core.ramBase, length)) return null
             val ram = file.readBytes()
+            val vram = video.takeIf { it.isFile }?.readBytes()
             val frame = game.session.keptFrame()?.let(::bitmapOf)
-            frame to ram
+            app.genkan.memory.RamSnapshots.Moment(frame, ram, vram)
         } catch (e: RemoteException) {
             null
         } catch (e: java.io.IOException) {
             null
         } finally {
             file.delete()
+            video.delete()
         }
     }
 
@@ -228,6 +232,8 @@ class BuiltInPlayer @Inject constructor() {
     }
 
     companion object {
+        /** Beside a capture's RAM file: the video RAM of the same frame ([moment]). */
+        const val VRAM_SUFFIX = ".vram"
         private const val VIDEO_CHUNK = 64 * 1024
         private const val TAG = "BuiltInPlayer"
         const val FRAME_WIDTH = "width"
