@@ -156,11 +156,11 @@ class SampleInbox @Inject constructor(
         if (files > 0) Log.i(TAG, "Sent $files sample files to the inbox, $added new samples")
     }
 
-    /** A snapshot waits on the device for an inbox limit (see [isSizeLimit]); its reason is the status. */
+    /** A snapshot the inbox refused waits on the device (see [keepsRefused]); its reason is the status. */
     private var snapshotHeld = false
 
     /**
-     * The snapshots the inbox refused for size since Genkan started, by name, with its reason:
+     * The snapshots the inbox refused since Genkan started, by name, with its reason:
      * the automatic send skips them, so tens of megabytes don't go over the network on every
      * Home; the Yomikata page's send tries them again, and so does a restart.
      */
@@ -215,17 +215,13 @@ class SampleInbox @Inject constructor(
                         _status.value = InboxStatus.Refused("the inbox didn't accept the token")
                         return@withContext null
                     }
-                    400, 413 -> if (isSizeLimit(response.code, text)) {
-                        // Too large for the inbox as it is: kept, since a limit can be raised and
-                        // a capture can't be taken again; the reason shows until it goes.
+                    in REFUSED -> {
+                        // Kept, whatever the reason: a capture can't be taken again, and the inbox
+                        // can change (a raised limit, a field it now takes); the reason shows until it goes.
                         Log.w(TAG, "Inbox can't take snapshot ${meta.name} yet: ${response.code} $text")
                         held[meta.name] = detailOf(text)
                         _status.value = InboxStatus.Refused("${meta.name} kept on this device: ${detailOf(text)}")
                         snapshotHeld = true
-                    } else {
-                        // Not something a retry fixes (outside main RAM, a meta it can't read): dropped.
-                        Log.w(TAG, "Inbox refused snapshot ${meta.name}: ${response.code} $text")
-                        snapshots.remove(meta)
                     }
                     else -> Log.i(TAG, "Snapshot ${meta.name} not sent yet: HTTP ${response.code}")
                 }
@@ -309,11 +305,13 @@ class SampleInbox @Inject constructor(
 
     companion object {
         /**
-         * Whether the inbox refused a snapshot for its size (a 413, or a 400 saying a part is too
-         * large), which a raised limit fixes, rather than for what it is.
+         * Whether a snapshot the inbox answered with [code] stays on the device, held: any refusal
+         * of what it is (400) or how large (413), since the inbox may take it later and the
+         * moment can't be captured again. Other answers leave it to be sent as usual.
          */
-        fun isSizeLimit(code: Int, body: String): Boolean =
-            code == 413 || (code == 400 && SIZE_WORDS.any { body.contains(it, ignoreCase = true) })
+        fun keepsRefused(code: Int): Boolean = code in REFUSED
+
+        private val REFUSED = setOf(400, 413)
 
         /** Whether the automatic send skips [name]: it's held for an inbox limit and not retried now. */
         fun skipsHeld(name: String, held: Set<String>, retryHeld: Boolean): Boolean = !retryHeld && name in held
@@ -322,7 +320,6 @@ class SampleInbox @Inject constructor(
         fun detailOf(body: String): String =
             runCatching { JSONObject(body).optString("detail") }.getOrNull()?.takeIf { it.isNotBlank() } ?: body.take(200)
 
-        private val SIZE_WORDS = listOf("larger than", "too large", "exceeds")
 
         private const val TAG = "SampleInbox"
         private val ADDRESS = stringPreferencesKey("inbox_address")
