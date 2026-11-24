@@ -222,7 +222,10 @@ class BuiltInText @Inject constructor(
             val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
                 ?: ocr.latest.value?.takeIf { it.isNotBlank() }
                 ?: ""
+            // With OCR off and no layout, an empty line means nothing read the screen, not that it was blank.
+            val unread = line.isEmpty() && read == null && !ocr.enabled.value
             val moment = when {
+                unread -> "OCR off, screen not read"
                 line.isEmpty() -> "no text on screen"
                 read?.asking == true -> "a question on screen"
                 read?.waitingOnLine == true -> "waiting for a press"
@@ -230,7 +233,7 @@ class BuiltInText @Inject constructor(
                 else -> "line on screen"
             }
             val core = player.game.value?.core?.displayName ?: "built-in player"
-            if (snapshots.takeNow(m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment")) {
+            if (snapshots.takeNow(m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment", ocrUnavailable = unread)) {
                 "Snapshot taken ($moment); it goes to Yomikata with the next sync"
             } else {
                 "Couldn't take a snapshot of this system's memory"

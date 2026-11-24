@@ -169,6 +169,7 @@ class CoreActivity : ComponentActivity() {
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
+            sticksOnly = def.sticksOnly
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
             shader = look.shader(::readAsset)
             // Per console (Settings > Playing): low latency unless it was switched off there.

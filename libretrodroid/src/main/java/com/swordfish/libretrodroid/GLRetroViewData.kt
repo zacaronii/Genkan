@@ -40,6 +40,11 @@ class GLRetroViewData(context: Context) {
      * RetroArch tells every core; empty, none. Dolphin connects no controller until it's told.
      */
     var portDevices: IntArray = IntArray(0)
+    /**
+     * Genkan: the console has sticks of its own (a GameCube), so they are only its sticks: no
+     * D-pad presses made of them (see StickMotion).
+     */
+    var sticksOnly: Boolean = false
 }
 
 enum class ViewportAlignment(val value: Int) {

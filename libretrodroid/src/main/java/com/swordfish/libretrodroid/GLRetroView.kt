@@ -286,24 +286,13 @@ class GLRetroView(
         if (port >= 0) {
             when (event?.source) {
                 InputDevice.SOURCE_JOYSTICK -> {
-                    sendMotionEvent(
-                        MOTION_SOURCE_DPAD,
-                        event.getAxisValue(MotionEvent.AXIS_HAT_X),
-                        event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-                        port
-                    )
-                    sendMotionEvent(
-                        MOTION_SOURCE_ANALOG_LEFT,
-                        event.getAxisValue(MotionEvent.AXIS_X),
-                        event.getAxisValue(MotionEvent.AXIS_Y),
-                        port
-                    )
-                    sendMotionEvent(
-                        MOTION_SOURCE_ANALOG_RIGHT,
-                        event.getAxisValue(MotionEvent.AXIS_Z),
-                        event.getAxisValue(MotionEvent.AXIS_RZ),
-                        port
-                    )
+                    // Genkan: see StickMotion, which also says whether the motion is handled here.
+                    StickMotion.moves(
+                        event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                        event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
+                        event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ),
+                    ).forEach { sendMotionEvent(it.source, it.x, it.y, port) }
+                    if (StickMotion.handled(data.sticksOnly)) return true
                 }
             }
         }
