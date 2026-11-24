@@ -50,6 +50,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -152,63 +153,66 @@ fun ReaderScreen(
     }
 
     Column(Modifier.fillMaxSize().background(colors.background)) {
-        Row(
-            Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                // One line that ends in "…": wrapped, it would show only its first words with no sign of the rest.
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    // This session's reading, then where the text comes from.
-                    (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
-                        notice != null -> notice!!
-                        manualNotice != null -> manualNotice!!
-                        finder is HookFinderState.Working -> (finder as HookFinderState.Working).message
-                        finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
-                        finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
-                        ocrOn && !capturing -> "OCR: waiting for capture"
-                        layoutActive -> "Text from the game's memory (Yomikata layout)"
-                        builtIn == MemoryTextStatus.Locked -> "Text from the game's memory"
-                        builtIn == MemoryTextStatus.Searching -> "Looking for this line in the game's memory…"
-                        builtIn == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from the game's memory"
-                        azahar == MemoryTextStatus.Locked -> "Azahar text (following it in memory)"
-                        azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
-                        azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
-                        ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
-                        ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR, or Find hook"
-                        ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
-                        ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
-                            (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "") +
-                            (if (builtIn == MemoryTextStatus.NotFound) "  ·  not found in the game's memory" else "") +
-                            (if (notListed) "  ·  no text reader for this game yet" else "")
-                        notListed -> "No text reader for this game yet; OCR is available"
-                        azahar == MemoryTextStatus.NeedsOcr -> "Azahar: turn OCR on once to find the text"
-                        builtIn == MemoryTextStatus.NeedsOcr -> "Built-in player: turn OCR on once to find the game's text"
-                        else -> when (status) {
-                            is HookStatus.Connected -> "Texthooker connected"
-                            is HookStatus.Waiting -> "Waiting for a texthooker"
-                        }
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
-            }
-            // OCR and Snapshot stay on the bar, one press away; the rest is in the menu, each
-            // row with its state. The chips take what they need, up to most of the bar.
+        // While a word's popup is up, a tap on the bar only closes it, and goes no further.
+        TapCloses(active = lookup != null, onClose = viewModel::closeLookup) {
             Row(
-                Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp * 0.6f).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
-                // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
-                if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
-                if (menuItems.isNotEmpty()) {
-                    ReaderMenuButton(menuOpen, attention = menuItems.any { it.attention }) { menuOpen = !menuOpen }
+                Column(Modifier.weight(1f)) {
+                    // One line that ends in "…": wrapped, it would show only its first words with no sign of the rest.
+                    Text(game.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        // This session's reading, then where the text comes from.
+                        (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
+                            notice != null -> notice!!
+                            manualNotice != null -> manualNotice!!
+                            finder is HookFinderState.Working -> (finder as HookFinderState.Working).message
+                            finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
+                            finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
+                            ocrOn && !capturing -> "OCR: waiting for capture"
+                            layoutActive -> "Text from the game's memory (Yomikata layout)"
+                            builtIn == MemoryTextStatus.Locked -> "Text from the game's memory"
+                            builtIn == MemoryTextStatus.Searching -> "Looking for this line in the game's memory…"
+                            builtIn == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from the game's memory"
+                            azahar == MemoryTextStatus.Locked -> "Azahar text (following it in memory)"
+                            azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
+                            azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
+                            ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
+                            ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR, or Find hook"
+                            ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
+                            ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
+                                (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "") +
+                                (if (builtIn == MemoryTextStatus.NotFound) "  ·  not found in the game's memory" else "") +
+                                (if (notListed) "  ·  no text reader for this game yet" else "")
+                            notListed -> "No text reader for this game yet; OCR is available"
+                            azahar == MemoryTextStatus.NeedsOcr -> "Azahar: turn OCR on once to find the text"
+                            builtIn == MemoryTextStatus.NeedsOcr -> "Built-in player: turn OCR on once to find the game's text"
+                            else -> when (status) {
+                                is HookStatus.Connected -> "Texthooker connected"
+                                is HookStatus.Waiting -> "Waiting for a texthooker"
+                            }
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                // OCR and Snapshot stay on the bar, one press away; the rest is in the menu, each
+                // row with its state. The chips take what they need, up to most of the bar.
+                Row(
+                    Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp * 0.6f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
+                    // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
+                    if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
+                    if (menuItems.isNotEmpty()) {
+                        ReaderMenuButton(menuOpen, attention = menuItems.any { it.attention }) { menuOpen = !menuOpen }
+                    }
                 }
             }
         }
@@ -380,11 +384,35 @@ internal fun Chip(label: String, onClick: () -> Unit) {
     )
 }
 
+/** The catcher over the reader's bar while a popup is up. */
+internal const val BAR_CLOSES_POPUP = "bar-closes-popup"
+
+/** [content], and while [active] a cover over it: a tap there only calls [onClose], and goes no further. */
+@Composable
+internal fun TapCloses(active: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
+    Box {
+        content()
+        if (active) {
+            Box(
+                Modifier.matchParentSize().testTag(BAR_CLOSES_POPUP).clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClose,
+                ),
+            )
+        }
+    }
+}
+
 /** A speaker known only by number ("#7"): kept to break runs, not shown. */
 private val UNNAMED_SPEAKER = Regex("#\\d+")
 
+/**
+ * The backlog's lines: a tap on a character looks it up ([onTap]); any other tap on it (past a
+ * short line's end, between lines, below the last) is [onBackground], which closes the popup.
+ */
 @Composable
-private fun Backlog(
+internal fun Backlog(
     lines: List<ReaderLineEntity>,
     lookup: Lookup?,
     panelHeight: Dp,
@@ -435,15 +463,19 @@ private fun Backlog(
                 if (name != null && (i == 0 || newRun)) {
                     Text(name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty()) { onTap(line, it) }
+                TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty(), onMiss = onBackground) { onTap(line, it) }
             }
         }
     }
 }
 
-/** A line whose characters can be tapped; the looked-up word is highlighted. */
+/**
+ * A line whose characters can be tapped; the looked-up word is highlighted. The line is as wide
+ * as the backlog, so a tap that lands on no character (past a short line's end, in its padding)
+ * is [onMiss], not the nearest character.
+ */
 @Composable
-private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineMark>, onTapAt: (Int) -> Unit) {
+private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineMark>, onMiss: () -> Unit, onTapAt: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
     val annotated = buildAnnotatedString {
@@ -461,10 +493,19 @@ private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineM
         onTextLayout = { layout.value = it },
         modifier = Modifier.fillMaxWidth().drawBehind { layout.value?.let { drawMarks(it, marks, text.length) } }.pointerInput(text) {
             detectTapGestures { position ->
-                layout.value?.let { onTapAt(it.getOffsetForPosition(position).coerceAtMost(text.length - 1)) }
+                val result = layout.value ?: return@detectTapGestures
+                val offset = result.getOffsetForPosition(position).coerceAtMost(text.length - 1)
+                if (offset >= 0 && onCharacter(result, offset, position)) onTapAt(offset) else onMiss()
             }
         },
     )
+}
+
+/** Whether [position] is on character [offset]'s box (as wide as the glyph, as tall as its row). */
+internal fun onCharacter(layout: TextLayoutResult, offset: Int, position: Offset): Boolean {
+    val box = layout.getBoundingBox(offset)
+    val line = layout.getLineForOffset(offset)
+    return position.x >= box.left && position.x <= box.right && position.y >= layout.getLineTop(line) && position.y <= layout.getLineBottom(line)
 }
 
 /**
