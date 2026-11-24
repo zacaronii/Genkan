@@ -111,7 +111,8 @@ class TextSamples @Inject constructor(private val settings: PlayerSettings) {
         fun yomikataPlatform(slug: String): String = YOMIKATA_PLATFORMS[slug] ?: slug
 
         private val YOMIKATA_PLATFORMS = mapOf(
-            "psx" to "ps1", "ngc" to "gc", "snes" to "sfc", "sfam" to "sfc", "nes" to "fc", "famicom" to "fc",
+            // The GameCube keeps RomM's ngc, as the inbox names it.
+            "psx" to "ps1", "snes" to "sfc", "sfam" to "sfc", "nes" to "fc", "famicom" to "fc",
             "genesis" to "md", "genesis-slash-megadrive" to "md", "megadrive" to "md",
         )
         private const val TAG = "TextSamples"
