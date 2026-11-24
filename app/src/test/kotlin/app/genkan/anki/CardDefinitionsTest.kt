@@ -53,6 +53,31 @@ class CardDefinitionsTest {
     }
 
     @Test
+    fun `a single sense is followed by the other dictionaries' senses, up to three`() {
+        val glossaries = listOf(
+            GlossaryEntry("First", structured(listOf("attribute", "property"))),
+            GlossaryEntry("Second", "[\"1 alignment.\\n2 element; type.\\n3 a fourth sense.\"]"),
+        )
+        assertEquals("1. attribute; property<br>2. alignment<br>3. element; type", CardDefinitions.selectionText(glossaries))
+        // Several senses of its own: the first dictionary's alone.
+        val two = listOf(GlossaryEntry("First", structured(listOf("one"))), GlossaryEntry("First", structured(listOf("two")))) + glossaries.drop(1)
+        assertEquals("1. one<br>2. two", CardDefinitions.selectionText(two))
+    }
+
+    @Test
+    fun `a gloss repeated with an article or a full stop is a repeat, and a sense of repeats is skipped`() {
+        assertEquals("run", CardDefinitions.sameGloss("to run."))
+        assertEquals("apple", CardDefinitions.sameGloss("an apple"))
+        assertEquals("theory", CardDefinitions.sameGloss("theory"))
+        val glossaries = listOf(
+            GlossaryEntry("First", structured(listOf("to run", "to dash"))),
+            GlossaryEntry("Second", "[\"1 run.\\n2 a dash; dash.\\n3 to sprint.\"]"),
+        )
+        // The second dictionary's first two senses repeat the first's: only "to sprint" is new.
+        assertEquals("1. to run; to dash<br>2. to sprint", CardDefinitions.selectionText(glossaries))
+    }
+
+    @Test
     fun `the forms entry is not a meaning`() {
         val glossaries = listOf(
             GlossaryEntry("Terms", structured(listOf("desperate", "frantic"))),

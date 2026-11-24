@@ -39,7 +39,8 @@ class CardFieldsTest {
         assertEquals("眺[なが]める", fields["ExpressionFurigana"])
         assertEquals("ながめる", fields["ExpressionReading"])
         assertEquals("彼女はそう言って、窓の外を<b>眺めた</b>。", fields["Sentence"])
-        assertEquals("3", fields["PitchPosition"])
+        assertEquals(CardFields.downstepNotation(3), fields["PitchPosition"])
+        assertEquals("x", fields["IsWordAndSentenceCard"])
         assertEquals("926", fields["FreqSort"])
         assertEquals("<img src=\"genkan_1.webp\">", fields["Picture"])
         assertEquals("マルコと銀河竜", fields["MiscInfo"])
@@ -73,7 +74,36 @@ class CardFieldsTest {
     @Test
     fun `several pitch positions become a list`() {
         val two = hit.copy(pitches = listOf(PitchEntry("p", listOf(Pitch(0), Pitch(2)))))
-        assertEquals("<ol><li>0</li><li>2</li></ol>", CardFields.pitchPositions(two))
+        assertEquals("<ol><li>${CardFields.downstepNotation(0)}</li><li>${CardFields.downstepNotation(2)}</li></ol>", CardFields.pitchPositions(two))
+    }
+
+    @Test
+    fun `a pitch position is Yomitan's downstep notation`() {
+        assertEquals(
+            "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"0\" style=\"display: inline;\">" +
+                "<span class=\"pronunciation-downstep-notation-prefix\">[</span>" +
+                "<span class=\"pronunciation-downstep-notation-number\">0</span>" +
+                "<span class=\"pronunciation-downstep-notation-suffix\">]</span></span>",
+            CardFields.downstepNotation(0),
+        )
+        assertEquals("", CardFields.pitchPositions(hit.copy(pitches = emptyList())))
+    }
+
+    @Test
+    fun `pitch categories follow Yomitan's`() {
+        fun categories(reading: String, rules: String, vararg positions: Int) =
+            CardFields.pitchCategories(hit.copy(reading = reading, rules = rules, pitches = listOf(PitchEntry("p", positions.map { Pitch(it) }))))
+        // A noun: flat, first mora, middle, last.
+        assertEquals("heiban", categories("ぞくせい", "", 0))
+        assertEquals("atamadaka", categories("ねこ", "", 1))
+        assertEquals("nakadaka", categories("あおぞら", "", 3))
+        assertEquals("odaka", categories("いもうと", "", 4))
+        // A verb's or an i-adjective's downstep is kifuku.
+        assertEquals("kifuku", categories("ながめる", "v1", 3))
+        assertEquals("heiban,kifuku", categories("あかい", "adj-i", 0, 2))
+        // Small kana join the mora before them: きょう is two morae.
+        assertEquals("odaka", categories("きょう", "", 2))
+        assertEquals("", CardFields.pitchCategories(hit.copy(pitches = emptyList())))
     }
 
     @Test

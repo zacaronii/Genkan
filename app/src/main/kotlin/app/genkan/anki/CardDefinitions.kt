@@ -87,12 +87,13 @@ object CardDefinitions {
     /**
      * A glanceable definition: the first [maxSenses] senses, each with its first [maxGlosses]
      * glosses, one line per sense ("1. rich; strong; heavy"). Parenthetical notes are dropped
-     * unless they're the whole gloss, and repeated glosses are skipped.
+     * unless they're the whole gloss, and repeated glosses are skipped ("to run" repeats "run",
+     * see [sameGloss]), as is a sense with nothing new.
      */
     fun shortDefinition(senses: List<List<String>>, maxSenses: Int = 3, maxGlosses: Int = 3): String {
         val seen = mutableSetOf<String>()
         val lines = senses.mapNotNull { sense ->
-            val glosses = sense.map(::withoutNotes).filter { it.isNotEmpty() && seen.add(it) }.take(maxGlosses).map(::capped)
+            val glosses = sense.map(::withoutNotes).filter { it.isNotEmpty() && seen.add(sameGloss(it)) }.take(maxGlosses).map(::capped)
             if (glosses.isEmpty()) null else glosses.joinToString("; ") { escape(it) }
         }.take(maxSenses)
         if (lines.size <= 1) return lines.firstOrNull().orEmpty()
@@ -102,13 +103,22 @@ object CardDefinitions {
     /**
      * The senses a short definition is made from: the first dictionary, in the results' order,
      * whose entries give any glosses (a prose dictionary first doesn't leave it empty), leaving out
-     * JMdict's forms entry (its spellings, not a meaning).
+     * JMdict's forms entry (its spellings, not a meaning). When that dictionary has a single
+     * sense, the other dictionaries' senses follow it, in the results' order (as Amatsubame does).
      */
     fun shortSenses(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): List<List<String>> {
         val meanings = glossaries.filter { "forms" !in it.definitionTags.split(' ') }
         val byDictionary = meanings.groupBy { it.dictionary }.mapValues { (_, entries) -> entries.flatMap { glosses(it.glossary, headwords) } }
-        return meanings.map { it.dictionary }.distinct().firstNotNullOfOrNull { byDictionary[it]?.takeIf { s -> s.isNotEmpty() } }.orEmpty()
+        val order = meanings.map { it.dictionary }.distinct().filter { byDictionary[it].orEmpty().isNotEmpty() }
+        val first = order.firstOrNull() ?: return emptyList()
+        val senses = byDictionary.getValue(first)
+        if (senses.size != 1) return senses
+        return senses + order.drop(1).flatMap { byDictionary.getValue(it) }
     }
+
+    /** A gloss as compared for repeats: without a leading "a", "an", "the" or "to", or trailing punctuation. */
+    fun sameGloss(gloss: String): String =
+        gloss.trim().replace(LEADING_ARTICLE, "").trimEnd { it.isWhitespace() || it in TRAILING_PUNCTUATION }
 
     /** SelectionText: the short definition of [glossaries]. */
     fun selectionText(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): String =
@@ -154,6 +164,10 @@ object CardDefinitions {
     private val HEADWORD_LINE = Regex("""^\S{0,20}?【[^】]*】""")
 
     private val SPACES = Regex("""\s+""")
+
+    private val LEADING_ARTICLE = Regex("""^(?:a|an|the|to)\s+""")
+
+    private const val TRAILING_PUNCTUATION = ".,;:!?。、！？"
 
     private val PARENTHESES = Regex("""\s*[(（][^()（）]*[)）]\s*""")
 

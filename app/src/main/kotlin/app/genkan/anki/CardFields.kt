@@ -42,9 +42,12 @@ object CardFields {
             put("Sentence", sentenceWithWord(source.sentence, source.matchStart, source.matchLength))
             put("Glossary", source.glossaryHtml)
             put("PitchPosition", pitchPositions(hit))
+            put("PitchCategories", pitchCategories(hit))
             put("Frequency", frequencies(hit))
             put("FreqSort", harmonicRank(hit).toString())
             put("MiscInfo", source.gameTitle)
+            // Lapis shows a word-and-sentence card: the word, then its sentence, as cards made elsewhere do.
+            put("IsWordAndSentenceCard", "x")
             source.pictureFile?.let { put("Picture", "<img src=\"$it\">") }
             source.sentenceAudioFile?.let { put("SentenceAudio", "[sound:$it]") }
         }
@@ -61,15 +64,55 @@ object CardFields {
         return escape(sentence.substring(0, s)) + "<b>" + escape(sentence.substring(s, e)) + "</b>" + escape(sentence.substring(e))
     }
 
-    /** Yomitan's {pitch-accent-positions}: one number, or a list when there are several. */
+    /**
+     * Yomitan's {pitch-accent-positions}: each downstep in its notation, `[0]` (Lapis reads the
+     * number from it); a list when there are several.
+     */
     fun pitchPositions(hit: TermHit): String {
         val positions = hit.pitches.flatMap { it.pitches }.map { it.position }.filter { it >= 0 }.distinct()
         return when (positions.size) {
             0 -> ""
-            1 -> positions.single().toString()
-            else -> positions.joinToString("", "<ol>", "</ol>") { "<li>$it</li>" }
+            1 -> downstepNotation(positions.single())
+            else -> positions.joinToString("", "<ol>", "</ol>") { "<li>${downstepNotation(it)}</li>" }
         }
     }
+
+    /** Yomitan's downstep notation for [position], with the inline style its cards carry. */
+    fun downstepNotation(position: Int): String =
+        "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"$position\" style=\"display: inline;\">" +
+            "<span class=\"pronunciation-downstep-notation-prefix\">[</span>" +
+            "<span class=\"pronunciation-downstep-notation-number\">$position</span>" +
+            "<span class=\"pronunciation-downstep-notation-suffix\">]</span></span>"
+
+    /**
+     * Yomitan's {pitch-accent-categories}: heiban, atamadaka, nakadaka or odaka for each pitch (a
+     * verb's or adjective's downstep is kifuku), each once, comma-separated. Lapis colours by it.
+     */
+    fun pitchCategories(hit: TermHit): String {
+        val classes = hit.rules.split(' ').filter { it.isNotEmpty() }
+        val verbOrAdjective = classes.any { it in VERB_OR_ADJECTIVE } && !("vs" in classes && "n" in classes)
+        val morae = moraCount(hit.reading.ifEmpty { hit.expression })
+        return hit.pitches.flatMap { it.pitches }.map { it.position }.mapNotNull { position ->
+            when {
+                position == 0 -> "heiban"
+                position < 0 -> null
+                verbOrAdjective -> "kifuku"
+                position == 1 -> "atamadaka"
+                position >= morae -> "odaka"
+                else -> "nakadaka"
+            }
+        }.distinct().joinToString(",")
+    }
+
+    /** Morae in a reading: a small kana (ゃ, ァ) joins the one before it. */
+    fun moraCount(reading: String): Int {
+        var count = 0
+        reading.forEachIndexed { i, c -> if (c !in SMALL_KANA || i == 0) count++ }
+        return count
+    }
+
+    private const val SMALL_KANA = "ぁぃぅぇぉゃゅょゎァィゥェォャュョヮ"
+    private val VERB_OR_ADJECTIVE = setOf("v1", "v5", "vk", "vz", "vs", "adj-i")
 
     /** Yomitan's {frequencies}: each frequency dictionary's values. */
     fun frequencies(hit: TermHit): String {
