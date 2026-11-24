@@ -60,6 +60,7 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.apiKey, { v -> viewModel.edit { it.copy(apiKey = v) } }, "API key (if AnkiConnect has one)", keyboardType = KeyboardType.Password)
+            GenkanTextField(form.audioUrl, { v -> viewModel.edit { it.copy(audioUrl = v) } }, "Word audio: a Yomitan audio source URL with {term} and {reading} (optional)", keyboardType = KeyboardType.Uri)
             // Picked from what Anki has: cards can't be sent without reaching it anyway.
             val known = choices
             if (known != null) {

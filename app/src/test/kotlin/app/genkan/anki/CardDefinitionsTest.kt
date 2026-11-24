@@ -72,7 +72,7 @@ class CardDefinitionsTest {
             glossaries = listOf(GlossaryEntry("First", structured(listOf("raw"))), GlossaryEntry("Second", structured(listOf("uncooked", "fresh")))))
         val otherReading = TermHit(matched = "生", deinflected = "生", expression = "生", reading = "せい",
             glossaries = listOf(GlossaryEntry("Second", structured(listOf("life", "living")))))
-        val fields = CardFields.lapis(MineSource(mined, "生", 0, 1, "", "", "生[なま]", ""))
+        val fields = CardFields.lapis(MineSource(mined, "生", 0, 1, "生[なま]", ""))
         assertEquals("1. raw<br>2. uncooked; fresh", fields["SelectionText"])
         assertFalse(fields["SelectionText"]!!.contains("life"))
         assertEquals("life; living", CardDefinitions.selectionText(otherReading.glossaries))
@@ -152,25 +152,30 @@ class CardDefinitionsTest {
     }
 
     @Test
-    fun `a first dictionary with no glosses at all keeps the full entries`() {
-        val prose = listOf(GlossaryEntry("Prose", """[{"type":"structured-content","content":{"tag":"div","content":"a paragraph"}}]"""))
-        assertNull(CardDefinitions.mainDefinition(prose))
-        val hit = TermHit(matched = "語", deinflected = "語", expression = "語", glossaries = prose)
-        val source = MineSource(hit, "語", 0, 1, glossaryHtml = "<ol><li>all</li></ol>", firstGlossaryHtml = "<ol><li>full first</li></ol>", furiganaPlain = "語", gameTitle = "")
-        val fields = CardFields.lapis(source)
-        assertEquals("<ol><li>full first</li></ol>", fields["MainDefinition"])
-        assertEquals("<ol><li>all</li></ol>", fields["Glossary"])
+    fun `a first dictionary that renders nothing keeps its label, without a broken image`() {
+        val pictures = listOf(GlossaryEntry("Pictures", """[{"type":"image","path":"a.png"}]"""))
+        assertNull(CardDefinitions.mainDefinition(pictures))
+        val hit = TermHit(matched = "語", deinflected = "語", expression = "語", glossaries = pictures)
+        val fields = CardFields.lapis(MineSource(hit, "語", 0, 1, furiganaPlain = "語", gameTitle = ""))
+        assertEquals(
+            "<div style=\"text-align: left;\" class=\"yomitan-glossary\"><ol><li data-dictionary=\"Pictures\"><i>(Pictures)</i> <ol class=\"gloss-list\"></ol></li></ol></div>",
+            fields["MainDefinition"],
+        )
+        assertFalse(fields["Glossary"]!!.contains("<img"))
     }
 
     @Test
-    fun `a card gets the short definition, a clean main definition and the full glossary`() {
-        val glossaries = listOf(GlossaryEntry("Terms", structured(listOf("deep", "dark"), examples)))
+    fun `a card gets the short definition, the first dictionary in full and every dictionary`() {
+        val glossaries = listOf(GlossaryEntry("Terms", structured(listOf("deep", "dark"), examples)), GlossaryEntry("Text", numberedText))
         val hit = TermHit(matched = "語", deinflected = "語", expression = "語", glossaries = glossaries)
-        val source = MineSource(hit, "語", 0, 1, glossaryHtml = "<ol><li>everything</li></ol>", firstGlossaryHtml = "<ol><li>first</li></ol>", furiganaPlain = "語", gameTitle = "")
-        val fields = CardFields.lapis(source)
-        assertEquals("deep; dark", fields["SelectionText"])
-        assertFalse(fields["MainDefinition"]!!.contains("例文"))
-        assertEquals("<ol><li>everything</li></ol>", fields["Glossary"])
+        val fields = CardFields.lapis(MineSource(hit, "語", 0, 1, furiganaPlain = "語", gameTitle = ""))
+        // One sense of its own: the text dictionary's follow it.
+        assertEquals("1. deep; dark<br>2. trial; test; attempt<br>3. sample; specimen", fields["SelectionText"])
+        // Examples stay in, as Amatsubame and Yomitan write the entry.
+        assertTrue(fields["MainDefinition"]!!.contains("例文です。"))
+        assertFalse(fields["MainDefinition"]!!.contains("data-dictionary=\"Text\""))
+        assertTrue(fields["Glossary"]!!.contains("data-dictionary=\"Text\""))
+        assertTrue(fields["Glossary"]!!.contains("data-dictionary=\"Terms\""))
     }
 
     /** A made-up text entry in 新和英's layout without sense numbers: a headword, then long lines. */

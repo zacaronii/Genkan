@@ -378,31 +378,6 @@ function parseGlossary(text) {
     }
 }
 
-/** One glossary's definitions as HTML, as Yomitan writes them into a card. */
-function glossaryItemHtml(g) {
-    const item = document.createElement('span');
-    renderStructuredContent(item, parseGlossary(g.glossary), g.dictionary);
-    const tags = (g.definitionTags || '').split(' ').filter(Boolean);
-    const label = [...tags, g.dictionary].join(', ');
-    return `<li data-dictionary="${escapeAttr(g.dictionary)}"><i>(${escapeText(label)})</i> ${item.innerHTML}</li>`;
-}
-
-/** Yomitan's {glossary}: every definition; {glossary-first}: the first dictionary's. */
-function cardGlossaries(hit) {
-    const glossaries = hit.glossaries || [];
-    const wrap = items => `<div style="text-align: left;" class="yomitan-glossary"><ol>${items.join('')}</ol></div>`;
-    const first = glossaries.length ? glossaries.filter(g => g.dictionary === glossaries[0].dictionary) : [];
-    return { all: wrap(glossaries.map(glossaryItemHtml)), first: wrap(first.map(glossaryItemHtml)) };
-}
-
-function escapeText(text) {
-    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function escapeAttr(text) {
-    return escapeText(text).replace(/"/g, '&quot;');
-}
-
 function mineButton(index, state) {
     const button = el('span', { className: `mine mine-${(state || 'NEW').toLowerCase()}`, textContent: STATE_LABELS[state || 'NEW'] });
     button.dataset.index = index;
@@ -410,8 +385,7 @@ function mineButton(index, state) {
         event.stopPropagation();
         const hit = lastTerms && lastTerms[index];
         if (!hit || !button.classList.contains('mine-new')) return;
-        const glossary = cardGlossaries(hit);
-        window.GenkanPopup?.mine(index, glossary.all, glossary.first, furiganaPlain(hit.expression, hit.reading));
+        window.GenkanPopup?.mine(index, furiganaPlain(hit.expression, hit.reading));
     });
     return button;
 }

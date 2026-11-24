@@ -51,6 +51,7 @@ class AnkiMiner @Inject constructor(
     private val settings: AnkiSettings,
     private val anki: AnkiConnect,
     private val dao: AnkiDao,
+    private val wordAudio: WordAudio,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sendLock = Mutex()
@@ -146,9 +147,11 @@ class AnkiMiner @Inject constructor(
             if (batch.isEmpty()) break
             for (card in batch) {
                 try {
-                    val fields = CardFields.forNoteType(fieldsAdapter.fromJson(card.fieldsJson).orEmpty(), fieldsOf(config))
+                    val noteFields = fieldsOf(config)
+                    val fields = CardFields.forNoteType(withWordAudio(config, fieldsAdapter.fromJson(card.fieldsJson).orEmpty(), noteFields), noteFields)
                     storeMedia(config, card.pictureFile)
                     storeMedia(config, card.audioFile)
+                    fields["ExpressionAudio"]?.let { storeMedia(config, SOUND.find(it)?.groupValues?.get(1)) }
                     anki.addNote(config, fields, TAGS)
                     onDelivered(card)
                     sent++
@@ -163,6 +166,9 @@ class AnkiMiner @Inject constructor(
                 } catch (e: IOException) {
                     _status.value = AnkiStatus.Unreachable(e.message ?: e.javaClass.simpleName)
                     return@withLock
+                } finally {
+                    // The word's recording is fetched for each try: it's only kept until sent.
+                    mediaDir.listFiles { f -> f.name.startsWith(WORD_AUDIO_PREFIX) }?.forEach { it.delete() }
                 }
             }
         }
@@ -176,6 +182,19 @@ class AnkiMiner @Inject constructor(
         card.pictureFile?.let { File(mediaDir, it).delete() }
         card.audioFile?.let { File(mediaDir, it).delete() }
         _deliveries.tryEmit(card.expression)
+    }
+
+    /**
+     * [fields] with the word's recording in ExpressionAudio, fetched now from the audio source
+     * (Settings ▸ Anki) into the media folder, when one is set and the note type has the field.
+     * Without one, or with the source out of reach, the card goes as it is.
+     */
+    private fun withWordAudio(config: AnkiConfig, fields: Map<String, String>, noteFields: List<String>?): Map<String, String> {
+        if (config.audioUrl.isBlank() || !fields["ExpressionAudio"].isNullOrEmpty()) return fields
+        if (noteFields != null && "ExpressionAudio" !in noteFields) return fields
+        val term = fields["Expression"].orEmpty().ifEmpty { return fields }
+        val file = wordAudio.fetch(config.audioUrl, term, fields["ExpressionReading"].orEmpty(), mediaDir) ?: return fields
+        return fields + ("ExpressionAudio" to "[sound:$file]")
     }
 
     /** The note type's fields, asked once per note type. */
@@ -215,5 +234,7 @@ class AnkiMiner @Inject constructor(
         const val PICTURE_WIDTH = 640
         const val PICTURE_QUALITY = 80
         val TAGS = listOf("genkan")
+        const val WORD_AUDIO_PREFIX = "genkan_word_"
+        val SOUND = Regex("""\[sound:([^\]]+)]""")
     }
 }

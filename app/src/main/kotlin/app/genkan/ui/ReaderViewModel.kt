@@ -81,6 +81,7 @@ class ReaderViewModel @Inject constructor(
     val ocr: OcrReader,
     val capture: ScreenCapture,
     private val miner: AnkiMiner,
+    private val library: app.genkan.library.LibraryDao,
     val audio: GameAudioRecorder,
     val stats: ReadingStats,
     val ppsspp: PpssppText,
@@ -353,7 +354,7 @@ class ReaderViewModel @Inject constructor(
         _popup.value = current.copy(statesJson = statesJson(result.hits.map { it.expression }))
     }
 
-    override fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
+    override fun mine(index: Int, furiganaPlain: String) {
         val lookup = _lookup.value ?: return
         val hit = shownResult?.hits?.getOrNull(index) ?: return
         // From a manual: its page around the line is the card's picture, and there's no voice.
@@ -364,6 +365,8 @@ class ReaderViewModel @Inject constructor(
         val screen = if (!fromManual && capture.running.value) capture.frame() else null
         val voice = if (fromManual) null else sentenceAudio(lookup.lineId)
         val title = (if (fromManual) manualGameTitle else null) ?: session.game.value.title
+        // A manual's game may not be the one running: its card goes without a platform.
+        val platform = if (fromManual && manualGameTitle != null) null else session.game.value.platform
         viewModelScope.launch {
             val picture = if (fromManual) manualHit?.let { manualTaps.picture(it) } else screen
             // The page wouldn't render again: the card still goes, without its picture.
@@ -374,10 +377,9 @@ class ReaderViewModel @Inject constructor(
                     sentence = lookup.lineText,
                     matchStart = lookup.start,
                     matchLength = if (shownResult == lookup.result) hit.matched.length else 0,
-                    glossaryHtml = glossaryHtml,
-                    firstGlossaryHtml = firstGlossaryHtml,
                     furiganaPlain = furiganaPlain,
                     gameTitle = title,
+                    platformName = platform?.let { library.platformName(it) },
                 ),
                 picture,
                 voice,

@@ -118,9 +118,9 @@ object CardDefinitions {
         return senses + order.drop(1).flatMap { byDictionary.getValue(it) }
     }
 
-    /** A gloss as compared for repeats: without a leading "a", "an", "the" or "to", or trailing punctuation. */
+    /** A gloss as compared for repeats, as Amatsubame's: lowercased, without a leading "a", "an", "the" or "to", or trailing punctuation. */
     fun sameGloss(gloss: String): String =
-        gloss.trim().replace(LEADING_ARTICLE, "").trimEnd { it.isWhitespace() || it in TRAILING_PUNCTUATION }
+        gloss.lowercase().replace(LEADING_ARTICLE, "").trimEnd { it.isWhitespace() || it in TRAILING_PUNCTUATION }
 
     /** SelectionText: the short definition of [glossaries]. */
     fun selectionText(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): String =
@@ -169,7 +169,7 @@ object CardDefinitions {
 
     private val LEADING_ARTICLE = Regex("""^(?:a|an|the|to)\s+""")
 
-    private const val TRAILING_PUNCTUATION = ".,;:!?。、！？"
+    private const val TRAILING_PUNCTUATION = ".,;:!?…。、"
 
     private val PARENTHESES = Regex("""\s*[(（][^()（）]*[)）]\s*""")
 
