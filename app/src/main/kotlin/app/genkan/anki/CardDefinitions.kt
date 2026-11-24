@@ -105,6 +105,8 @@ object CardDefinitions {
      * whose entries give any glosses (a prose dictionary first doesn't leave it empty), leaving out
      * JMdict's forms entry (its spellings, not a meaning). When that dictionary has a single
      * sense, the other dictionaries' senses follow it, in the results' order (as Amatsubame does).
+     * [glossaries] are one hit's, the lookup's entries for one expression and reading, so
+     * senses are never borrowed from a related word or another reading.
      */
     fun shortSenses(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): List<List<String>> {
         val meanings = glossaries.filter { "forms" !in it.definitionTags.split(' ') }

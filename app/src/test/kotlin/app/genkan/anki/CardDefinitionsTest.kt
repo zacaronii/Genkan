@@ -65,6 +65,20 @@ class CardDefinitionsTest {
     }
 
     @Test
+    fun `senses are borrowed only from the mined word's own reading`() {
+        // The lookup gives each expression and reading its own hit: another reading of 生 is
+        // another hit, whose senses never reach this one's card.
+        val mined = TermHit(matched = "生", deinflected = "生", expression = "生", reading = "なま",
+            glossaries = listOf(GlossaryEntry("First", structured(listOf("raw"))), GlossaryEntry("Second", structured(listOf("uncooked", "fresh")))))
+        val otherReading = TermHit(matched = "生", deinflected = "生", expression = "生", reading = "せい",
+            glossaries = listOf(GlossaryEntry("Second", structured(listOf("life", "living")))))
+        val fields = CardFields.lapis(MineSource(mined, "生", 0, 1, "", "", "生[なま]", ""))
+        assertEquals("1. raw<br>2. uncooked; fresh", fields["SelectionText"])
+        assertFalse(fields["SelectionText"]!!.contains("life"))
+        assertEquals("life; living", CardDefinitions.selectionText(otherReading.glossaries))
+    }
+
+    @Test
     fun `a gloss repeated with an article or a full stop is a repeat, and a sense of repeats is skipped`() {
         assertEquals("run", CardDefinitions.sameGloss("to run."))
         assertEquals("apple", CardDefinitions.sameGloss("an apple"))
