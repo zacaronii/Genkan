@@ -3,6 +3,8 @@ import javax.inject.Inject
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -243,7 +245,127 @@ val buildBsnes = tasks.register<BuildLibretroCore>("buildBsnes") {
     outputDir.set(layout.buildDirectory.dir("generated/bsnes"))
 }
 
-val meikiDetect = "https://huggingface.co/rtr46/meiki.text.detect.v0/resolve/a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6"
+/**
+ * A libretro core built from source with CMake, from a submodule pinned at [commit] that a normal
+ * checkout skips (`update = none` in .gitmodules: its externals are large). Built once per commit
+ * into [cacheDir] with the zip of the [sysEntries] under the source's Data/Sys the core needs in its
+ * system folder, so later builds (and CI, which caches the folder) only copy both; the source and
+ * its externals are fetched, shallow, only when the cache has no build of the commit.
+ */
+abstract class BuildCmakeCore : DefaultTask() {
+    @get:Input abstract val commit: Property<String>
+    @get:Internal abstract val submoduleDir: DirectoryProperty
+    @get:Input abstract val libraryName: Property<String>
+    @get:Input abstract val abi: Property<String>
+    @get:Input abstract val cmakeArgs: ListProperty<String>
+    @get:Input abstract val target: Property<String>
+    /** The source's own submodules the build doesn't need (Windows' Qt and FFmpeg). */
+    @get:Input abstract val skipExternals: ListProperty<String>
+    @get:Input abstract val sysEntries: ListProperty<String>
+    @get:Input abstract val sysZipName: Property<String>
+    @get:Internal abstract val ndkDir: DirectoryProperty
+    @get:Internal abstract val cmakeDir: DirectoryProperty
+    @get:Internal abstract val cacheDir: DirectoryProperty
+    @get:OutputDirectory abstract val libsDir: DirectoryProperty
+    @get:OutputDirectory abstract val assetsDir: DirectoryProperty
+    @get:Inject abstract val exec: ExecOperations
+
+    private fun git(dir: File, vararg args: String): String = ByteArrayOutputStream().also { out ->
+        exec.exec { commandLine(listOf("git", "-C", dir.path) + args); standardOutput = out }
+    }.toString().trim()
+
+    @TaskAction
+    fun build() {
+        val source = submoduleDir.get().asFile
+        val root = source.parentFile.parentFile
+        val path = source.relativeTo(root).path
+        // The commit the repository pins (its gitlink), whether or not the source is checked out.
+        val pinned = git(root, "ls-files", "-s", "--", path).split(Regex("\\s+")).getOrNull(1)
+        check(pinned == commit.get()) { "$path is pinned at $pinned, not ${commit.get()}: update the commit here too" }
+        val stem = libraryName.get().removeSuffix(".so")
+        val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}")
+        val library = cached.resolve("${abi.get()}/${libraryName.get()}")
+        val sysZip = cached.resolve(sysZipName.get())
+        if (!library.isFile || !sysZip.isFile) {
+            fetch(root, source, path)
+            logger.lifecycle("Building ${libraryName.get()} at ${commit.get().take(7)}")
+            val work = temporaryDir.apply { deleteRecursively(); mkdirs() }
+            val cmakeBin = cmakeDir.get().asFile
+            val ndk = ndkDir.get().asFile
+            exec.exec {
+                commandLine(
+                    listOf(
+                        cmakeBin.resolve("cmake").path, "-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=${cmakeBin.resolve("ninja").path}",
+                        "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_TOOLCHAIN_FILE=${ndk.resolve("build/cmake/android.toolchain.cmake").path}",
+                        "-DANDROID_ABI=${abi.get()}", "-DANDROID_STL=c++_static",
+                    ) + cmakeArgs.get() + listOf("-S", source.path, "-B", work.path),
+                )
+            }
+            exec.exec { commandLine(cmakeBin.resolve("cmake").path, "--build", work.path, "--target", target.get()) }
+            val built = work.walkTopDown().first { it.name == "${target.get()}_android.so" || it.name == "${target.get()}.so" }
+            library.parentFile.mkdirs()
+            // The host's own prebuilt LLVM: there is one per NDK.
+            val strip = ndk.resolve("toolchains/llvm/prebuilt").listFiles()!!.single().resolve("bin/llvm-strip")
+            exec.exec { commandLine(strip.path, "-o", library.path, built.path) }
+            zipSys(source.resolve("Data/Sys"), sysZip)
+        }
+        val libs = libsDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
+        library.copyTo(libs.resolve(libraryName.get()), overwrite = true)
+        val assets = assetsDir.get().asFile.resolve("cores").apply { deleteRecursively(); mkdirs() }
+        sysZip.copyTo(assets.resolve(sysZipName.get()), overwrite = true)
+    }
+
+    /** The source at the pinned commit, with the externals the build uses, each one commit deep. */
+    private fun fetch(root: File, source: File, path: String) {
+        if (source.resolve(".git").exists() && git(source, "rev-parse", "HEAD") == commit.get()) return
+        logger.lifecycle("Fetching $path at ${commit.get().take(7)}")
+        git(root, "submodule", "update", "--init", "--checkout", "--depth", "1", "--", path)
+        val externals = git(source, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$").lines()
+            .map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
+        git(source, *(listOf("submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8", "--") + externals).toTypedArray())
+    }
+
+    /** [entries] of [sys] zipped under Sys/, in name order and with fixed times: the same zip from the same commit. */
+    private fun zipSys(sys: File, zip: File) {
+        val files = sysEntries.get().flatMap { entry -> sys.resolve(entry).walkTopDown().filter { it.isFile }.toList() }
+            .sortedBy { it.relativeTo(sys).invariantSeparatorsPath }
+        ZipOutputStream(zip.outputStream()).use { out ->
+            for (file in files) {
+                out.putNextEntry(ZipEntry("Sys/${file.relativeTo(sys).invariantSeparatorsPath}").apply { time = 0L })
+                file.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+            }
+        }
+    }
+}
+
+/**
+ * Dolphin (GPL-2.0-or-later), the GameCube core, built from libretro's repository at this commit
+ * as libretro's buildbot builds it for Android, with the files of its Sys folder GameCube games
+ * use (per-game settings, fonts, shaders). See NOTICE.
+ */
+val dolphinCommit = "e0f0bfec5003270c6252a51d1eae6e6bbec6c3ed"
+
+val buildDolphin = tasks.register<BuildCmakeCore>("buildDolphin") {
+    commit.set(dolphinCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/dolphin"))
+    libraryName.set("libdolphin_libretro_android.so")
+    abi.set("arm64-v8a")
+    cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DENABLE_LTO=ON", "-DANDROID_PLATFORM=android-21"))
+    target.set("dolphin_libretro")
+    skipExternals.set(listOf("Externals/Qt", "Externals/FFmpeg-bin", "Externals/wil"))
+    sysEntries.set(listOf("GameSettings", "GC", "Shaders", "Resources", "ApprovedInis.json"))
+    sysZipName.set("dolphin.zip")
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    libsDir.set(layout.buildDirectory.dir("generated/dolphin/libs"))
+    assetsDir.set(layout.buildDirectory.dir("generated/dolphin/assets"))
+    // After the app's native configure, which installs the SDK's CMake when it's missing.
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+val meikiDetect ="https://huggingface.co/rtr46/meiki.text.detect.v0/resolve/a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6"
 val meikiRecognize = "https://huggingface.co/rtr46/meiki.txt.recognition.v0/resolve/a28cf5874dc2438ebb1c86336be26bcec51e3375"
 
 /** Meiki OCR's models (LGPL-3.0, trained on Japanese games), as assets. */
@@ -368,6 +490,8 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
         // The PC hook kit (tools/hookbridge/kit.sh, which needs MinGW): packed when it's been
         // built; without it, Genkan just has no kit to install.

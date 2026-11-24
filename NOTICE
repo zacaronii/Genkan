@@ -136,6 +136,25 @@ License: GPL-3.0 (LICENSE at that commit; sfc/sfc.hpp states GPLv3)
   source it is built from is the submodule at that commit.
 
 --------------------------------------------------------------------------
+Dolphin, libretro's port (GPL-2.0-or-later), the GameCube core
+https://github.com/libretro/dolphin
+Pinned commit: e0f0bfec5003270c6252a51d1eae6e6bbec6c3ed
+License: GPL-2.0-or-later (COPYING and LICENSES/ at that commit; parts under
+  other licenses compatible with GPLv3, as COPYING says, and its externals
+  under their own)
+
+  A submodule at third_party/dolphin, unmodified, which a normal checkout
+  skips (update = none). The buildDolphin task in app/build.gradle.kts fetches
+  it with its externals (not Externals/Qt, Externals/FFmpeg-bin or
+  Externals/wil, which are for Windows), builds it for arm64-v8a with the
+  NDK's CMake toolchain as libretro's buildbot does (-DLIBRETRO=ON
+  -DENABLE_LTO=ON, android-21, c++_static, stripped) and bundles it as
+  libdolphin_libretro_android.so; and zips GameSettings, GC, Shaders,
+  Resources and ApprovedInis.json from its Data/Sys, unmodified, as
+  assets/cores/dolphin.zip. Neither is committed; the source they are built
+  from is the submodule at that commit.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

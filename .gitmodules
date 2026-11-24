@@ -7,3 +7,8 @@
 [submodule "third_party/bsnes-mercury"]
 	path = third_party/bsnes-mercury
 	url = https://github.com/libretro/bsnes-mercury
+[submodule "third_party/dolphin"]
+	path = third_party/dolphin
+	url = https://github.com/libretro/dolphin
+	shallow = true
+	update = none

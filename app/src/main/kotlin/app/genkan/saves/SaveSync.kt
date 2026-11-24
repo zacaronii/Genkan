@@ -101,7 +101,7 @@ class SaveSync @Inject constructor(
             val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) ?: return@withLock false else installed
             try {
                 val own = builtInTarget(game.platformSlug, rom)
-                val watched = WatchedEmulator.BY_PLATFORM[game.platformSlug].takeIf { own == null }
+                val watched = watchedFor(game.platformSlug).takeIf { own == null }
                 val io = if (own != null) {
                     DirectIo(own)
                 } else if (watched != null) {
@@ -129,10 +129,23 @@ class SaveSync @Inject constructor(
      * session creates or changes can be claimed as that game's save afterwards.
      */
     suspend fun beforeLaunch(romId: Long, platformSlug: String) = withContext(Dispatchers.IO) {
-        if (player.isEnabled() && CoreCatalog.forPlatform(platformSlug)?.sharedSaves?.isEmpty() == true) return@withContext
-        val watched = WatchedEmulator.BY_PLATFORM[platformSlug] ?: return@withContext
+        val watched = watchedFor(platformSlug) ?: return@withContext
         val files = filesFor(watched) ?: return@withContext
         snapshots[romId] = snapshot(watched, files)
+    }
+
+    /**
+     * The shared save folders of the player that runs [platformSlug]'s games: the built-in
+     * player's own when it keeps them in a folder of its own, none when it keeps one file per game,
+     * else the emulator app's (which the built-in PPSSPP shares).
+     */
+    private suspend fun watchedFor(platformSlug: String): WatchedEmulator? {
+        val core = CoreCatalog.forPlatform(platformSlug)?.takeIf { player.isEnabled() }
+        if (core != null) {
+            WatchedEmulator.BUILT_IN[platformSlug]?.let { return it }
+            if (core.sharedSaves.isEmpty()) return null
+        }
+        return WatchedEmulator.BY_PLATFORM[platformSlug]
     }
 
     /** The built-in player's own save for the game, when it runs the game (as the launcher decides). */

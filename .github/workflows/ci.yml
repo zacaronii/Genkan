@@ -57,6 +57,17 @@ jobs:
           path: .gradle/cores/libbsnes_mercury_libretro_android-${{ env.BSNES_COMMIT }}
           key: bsnes-mercury-${{ env.BSNES_COMMIT }}
 
+      # Dolphin, the GameCube core, likewise (third_party/dolphin, which checkout skips): its
+      # source is fetched and built only when this cache has no build of the pinned commit.
+      - name: Note the Dolphin commit
+        run: echo "DOLPHIN_COMMIT=$(git rev-parse HEAD:third_party/dolphin)" >> "$GITHUB_ENV"
+
+      - name: Cache the built Dolphin
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores/libdolphin_libretro_android-${{ env.DOLPHIN_COMMIT }}
+          key: dolphin-${{ env.DOLPHIN_COMMIT }}
+
       # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
       # the proxy and host; LunaHook comes from LunaTranslator's pinned release.
       - name: Cache LunaHook

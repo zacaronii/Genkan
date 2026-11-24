@@ -5,6 +5,7 @@
 // Grisaia (with util/stringfilters.cpp's katakana remap).
 package app.genkan.ppsspp
 
+import app.genkan.memory.MemoryScan
 import java.nio.charset.Charset
 
 /**
@@ -69,7 +70,7 @@ object PspHooks {
 
     /** The string at the start of [bytes], up to its NUL terminator (two bytes for UTF-16). */
     fun decode(bytes: ByteArray, charset: Charset): String {
-        val end = if (charset == Charsets.UTF_16LE) {
+        val end = if (MemoryScan.unit(charset) == 2) {
             (0 until bytes.size - 1 step 2).firstOrNull { bytes[it] == 0.toByte() && bytes[it + 1] == 0.toByte() } ?: (bytes.size and 1.inv())
         } else {
             bytes.indexOf(0).let { if (it < 0) bytes.size else it }

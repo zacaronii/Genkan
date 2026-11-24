@@ -83,6 +83,29 @@ class MemoryScanTest {
     }
 
     @Test
+    fun `big-endian memory's pointers and UTF-16 text`() {
+        // A GameCube's: words and UTF-16 high byte first.
+        val chunk = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putInt(0x80550384.toInt()).putInt(0xC0123400.toInt()).array()
+        assertEquals(
+            listOf(0x80000000L to 0x80550384L, 0x80000004L to 0x80123400L),
+            MemoryScan.pointersInto(chunk, 0x80000000L, 0x80000000L..0x817FFFFFL, bigEndian = true) { it and 0x81FFFFFFL },
+        )
+        assertEquals(0x80550384L, MemoryScan.u32(chunk, bigEndian = true))
+        assertEquals(0xC0123400L, MemoryScan.u32(chunk, at = 4, bigEndian = true))
+        val text = "前".toByteArray(Charsets.UTF_16BE) + byteArrayOf(0, 0) + "今の行".toByteArray(Charsets.UTF_16BE)
+        assertEquals(4, MemoryScan.stringStart(text, 8, Charsets.UTF_16BE))
+        assertEquals(listOf(MemoryScan.Page(0, "前"), MemoryScan.Page(4, "今の行")), MemoryScan.pages(text, Charsets.UTF_16BE))
+    }
+
+    @Test
+    fun `UTF-16 is looked for in the memory's byte order, EUC-JP in both`() {
+        assertEquals(listOf(Charsets.UTF_16LE, Charsets.UTF_8, MemoryScan.SHIFT_JIS, MemoryScan.EUC_JP), MemoryScan.charsets(bigEndian = false))
+        assertEquals(Charsets.UTF_16BE, MemoryScan.charsets(bigEndian = true).first())
+        assertEquals(2, MemoryScan.unit(Charsets.UTF_16BE))
+        assertEquals(1, MemoryScan.unit(MemoryScan.EUC_JP))
+    }
+
+    @Test
     fun `a script splits into the pages the player sees, without markup`() {
         val script = "<E800 268><E003 60><CNTR>１２月１７日\n<CNTR>地方裁判所<E023><PAGE>\n<E800 276>" +
             "<E025 4>（うーん。<E003 34>ぜんっ<E003 20>ぜん）<E023><PAGE>\n<E800 299><E040 0 1>"

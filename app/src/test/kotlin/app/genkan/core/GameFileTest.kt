@@ -169,6 +169,12 @@ class GameFileTest {
         assertEquals("bsnes_mercury", snes.id)
         assertTrue(GameFile.takes(snes, zip("sfc.zip", "game.sfc" to bytes(64, 23))))
         assertFalse(GameFile.takes(snes, zip("gb.zip", "game.gb" to bytes(64, 24))))
+        // The GameCube's discs, as Dolphin's own types; big-endian memory.
+        val ngc = CoreCatalog.forPlatform("ngc")!!
+        assertEquals("dolphin", ngc.id)
+        assertTrue(ngc.bigEndian)
+        assertTrue(GameFile.takes(ngc, File(temp.root, "game.rvz").apply { writeBytes(bytes(64, 25)) }))
+        assertFalse(GameFile.takes(ngc, File(temp.root, "game.wbfs").apply { writeBytes(bytes(64, 26)) }))
         // A console with no built-in core goes to the outside emulator as before.
         assertNull(CoreCatalog.forPlatform("n64"))
     }

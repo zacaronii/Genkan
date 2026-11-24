@@ -109,13 +109,17 @@ a Yomitan dictionary popup. See
   string to follow: OCR stays on to tell which page shows, and each line is swapped for that
   page's exact text from memory. Azahar's RPC listens on the whole network while a game runs.
 - **Built-in player (opt-in):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
-  DS games (melonDS DS), PS1 games (PCSX ReARMed) and PSP games (PPSSPP) inside Genkan instead of their installed
+  DS games (melonDS DS), PS1 games (PCSX ReARMed), PSP games (PPSSPP), Super Famicom games
+  (bsnes-mercury) and GameCube games (Dolphin) inside Genkan instead of their installed
   emulator, in a process of its own. Genkan then reads the game's frames, sound and memory
   itself: OCR and card audio need no screen-capture prompt, and text is found in memory as for
   Azahar (a PSP scan takes a third of a second), with no hook profile or network debugger.
   GBA saves are RetroArch's mGBA `.srm` files and PSP saves go on PPSSPP's memory stick, so
   each is shared with the standalone emulator and synced; PS1 and DS saves are kept in
-  `Genkan/saves/<core>` and synced to RomM under the core's name. Select+Start saves and quits. A DS game's upper screen
+  `Genkan/saves/<core>` and synced to RomM under the core's name. Dolphin keeps its whole User
+  folder in `Genkan/saves/dolphin` (memory cards, config and shader cache); only its GameCube
+  memory cards (`User/GC`) sync, as standalone Dolphin's, so the two share saves through RomM.
+  Select+Start saves and quits. A DS game's upper screen
   is on the top display and its touch screen on the bottom one, over the reader; clicking
   either stick swaps the touch screen and the reader. PS1 games boot with the Japanese BIOS
   (`ps-30j.bin`, SCPH-5500) from the platform's firmware in RomM, fetched on first launch;
@@ -174,7 +178,9 @@ a Yomitan dictionary popup. See
 
 Requires JDK 21 and the Android SDK (platform 37, build-tools, NDK 29, CMake 3.31.6).
 Clone with `--recursive`, or run `git submodule update --init --recursive`, for the
-dictionary engine in `third_party/hoshidicts`.
+dictionary engine in `third_party/hoshidicts`. The GameCube core (`third_party/dolphin`) is
+skipped by that: the first build fetches it with its externals (about 600 MB) and builds it
+(a few minutes), once per pinned commit, into `.gradle/cores`.
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug

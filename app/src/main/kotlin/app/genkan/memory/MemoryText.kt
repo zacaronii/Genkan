@@ -176,7 +176,7 @@ class MemoryText(
             // Pointers to anywhere between the guessed start and the hit: the game's own pointer
             // also says where the string really starts.
             val pointers = mutableListOf<Pair<Long, Long>>()
-            scan(memory, overlap = 0) { chunk, base -> pointers += MemoryScan.pointersInto(chunk, base, candidate.start..candidate.hit.address, memory::target) }
+            scan(memory, overlap = 0) { chunk, base -> pointers += MemoryScan.pointersInto(chunk, base, candidate.start..candidate.hit.address, memory.bigEndian, memory::target) }
             val start = pointers.groupingBy { it.second }.eachCount().maxByOrNull { it.value }?.key ?: candidate.start
             val found = if (start == candidate.start) candidate else {
                 val bytes = memory.read(start, LINE_BYTES) ?: return@use null
@@ -203,7 +203,7 @@ class MemoryText(
             while (isActive) {
                 delay(POLL_MS)
                 for ((slot, last) in pointers) {
-                    val value = memory.read(slot, 4)?.let(MemoryScan::u32)?.let(memory::target) ?: continue
+                    val value = memory.read(slot, 4)?.let { MemoryScan.u32(it, bigEndian = memory.bigEndian) }?.let(memory::target) ?: continue
                     if (value != last) {
                         pointers[slot] = value
                         current = value
@@ -231,7 +231,7 @@ class MemoryText(
      * occur, widened to the whole string there, best match first.
      */
     fun search(memory: MemorySource, line: String): List<FoundText> {
-        val needles = MemoryScan.CHARSETS.flatMap { charset ->
+        val needles = MemoryScan.charsets(memory.bigEndian).flatMap { charset ->
             MemoryScan.probes(line).map { probe -> charset to probe.toByteArray(charset) }
         }
         val hits = linkedSetOf<TextHit>()
@@ -239,7 +239,7 @@ class MemoryText(
         val overlap = (needles.maxOf { it.second.size } - 1 + 1) and 1.inv()
         scan(memory, overlap) { window, base ->
             for ((charset, needle) in needles) {
-                for (offset in MemoryScan.find(window, needle, aligned = charset == Charsets.UTF_16LE)) {
+                for (offset in MemoryScan.find(window, needle, aligned = MemoryScan.unit(charset) == 2)) {
                     hits += TextHit(base + offset, charset)
                 }
             }
@@ -253,7 +253,7 @@ class MemoryText(
     /** Every pointer in the game's memory into [targets], as slot to address (debug builds). */
     fun pointers(memory: MemorySource, targets: LongRange): List<Pair<Long, Long>> {
         val found = mutableListOf<Pair<Long, Long>>()
-        scan(memory, overlap = 0) { chunk, base -> found += MemoryScan.pointersInto(chunk, base, targets, memory::target) }
+        scan(memory, overlap = 0) { chunk, base -> found += MemoryScan.pointersInto(chunk, base, targets, memory.bigEndian, memory::target) }
         return found
     }
 

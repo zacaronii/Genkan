@@ -103,6 +103,8 @@ private:
     std::optional<ShaderManager::Config> loadedShaderType = std::nullopt;
 
     bool isDirty = false;
+    /** Genkan: the core renders with GL itself, into the renderer's framebuffer. */
+    bool hardwareAccelerated = false;
     bool skipDuplicateFrames = false;
 
     std::vector<ShaderChainEntry> shadersChain;

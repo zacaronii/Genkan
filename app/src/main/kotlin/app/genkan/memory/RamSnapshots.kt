@@ -35,6 +35,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "gb", "gbc" -> MainRam(0xC000L until 0xE000L, 0xC000L)
             // Main RAM, 4 MB at 0x02000000 (melonDS's, which Genkan reads from that base).
             "nds" -> MainRam(0x02000000L until 0x02400000L, 0x02000000L)
+            // MEM1, 24 MB at 0x80000000 (Dolphin's memory map gives the game's addresses), big-endian.
+            "ngc" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
             else -> null
         }
     }

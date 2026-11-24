@@ -146,9 +146,95 @@ void Video::updateProgram() {
     renderer->setShaders(shaders);
 }
 
+namespace {
+
+/**
+ * Genkan: the GL state a hardware-rendered core had when its frame was handed over, put back when
+ * this goes. A core that asks for a shared context (Dolphin), which this frontend doesn't give,
+ * expects its state untouched between frames.
+ */
+struct CoreGLState {
+    GLint vertexArray, arrayBuffer, unpackBuffer, program, activeTexture, drawFramebuffer, readFramebuffer;
+    GLint samplers[2], textures[2], viewport[4];
+    GLboolean scissor, blend, cull, stencil, depth, colorMask[4], depthMask;
+    GLfloat clearColor[4];
+
+    CoreGLState() {
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
+        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBuffer);
+        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
+        for (int unit = 0; unit < 2; unit++) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glGetIntegerv(GL_SAMPLER_BINDING, &samplers[unit]);
+            glGetIntegerv(GL_TEXTURE_BINDING_2D, &textures[unit]);
+        }
+        glActiveTexture(activeTexture);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        scissor = glIsEnabled(GL_SCISSOR_TEST);
+        blend = glIsEnabled(GL_BLEND);
+        cull = glIsEnabled(GL_CULL_FACE);
+        stencil = glIsEnabled(GL_STENCIL_TEST);
+        depth = glIsEnabled(GL_DEPTH_TEST);
+        glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
+    }
+
+    ~CoreGLState() {
+        glBindVertexArray(vertexArray);
+        glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
+        glUseProgram(program);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFramebuffer);
+        for (int unit = 0; unit < 2; unit++) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindSampler(unit, samplers[unit]);
+            glBindTexture(GL_TEXTURE_2D, textures[unit]);
+        }
+        glActiveTexture(activeTexture);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        auto set = [](GLenum cap, GLboolean on) { if (on) glEnable(cap); else glDisable(cap); };
+        set(GL_SCISSOR_TEST, scissor);
+        set(GL_BLEND, blend);
+        set(GL_CULL_FACE, cull);
+        set(GL_STENCIL_TEST, stencil);
+        set(GL_DEPTH_TEST, depth);
+        glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
+        glDepthMask(depthMask);
+        glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+    }
+};
+
+}
+
 void Video::renderFrame() {
     if (skipDuplicateFrames && !isDirty) return;
     isDirty = false;
+
+    // Genkan: such a core leaves its own vertex array, buffers and sampler objects bound, and the
+    // passes below draw from client-side arrays with the texture's own parameters: back to the
+    // defaults first, and the core's state put back after. Software-rendered cores skip it.
+    std::optional<CoreGLState> saved;
+    if (hardwareAccelerated) {
+        saved.emplace();
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glBindSampler(0, 0);
+        glBindSampler(1, 0);
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_BLEND);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_STENCIL_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_TRUE);
+    }
 
     glDisable(GL_DEPTH_TEST);
 
@@ -274,6 +360,7 @@ Video::Video(
     unsigned int viewportAlignment
 ) :
     requestedShaderConfig(std::move(shaderConfig)),
+    hardwareAccelerated(renderingOptions.hardwareAccelerated),
     skipDuplicateFrames(skipDuplicateFrames),
     immersiveModeEnabled(immersiveModeEnabled),
     immersiveMode(immersiveModeConfig),

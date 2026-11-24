@@ -30,6 +30,13 @@ data class CoreDef(
     val splitScreens: Boolean = false,
     /** The file types the core plays, lower case, without the dot: the core's own list. */
     val extensions: Set<String> = emptySet(),
+    /** The system keeps its words big-endian (a GameCube): its pointers and UTF-16 text. */
+    val bigEndian: Boolean = false,
+    /**
+     * A folder under shared storage the core keeps everything in as its saves folder (Dolphin's
+     * User folder: memory cards, and its config and shader cache), instead of Genkan's own files.
+     */
+    val savesFolder: String? = null,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -94,6 +101,20 @@ object CoreCatalog {
             // 0x7E0000, mirrored low in banks 00-3F), so no base is added to them.
             pointerMask = 0xFFFFFFL,
             extensions = setOf("sfc", "smc", "bml"),
+        ),
+        CoreDef(
+            id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
+            platforms = setOf("ngc"),
+            // Measured on the Thor: a steady 60 fps at the native resolution with the GL renderer
+            // (Dolphin's software renderer crashes on start). Fastmem stays at its default, on.
+            variables = mapOf("dolphin_renderer" to "Hardware", "dolphin_efb_scale" to "1"),
+            // MEM1 is mapped at 0x80000000, as games see it cached; 0xC0000000 is the same RAM uncached.
+            pointerMask = 0x81FFFFFFL,
+            // Its Sys folder: per-game settings, fonts and shaders, built with the core.
+            assets = "dolphin.zip" to "dolphin-emu",
+            extensions = setOf("rvz", "iso", "gcm", "gcz", "ciso"),
+            bigEndian = true,
+            savesFolder = "Genkan/saves/dolphin",
         ),
     )
 

@@ -13,7 +13,8 @@ import java.io.File
 object CoreSaves {
     /** The folder a core keeps its own saves in: a standalone emulator's when it has one here. */
     fun directoryFor(core: CoreDef, fallback: File, storage: File = Environment.getExternalStorageDirectory()): File =
-        core.sharedSaves.map { File(storage, it) }.firstOrNull { File(it, "PSP/SAVEDATA").isDirectory } ?: fallback
+        core.savesFolder?.let { File(storage, it) }
+            ?: core.sharedSaves.map { File(storage, it) }.firstOrNull { File(it, "PSP/SAVEDATA").isDirectory } ?: fallback
 
     fun fileFor(platformSlug: String, core: CoreDef, rom: File, storage: File = Environment.getExternalStorageDirectory()): File =
         SaveLocator(storage).locate(platformSlug, rom)?.takeIf { !it.folder }?.path
@@ -25,7 +26,7 @@ object CoreSaves {
      * which syncs as that emulator's.
      */
     fun ownTarget(platformSlug: String, core: CoreDef, rom: File, storage: File = Environment.getExternalStorageDirectory()): SaveTarget? {
-        if (core.sharedSaves.isNotEmpty() || SaveLocator(storage).locate(platformSlug, rom)?.folder == false) return null
+        if (core.sharedSaves.isNotEmpty() || core.savesFolder != null || SaveLocator(storage).locate(platformSlug, rom)?.folder == false) return null
         val file = ownFile(core, rom, storage)
         return SaveTarget(core.id, file, folder = false, name = file.name)
     }

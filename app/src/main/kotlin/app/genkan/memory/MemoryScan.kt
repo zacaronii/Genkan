@@ -10,9 +10,18 @@ data class TextHit(val address: Long, val charset: Charset)
 object MemoryScan {
 
     val SHIFT_JIS: Charset = Charset.forName("Shift_JIS")
+    val EUC_JP: Charset = Charset.forName("EUC-JP")
 
-    /** 3DS games mostly keep text as UTF-16, PS1 and GBA games Shift-JIS, newer ones UTF-8. */
-    val CHARSETS: List<Charset> = listOf(Charsets.UTF_16LE, Charsets.UTF_8, SHIFT_JIS)
+    /**
+     * The encodings text is looked for in: 3DS games mostly keep text as UTF-16, PS1, GBA and
+     * GameCube games Shift-JIS, newer ones UTF-8, a few EUC-JP. UTF-16 in the memory's own byte
+     * order ([bigEndian]: a GameCube's).
+     */
+    fun charsets(bigEndian: Boolean): List<Charset> =
+        listOf(if (bigEndian) Charsets.UTF_16BE else Charsets.UTF_16LE, Charsets.UTF_8, SHIFT_JIS, EUC_JP)
+
+    /** The bytes each character of [charset] takes at least: 2 for UTF-16, which is aligned to them. */
+    fun unit(charset: Charset): Int = if (charset == Charsets.UTF_16LE || charset == Charsets.UTF_16BE) 2 else 1
 
     /** Offsets of every [needle] occurrence in [haystack]; UTF-16 hits only on even offsets. */
     fun find(haystack: ByteArray, needle: ByteArray, aligned: Boolean = false): List<Int> {
@@ -49,12 +58,13 @@ object MemoryScan {
      * addresses, right before its string with no terminator between).
      */
     fun stringStart(bytes: ByteArray, offset: Int, charset: Charset): Int {
-        val step = if (charset == Charsets.UTF_16LE) 2 else 1
+        val step = unit(charset)
         var at = offset
         while (at - step >= 0) {
             val previous = at - step
             val stop = if (step == 2) {
-                !isTextChar(((bytes[previous].toInt() and 0xFF) or ((bytes[previous + 1].toInt() and 0xFF) shl 8)).toChar())
+                val (low, high) = if (charset == Charsets.UTF_16BE) previous + 1 to previous else previous to previous + 1
+                !isTextChar(((bytes[low].toInt() and 0xFF) or ((bytes[high].toInt() and 0xFF) shl 8)).toChar())
             } else {
                 bytes[previous] == 0.toByte()
             }
@@ -133,7 +143,7 @@ object MemoryScan {
     private class Span(val offset: Int, val end: Int, val text: String)
 
     private fun spans(bytes: ByteArray, charset: Charset): List<Span> {
-        val width = if (charset == Charsets.UTF_16LE) 2 else 1
+        val width = unit(charset)
         val breaks = PAGE_BREAKS.map { it.toByteArray(charset) }
         val spans = mutableListOf<Span>()
         var start = 0
@@ -167,29 +177,32 @@ object MemoryScan {
     }
 
     /**
-     * Aligned little-endian u32 slots in [chunk] (read at [base]) that point into [targets]
-     * (after [target] folds the value to an address): pointers into the string, as slot
-     * address to the address pointed at.
+     * Aligned u32 slots in [chunk] (read at [base]) that point into [targets] (after [target]
+     * folds the value to an address): pointers into the string, as slot address to the address
+     * pointed at. Little-endian, or [bigEndian] (a GameCube's).
      */
     fun pointersInto(
         chunk: ByteArray,
         base: Long,
         targets: LongRange,
+        bigEndian: Boolean = false,
         target: (Long) -> Long? = { it },
     ): List<Pair<Long, Long>> {
         val hits = mutableListOf<Pair<Long, Long>>()
         var i = ((4 - (base % 4).toInt()) % 4)
         while (i + 4 <= chunk.size) {
-            val value = (chunk[i].toLong() and 0xFF) or ((chunk[i + 1].toLong() and 0xFF) shl 8) or
-                ((chunk[i + 2].toLong() and 0xFF) shl 16) or ((chunk[i + 3].toLong() and 0xFF) shl 24)
+            val value = u32(chunk, i, bigEndian)
             if (value != 0L) target(value)?.takeIf { it in targets }?.let { hits += (base + i) to it }
             i += 4
         }
         return hits
     }
 
-    fun u32(bytes: ByteArray): Long = (bytes[0].toLong() and 0xFF) or ((bytes[1].toLong() and 0xFF) shl 8) or
-        ((bytes[2].toLong() and 0xFF) shl 16) or ((bytes[3].toLong() and 0xFF) shl 24)
+    /** The u32 at [at] in [bytes], little-endian or [bigEndian]. */
+    fun u32(bytes: ByteArray, at: Int = 0, bigEndian: Boolean = false): Long {
+        fun b(k: Int) = bytes[at + (if (bigEndian) 3 - k else k)].toLong() and 0xFF
+        return b(0) or (b(1) shl 8) or (b(2) shl 16) or (b(3) shl 24)
+    }
 
     /** Characters [a] and [b] share in order (longest common subsequence), over the longer length. */
     fun similarity(a: String, b: String): Double {

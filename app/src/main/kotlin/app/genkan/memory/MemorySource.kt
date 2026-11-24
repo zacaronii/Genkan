@@ -16,6 +16,9 @@ interface MemorySource : Closeable {
      */
     fun target(value: Long): Long?
 
+    /** Whether the game keeps its words big-endian (a GameCube's): its pointers, and UTF-16 text. */
+    val bigEndian: Boolean get() = false
+
     /** [size] bytes at [address], or null when they can't be read. */
     fun read(address: Long, size: Int): ByteArray?
 }
