@@ -142,6 +142,10 @@ interface LibraryDao {
     @Query("SELECT * FROM platforms WHERE romCount > 0 ORDER BY name")
     fun platforms(): Flow<List<PlatformEntity>>
 
+    /** The name RomM gives the platform [slug] (a card's MiscInfo), or null. */
+    @Query("SELECT name FROM platforms WHERE slug = :slug LIMIT 1")
+    suspend fun platformName(slug: String): String?
+
     @Query("SELECT * FROM games WHERE platformId = :platformId ORDER BY sortTitle")
     fun games(platformId: Long): Flow<List<GameEntity>>
 

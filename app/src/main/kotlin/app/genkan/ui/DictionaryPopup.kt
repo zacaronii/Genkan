@@ -51,8 +51,8 @@ interface PopupActions {
     fun lookUpKanji(character: String)
     fun lookUp(text: String)
 
-    /** Make a card of hit [index]; the page rendered its glossary and furigana. */
-    fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String)
+    /** Make a card of hit [index]; the page split its furigana. */
+    fun mine(index: Int, furiganaPlain: String)
 
     /** Hit [index]'s known or ignore button ([status]: KNOWN or IGNORED) was pressed. */
     fun setMark(index: Int, status: String)
@@ -132,8 +132,8 @@ private class Bridge(private val actions: PopupActions, private val view: WebVie
     }
 
     @JavascriptInterface
-    fun mine(index: Int, glossaryHtml: String, firstGlossaryHtml: String, furiganaPlain: String) {
-        view.post { actions.mine(index, glossaryHtml, firstGlossaryHtml, furiganaPlain) }
+    fun mine(index: Int, furiganaPlain: String) {
+        view.post { actions.mine(index, furiganaPlain) }
     }
 
     @JavascriptInterface

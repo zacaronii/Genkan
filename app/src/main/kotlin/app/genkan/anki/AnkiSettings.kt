@@ -23,6 +23,11 @@ data class AnkiConfig(
     val marksWords: Boolean = true,
     /** Decks besides [deck] whose notes count as words being learned or known (first field). */
     val markDecks: List<String> = emptyList(),
+    /**
+     * Where a card's word recording comes from: a Yomitan custom audio source URL, with
+     * `{term}` and `{reading}` in it. Empty: cards go without one.
+     */
+    val audioUrl: String = "",
 ) {
     val configured: Boolean get() = address.isNotBlank()
 
@@ -51,6 +56,7 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
             noteType = it[NOTE_TYPE] ?: AnkiConfig().noteType,
             marksWords = it[MARKS_WORDS] ?: true,
             markDecks = it[MARK_DECKS]?.split('\n')?.filter { d -> d.isNotBlank() }.orEmpty(),
+            audioUrl = it[AUDIO_URL].orEmpty(),
         )
     }
 
@@ -64,6 +70,7 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
             it[NOTE_TYPE] = config.noteType.trim()
             it[MARKS_WORDS] = config.marksWords
             it[MARK_DECKS] = config.markDecks.joinToString("\n")
+            it[AUDIO_URL] = config.audioUrl.trim()
         }
     }
 
@@ -74,5 +81,6 @@ class AnkiSettings @Inject constructor(@ApplicationContext private val context: 
         val NOTE_TYPE = stringPreferencesKey("noteType")
         val MARKS_WORDS = androidx.datastore.preferences.core.booleanPreferencesKey("marksWords")
         val MARK_DECKS = stringPreferencesKey("markDecks")
+        val AUDIO_URL = stringPreferencesKey("audioUrl")
     }
 }

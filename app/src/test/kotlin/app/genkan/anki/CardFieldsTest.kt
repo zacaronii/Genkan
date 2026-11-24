@@ -25,8 +25,6 @@ class CardFieldsTest {
         sentence = "彼女はそう言って、窓の外を眺めた。",
         matchStart = 13,
         matchLength = 3,
-        glossaryHtml = "<ol><li>to look at</li></ol>",
-        firstGlossaryHtml = "<ol><li>to look at</li></ol>",
         furiganaPlain = "眺[なが]める",
         gameTitle = "マルコと銀河竜",
         pictureFile = "genkan_1.webp",
@@ -72,38 +70,59 @@ class CardFieldsTest {
     }
 
     @Test
-    fun `several pitch positions become a list`() {
-        val two = hit.copy(pitches = listOf(PitchEntry("p", listOf(Pitch(0), Pitch(2)))))
-        assertEquals("<ol><li>${CardFields.downstepNotation(0)}</li><li>${CardFields.downstepNotation(2)}</li></ol>", CardFields.pitchPositions(two))
+    fun `several pitch positions become a list, from the first pitch dictionary only`() {
+        val two = hit.copy(pitches = listOf(PitchEntry("p", listOf(Pitch(0), Pitch(2))), PitchEntry("q", listOf(Pitch(4)))))
+        val fields = CardFields.lapis(source.copy(hit = two))
+        assertEquals("<ol><li>${CardFields.downstepNotation(0)}</li><li>${CardFields.downstepNotation(2)}</li></ol>", fields["PitchPosition"])
+        // No verb rule on this hit: ながめる's drop at 2 of 4 morae is nakadaka.
+        assertEquals("heiban,nakadaka", fields["PitchCategories"])
     }
 
     @Test
-    fun `a pitch position is Yomitan's downstep notation`() {
+    fun `a pitch position is Yomitan's downstep notation, as Amatsubame writes it`() {
         assertEquals(
-            "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"0\" style=\"display: inline;\">" +
+            "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"0\" style=\"display:inline;\">" +
                 "<span class=\"pronunciation-downstep-notation-prefix\">[</span>" +
                 "<span class=\"pronunciation-downstep-notation-number\">0</span>" +
                 "<span class=\"pronunciation-downstep-notation-suffix\">]</span></span>",
             CardFields.downstepNotation(0),
         )
-        assertEquals("", CardFields.pitchPositions(hit.copy(pitches = emptyList())))
+        assertEquals("", CardFields.pitchPosition(emptyList()))
     }
 
     @Test
-    fun `pitch categories follow Yomitan's`() {
-        fun categories(reading: String, rules: String, vararg positions: Int) =
-            CardFields.pitchCategories(hit.copy(reading = reading, rules = rules, pitches = listOf(PitchEntry("p", positions.map { Pitch(it) }))))
-        // A noun: flat, first mora, middle, last.
-        assertEquals("heiban", categories("ぞくせい", "", 0))
-        assertEquals("atamadaka", categories("ねこ", "", 1))
-        assertEquals("nakadaka", categories("あおぞら", "", 3))
-        assertEquals("odaka", categories("いもうと", "", 4))
-        // A verb's or an i-adjective's downstep is kifuku.
-        assertEquals("kifuku", categories("ながめる", "v1", 3))
-        assertEquals("heiban,kifuku", categories("あかい", "adj-i", 0, 2))
+    fun `pitch categories follow Amatsubame's`() {
+        fun categories(expression: String, reading: String, rules: String, vararg downsteps: Int) =
+            CardFields.pitchCategories(downsteps.toList(), expression, reading, rules.split(' ').filter(String::isNotEmpty))
+        // A noun: flat, first mora, the last, else the middle.
+        assertEquals("heiban", categories("語", "ぞくせい", "", 0))
+        assertEquals("atamadaka", categories("語", "ねこ", "", 1))
+        assertEquals("nakadaka", categories("語", "あおぞら", "", 3))
+        assertEquals("odaka", categories("語", "いもうと", "", 4))
+        // A verb's or an i-adjective's drop is kifuku.
+        assertEquals("kifuku", categories("眺める", "ながめる", "v1", 3))
+        assertEquals("heiban,kifuku", categories("赤い", "あかい", "adj-i", 0, 2))
+        // A する-noun is a noun; the する verb is a verb.
+        assertEquals("nakadaka", categories("勉強", "べんきょう", "vs", 2))
+        assertEquals("kifuku", categories("勉強する", "べんきょうする", "vs", 2))
         // Small kana join the mora before them: きょう is two morae.
-        assertEquals("odaka", categories("きょう", "", 2))
-        assertEquals("", CardFields.pitchCategories(hit.copy(pitches = emptyList())))
+        assertEquals("odaka", categories("語", "きょう", "", 2))
+        assertEquals("", categories("語", "ねこ", ""))
+    }
+
+    @Test
+    fun `frequencies are an item per value, as Amatsubame writes them`() {
+        assertEquals(
+            "<ul data-content=\"frequencies\"><li data-dictionary=\"JPDB\">JPDB: 926</li><li data-dictionary=\"JPDB\">JPDB: 19047㋕</li></ul>",
+            CardFields.frequencies(hit),
+        )
+        assertEquals("", CardFields.frequencies(hit.copy(frequencies = emptyList())))
+    }
+
+    @Test
+    fun `MiscInfo is the game and its platform`() {
+        assertEquals("マルコと銀河竜 — Nintendo GameCube", CardFields.lapis(source.copy(platformName = "Nintendo GameCube"))["MiscInfo"])
+        assertEquals("A &amp; B", CardFields.miscInfo("A & B", null))
     }
 
     @Test

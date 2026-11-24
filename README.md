@@ -140,11 +140,15 @@ a Yomitan dictionary popup. See
   grown whenever you come back from a game, and keeps trying until the inbox answers. The token is
   stored encrypted on the device, like the RomM sign-in.
 - **Anki:** set an AnkiConnect address, deck and note type (Lapis or Kiku) under *Anki* in
-  settings. *＋ Anki* in the popup makes a card: the word with furigana, the line with the
-  word in bold, every dictionary's definitions, pitch, frequency (and FreqSort), the game,
-  a picture of the top screen while OCR is on, and the line's voice once *Audio* on the
-  reader's bar has the recording permission (what the game plays, cut from when the line
-  appeared to when the next one did, silence trimmed). Cards wait in an outbox when Anki can't be
+  settings. *＋ Anki* in the popup makes a card, in the same markup as Amatsubame's (Yomitan's
+  formats): the word with furigana, a short definition, the first dictionary in full and every
+  dictionary's definitions (without their images), the line with the word in bold, pitch and
+  its category, frequency (and FreqSort), the game and its platform, a picture of the top screen
+  while OCR is on, and the line's voice once *Audio* on the reader's bar has the recording
+  permission (what the game plays, cut from when the line appeared to when the next one did,
+  silence trimmed). With a word-audio source set (a Yomitan custom audio URL with `{term}` and
+  `{reading}`, such as a local audio server's `/audio/list`), the word's first recording goes in
+  too, text-to-speech only when there's nothing else. Cards wait in an outbox when Anki can't be
   reached and are sent when it answers; the badge shows *Queued* or *In Anki*. To try it
   without Anki: `python3 scripts/fake_ankiconnect.py` and `adb reverse tcp:8765 tcp:8765`.
 - **Reading stats:** while a game started from Genkan is being read, the reader counts its

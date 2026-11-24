@@ -3,8 +3,8 @@ package app.genkan.anki
 import app.genkan.dictionary.TermHit
 
 /**
- * What a card is made from: the looked-up entry, the line it was found in, and what the popup
- * rendered (the glossary as HTML, the furigana as `漢字[かんじ]`).
+ * What a card is made from: the looked-up entry, the line it was found in, the game, and the
+ * furigana as the popup splits it (`漢字[かんじ]`).
  */
 data class MineSource(
     val hit: TermHit,
@@ -12,46 +12,73 @@ data class MineSource(
     val sentence: String,
     val matchStart: Int,
     val matchLength: Int,
-    val glossaryHtml: String,
-    val firstGlossaryHtml: String,
     val furiganaPlain: String,
     val gameTitle: String,
+    /** The game's platform, as RomM names it, for MiscInfo; null when there's none. */
+    val platformName: String? = null,
     val pictureFile: String? = null,
     val sentenceAudioFile: String? = null,
 )
 
 /**
- * Fills a Lapis or Kiku note the way Yomitan's handlebars do for those note types (Hoshi
- * Reader's AnkiFieldTemplates is the mapping): Expression, ExpressionFurigana, Sentence with the
- * word in bold, Glossary, pitch, Frequency and FreqSort. Unknown note types get the same names,
- * and fields the note type lacks are dropped by [forNoteType].
+ * Fills a Lapis or Kiku note as Amatsubame does (its MiningService and CardFormatting), which
+ * writes Yomitan's formats, so every app's cards are the same: Expression, ExpressionFurigana,
+ * the short definition, the first dictionary in full, every dictionary, the sentence with the
+ * word in bold, pitch, Frequency and FreqSort. Unknown note types get the same names, and fields
+ * the note type lacks are dropped by [forNoteType]. ExpressionAudio is added as the card is sent
+ * ([WordAudio]).
  */
 object CardFields {
 
     fun lapis(source: MineSource): Map<String, String> {
         val hit = source.hit
+        val reading = hit.reading.ifEmpty { hit.expression }
+        val items = hit.glossaries.map { GlossaryItem(it.dictionary, it.definitionTags.split(' ').filter(String::isNotEmpty), CardHtml.renderOrNull(it.glossary)) }
+        val firstDictionary = items.firstOrNull()?.dictionary
+        val firstItems = items.filter { it.dictionary == firstDictionary }
+        val headwords = listOf(hit.expression, hit.reading)
+        val downsteps = hit.pitches.firstOrNull { p -> p.pitches.any { it.position >= 0 } }?.pitches?.map { it.position }?.filter { it >= 0 }.orEmpty()
         return buildMap {
             put("Expression", hit.expression)
             put("ExpressionFurigana", source.furiganaPlain)
-            put("ExpressionReading", hit.reading.ifEmpty { hit.expression })
-            // A short definition Lapis shows in MainDefinition's place, and MainDefinition with
-            // only the first dictionary's glosses; Glossary keeps every entry in full.
-            val headwords = listOf(hit.expression, hit.reading)
+            put("ExpressionReading", reading)
+            // The short definition Lapis shows; MainDefinition is the first dictionary in full
+            // (its glosses alone only when it renders nothing), Glossary every dictionary.
             put("SelectionText", CardDefinitions.selectionText(hit.glossaries, headwords))
-            put("MainDefinition", CardDefinitions.mainDefinition(hit.glossaries, headwords) ?: source.firstGlossaryHtml)
+            put(
+                "MainDefinition",
+                if (firstItems.any { it.html != null }) glossary(firstItems) else CardDefinitions.mainDefinition(hit.glossaries, headwords) ?: glossary(firstItems),
+            )
             put("Sentence", sentenceWithWord(source.sentence, source.matchStart, source.matchLength))
-            put("Glossary", source.glossaryHtml)
-            put("PitchPosition", pitchPositions(hit))
-            put("PitchCategories", pitchCategories(hit))
+            put("Glossary", glossary(items))
+            put("PitchPosition", pitchPosition(downsteps))
+            put("PitchCategories", pitchCategories(downsteps, hit.expression, reading, hit.rules.split(' ').filter(String::isNotEmpty)))
             put("Frequency", frequencies(hit))
             put("FreqSort", harmonicRank(hit).toString())
-            put("MiscInfo", source.gameTitle)
+            put("MiscInfo", miscInfo(source.gameTitle, source.platformName))
             // Lapis shows a word-and-sentence card: the word, then its sentence, as cards made elsewhere do.
             put("IsWordAndSentenceCard", "x")
             source.pictureFile?.let { put("Picture", "<img src=\"$it\">") }
             source.sentenceAudioFile?.let { put("SentenceAudio", "[sound:$it]") }
         }
     }
+
+    /** One definition for the glossary: its dictionary, tags (the sense number first) and HTML (null: it renders nothing). */
+    data class GlossaryItem(val dictionary: String, val tags: List<String>, val html: String?)
+
+    /** Yomitan's glossary markup: a list item per definition, labelled with its tags and dictionary. */
+    fun glossary(items: List<GlossaryItem>): String {
+        if (items.isEmpty()) return ""
+        val list = items.joinToString("") { item ->
+            val label = (item.tags + item.dictionary).joinToString(", ") { CardHtml.escape(it) }
+            "<li data-dictionary=\"${CardHtml.escape(item.dictionary)}\"><i>($label)</i> ${item.html ?: CardHtml.EMPTY}</li>"
+        }
+        return "<div style=\"text-align: left;\" class=\"yomitan-glossary\"><ol>$list</ol></div>"
+    }
+
+    /** `Game — Platform`, the game alone when the platform isn't known. */
+    fun miscInfo(title: String, platform: String?): String =
+        CardHtml.escape(if (platform.isNullOrBlank()) title else "$title — $platform")
 
     /** Only the fields [noteFields] has, so a note type without one still takes the card. */
     fun forNoteType(fields: Map<String, String>, noteFields: List<String>?): Map<String, String> =
@@ -61,44 +88,36 @@ object CardFields {
     fun sentenceWithWord(sentence: String, start: Int, length: Int): String {
         val s = start.coerceIn(0, sentence.length)
         val e = (start + length).coerceIn(s, sentence.length)
-        return escape(sentence.substring(0, s)) + "<b>" + escape(sentence.substring(s, e)) + "</b>" + escape(sentence.substring(e))
+        return CardHtml.escape(sentence.substring(0, s)) + "<b>" + CardHtml.escape(sentence.substring(s, e)) + "</b>" + CardHtml.escape(sentence.substring(e))
     }
 
-    /**
-     * Yomitan's {pitch-accent-positions}: each downstep in its notation, `[0]` (Lapis reads the
-     * number from it); a list when there are several.
-     */
-    fun pitchPositions(hit: TermHit): String {
-        val positions = hit.pitches.flatMap { it.pitches }.map { it.position }.filter { it >= 0 }.distinct()
-        return when (positions.size) {
-            0 -> ""
-            1 -> downstepNotation(positions.single())
-            else -> positions.joinToString("", "<ol>", "</ol>") { "<li>${downstepNotation(it)}</li>" }
-        }
+    /** Yomitan's downstep notation for each of [downsteps], `[0]`; a list when there are several. */
+    fun pitchPosition(downsteps: List<Int>): String {
+        val spans = downsteps.map(::downstepNotation)
+        if (spans.size <= 1) return spans.firstOrNull().orEmpty()
+        return spans.joinToString("", "<ol>", "</ol>") { "<li>$it</li>" }
     }
 
-    /** Yomitan's downstep notation for [position], with the inline style its cards carry. */
     fun downstepNotation(position: Int): String =
-        "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"$position\" style=\"display: inline;\">" +
+        "<span class=\"pronunciation-downstep-notation\" data-downstep-position=\"$position\" style=\"display:inline;\">" +
             "<span class=\"pronunciation-downstep-notation-prefix\">[</span>" +
             "<span class=\"pronunciation-downstep-notation-number\">$position</span>" +
             "<span class=\"pronunciation-downstep-notation-suffix\">]</span></span>"
 
     /**
-     * Yomitan's {pitch-accent-categories}: heiban, atamadaka, nakadaka or odaka for each pitch (a
-     * verb's or adjective's downstep is kifuku), each once, comma-separated. Lapis colours by it.
+     * Yomitan's pitch categories, comma-separated: heiban, atamadaka, nakadaka, odaka, and kifuku
+     * for a verb's or i-adjective's drop. A する-noun (rule vs) is a noun; only a headword
+     * ending in する counts as the verb.
      */
-    fun pitchCategories(hit: TermHit): String {
-        val classes = hit.rules.split(' ').filter { it.isNotEmpty() }
-        val verbOrAdjective = classes.any { it in VERB_OR_ADJECTIVE } && !("vs" in classes && "n" in classes)
-        val morae = moraCount(hit.reading.ifEmpty { hit.expression })
-        return hit.pitches.flatMap { it.pitches }.map { it.position }.mapNotNull { position ->
+    fun pitchCategories(downsteps: List<Int>, expression: String, reading: String, rules: List<String>): String {
+        val morae = moraCount(reading)
+        val inflecting = rules.any { rule -> if (rule == "vs") expression.endsWith("する") else rule.startsWith("v") || rule == "adj-i" }
+        return downsteps.map { downstep ->
             when {
-                position == 0 -> "heiban"
-                position < 0 -> null
-                verbOrAdjective -> "kifuku"
-                position == 1 -> "atamadaka"
-                position >= morae -> "odaka"
+                downstep == 0 -> "heiban"
+                inflecting -> "kifuku"
+                downstep == 1 -> "atamadaka"
+                downstep == morae -> "odaka"
                 else -> "nakadaka"
             }
         }.distinct().joinToString(",")
@@ -112,14 +131,16 @@ object CardFields {
     }
 
     private const val SMALL_KANA = "ぁぃぅぇぉゃゅょゎァィゥェォャュョヮ"
-    private val VERB_OR_ADJECTIVE = setOf("v1", "v5", "vk", "vz", "vs", "adj-i")
 
-    /** Yomitan's {frequencies}: each frequency dictionary's values. */
+    /** Each frequency dictionary's values, an item each, as Amatsubame writes them. */
     fun frequencies(hit: TermHit): String {
-        val items = hit.frequencies.filter { it.values.isNotEmpty() }.map { f ->
-            "<li>${escape(f.dictionary)}: ${f.values.joinToString(", ") { escape(it.display.ifEmpty { it.value.toString() }) }}</li>"
+        val items = hit.frequencies.flatMap { f ->
+            f.values.map { v ->
+                val name = CardHtml.escape(f.dictionary)
+                "<li data-dictionary=\"$name\">$name: ${CardHtml.escape(v.display.ifEmpty { v.value.toString() })}</li>"
+            }
         }
-        return if (items.isEmpty()) "" else items.joinToString("", "<ul style=\"text-align: left;\">", "</ul>")
+        return if (items.isEmpty()) "" else items.joinToString("", "<ul data-content=\"frequencies\">", "</ul>")
     }
 
     /**
@@ -132,7 +153,6 @@ object CardFields {
         return (ranks.size / ranks.sumOf { 1.0 / it }).toInt()
     }
 
-    private fun escape(text: String) = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     const val NO_RANK = 9_999_999
 }
