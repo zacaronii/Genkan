@@ -16,9 +16,16 @@ class FrequencyOrderTest {
     }
 
     @Test
-    fun `a linked Hachidori's own order is used as it is`() {
-        assertEquals(FrequencyOrder.AUTO, FrequencyOrder.of("auto", mode = null))
+    fun `a linked Hachidori's auto is the dictionary's mode, as in Amatsubame`() {
+        assertEquals(FrequencyOrder.ASCENDING, FrequencyOrder.of("auto", mode = null))
+        assertEquals(FrequencyOrder.ASCENDING, FrequencyOrder.of("auto", mode = "rank-based"))
+        assertEquals(FrequencyOrder.DESCENDING, FrequencyOrder.of("auto", mode = "occurrence-based"))
+    }
+
+    @Test
+    fun `a linked Hachidori's explicit order is used as it is`() {
         assertEquals(FrequencyOrder.DESCENDING, FrequencyOrder.of("descending", mode = "rank-based"))
+        assertEquals(FrequencyOrder.ASCENDING, FrequencyOrder.of("ascending", mode = "occurrence-based"))
         assertEquals(FrequencyOrder.DISABLED, FrequencyOrder.of("disabled", mode = "rank-based"))
         assertEquals(FrequencyOrder.ASCENDING, FrequencyOrder.of("something new", mode = null))
     }
