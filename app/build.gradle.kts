@@ -347,7 +347,10 @@ abstract class JsPopupTest : DefaultTask() {
 
     @TaskAction
     fun run() {
-        exec.exec { commandLine("node", "--test", tests.get().asFile.path + "/") }
+        // The files themselves: Node before 26 reads a directory argument as a module to run.
+        val files = tests.get().asFile.listFiles { f -> f.name.endsWith(".test.js") }.orEmpty().sortedBy { it.name }
+        check(files.isNotEmpty()) { "No *.test.js in ${tests.get().asFile}" }
+        exec.exec { commandLine(listOf("node", "--test") + files.map { it.path }) }
         passed.get().asFile.writeText("passed\n")
     }
 }
