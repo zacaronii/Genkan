@@ -93,6 +93,8 @@ class CoreActivity : ComponentActivity() {
      * A capture waiting for its frame (see captureTo), run on the emulation thread after each
      * frame until it says it's done: the frame just drawn and the memory then are one moment.
      */
+    /** The last seconds of the game's picture (see [FrameRing]), for a card's animated Picture. */
+    private val frameRing = FrameRing()
     @Volatile private var capture: (() -> Boolean)? = null
     /** The frame the last capture took, beside its memory; what keptFrame() gives. */
     @Volatile private var captured: KeptFrame? = null
@@ -204,6 +206,12 @@ class CoreActivity : ComponentActivity() {
         retroView.afterFrame = {
             layoutWatch.afterFrame()
             capture?.let { if (it()) capture = null }
+            // The last seconds of the picture, small, for a card's animated Picture.
+            val now = android.os.SystemClock.uptimeMillis()
+            if (frameRing.due(now)) {
+                val started = System.nanoTime()
+                retroView.readShownFrameScaled(FrameRing.WIDTH)?.let { frameRing.add(it, now, System.nanoTime() - started) }
+            }
         }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
@@ -355,6 +363,22 @@ class CoreActivity : ComponentActivity() {
 
     private val session = object : ICoreSession.Stub() {
         override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" }
+
+        override fun recentGif(path: String, millis: Int): Boolean {
+            // Only into the Anki media folder, which both processes share.
+            val file = java.io.File(path)
+            if (file.parentFile?.canonicalPath != java.io.File(filesDir, "anki-media").canonicalPath) return false
+            val frames = frameRing.recent(millis.toLong(), android.os.SystemClock.uptimeMillis())
+            if (frames.size < MIN_GIF_FRAMES) return false
+            return try {
+                file.outputStream().buffered().use { app.genkan.anki.GifEncoder.encode(frames, FrameRing.INTERVAL_MS.toInt(), it) }
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "No GIF: $e")
+                file.delete()
+                false
+            }
+        }
 
         override fun regions(): LongArray =
             GenkanTap.regions().flatMap { listOf(it.start, it.length, if (it.mirror) 1L else 0L) }.toLongArray()
@@ -795,6 +819,8 @@ class CoreActivity : ComponentActivity() {
         private const val CAPTURE_CHUNK = 1 shl 20
         /** The most video RAM a capture copies (a PS1's is 1 MB). */
         private const val MAX_VRAM = 4L shl 20
+        /** Fewer frames than this is a still, which the card takes as WebP instead. */
+        private const val MIN_GIF_FRAMES = 5
         private const val AUDIO_EVERY_MS = 100L
         /** How long a failed load's reason stays up before the player closes. */
         private const val FAIL_SHOW_MS = 5_000L

@@ -52,4 +52,9 @@ interface ICoreSession {
     oneway void showPanel(String panelJson) = 14;
     /** A cartridge's catalog id and header CRC-32 (SnesCartridge), "id crc"; null for a game that isn't one. */
     String cartridgeId() = 15;
+    /**
+     * The last millis of the game's picture as a looping GIF, written to the file at path (in the
+     * Anki media folder); whether there were frames enough to make one.
+     */
+    boolean recentGif(String path, int millis) = 16;
 }

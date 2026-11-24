@@ -199,6 +199,16 @@ class BuiltInPlayer @Inject constructor() {
         return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base, game.core.bigEndian)
     }
 
+    /** The last [millis] of the running game's picture as a GIF in [file]; whether it made one. */
+    fun recentGif(file: java.io.File, millis: Int): Boolean {
+        val session = _game.value?.session ?: return false
+        return try {
+            session.recentGif(file.absolutePath, millis)
+        } catch (e: RemoteException) {
+            false
+        }
+    }
+
     /** The running game's savestate, gzipped into [file] (in the snapshot folder); its size before gzip, or null. */
     fun saveState(file: java.io.File): Long? {
         val session = _game.value?.session ?: return null
