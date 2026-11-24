@@ -95,6 +95,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_RAM -n app.genkan/.debug.DictionaryDebugReceiver --es name line1
  * (writes each region of the built-in player's game memory, as it is, to files/debug-ram/<name>-<start>.bin, to search
  *  off the device; it holds script text, so it goes nowhere else and is deleted after)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_STATE_SIZE -n app.genkan/.debug.DictionaryDebugReceiver
+ * (logs how large the built-in player's savestate is, unpacked and gzipped, as a snapshot would take it; the state is
+ *  deleted at once)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -295,6 +298,13 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
+                    "app.genkan.debug.PLAYER_STATE_SIZE" -> {
+                        val file = File(context.filesDir, "yomikata-snapshots/state-size.state.gz").apply { parentFile?.mkdirs() }
+                        val started = System.currentTimeMillis()
+                        val size = player.saveState(file)
+                        Log.i(TAG, "Savestate: ${size ?: "none"} bytes unpacked, ${file.length()} gzipped, in ${System.currentTimeMillis() - started} ms")
+                        file.delete()
                     }
                     "app.genkan.debug.PLAYER_RAM" -> {
                         val memory = player.memory()

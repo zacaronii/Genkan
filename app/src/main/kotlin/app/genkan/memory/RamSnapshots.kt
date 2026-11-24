@@ -162,6 +162,11 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         val frame = if (moment != null) moment.frame else extras?.screen()
         // What can't be read stays zeros: the dump keeps its addresses.
         val bytes = moment?.ram ?: readRam(memory, ram) ?: return false
+        // A GameCube's MEM1 starts with its disc's header, which the inbox checks the dump against.
+        if (game.platform == "ngc" && gcDiscId(bytes) != id) {
+            Log.w(TAG, "MEM1 doesn't start with disc $id's header: no snapshot")
+            return false
+        }
         GZIPOutputStream(File(dir, "$name.ram.gz").outputStream()).use { it.write(bytes) }
         val meta = JSONObject()
             .put("id", id)
@@ -183,7 +188,16 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             if (format == PS1_VRAM) described.put("width", VRAM_WIDTH).put("height", video.size / 2 / VRAM_WIDTH)
             meta.put("vram", described).put("vram_format", format)
         }
-        extras?.state(File(dir, "$name.state.gz"))?.let { size -> meta.put("state", JSONObject().put("bytes", size)) }
+        val stateFile = File(dir, "$name.state.gz")
+        extras?.state(stateFile)?.let { size ->
+            // The inbox takes a state of up to MAX_STATE unpacked; a larger one stays behind.
+            if (size <= MAX_STATE) {
+                meta.put("state", JSONObject().put("bytes", size))
+            } else {
+                Log.i(TAG, "Savestate of $size bytes is over the inbox's ${MAX_STATE / 1024 / 1024} MB: left out")
+                stateFile.delete()
+            }
+        }
         frame?.let { frame ->
             File(dir, "$name.screen.png").outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, 100, it) }
             meta.put("screen", JSONObject().put("width", frame.width).put("height", frame.height))
@@ -196,6 +210,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     companion object {
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
+        /** The largest savestate the inbox takes, unpacked. */
+        const val MAX_STATE = 64L * 1024 * 1024
         private const val PS1_VRAM = "ps1-15bit"
 
         /** The label of a console's video RAM for the inbox (`meta.vram_format`): PS1's frame buffer, else the core's raw block. */
@@ -231,14 +247,30 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
 
         /**
          * The release id the catalog knows the game by, from its RAM: a PS1 disc's boot path
-         * (SLPS-01001), or the PSP disc id the game names its saves with (the commonest there).
+         * (SLPS-01001), the PSP disc id the game names its saves with (the commonest there), or
+         * a GameCube disc's six-character id at the start of MEM1.
          */
         fun gameId(platform: String?, ram: ByteArray): String? = when (platform) {
             "psx" -> TextSamples.ps1Serial(ram)
+            "ngc" -> gcDiscId(ram)
             "psp" -> PSP_ID.findAll(String(ram, Charsets.ISO_8859_1)).map { it.value }
                 .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             else -> null
         }
+
+        /**
+         * The disc id (G8MJ01) a GameCube game's MEM1 starts with: the apploader copies the disc's
+         * header there, its magic word C2339F3D at 0x1C, in the console's big-endian order. Null
+         * for anything else, a word-swapped dump among them.
+         */
+        fun gcDiscId(ram: ByteArray): String? {
+            if (ram.size < GC_MAGIC_AT + 4) return null
+            if (MemoryScan.u32(ram, GC_MAGIC_AT, bigEndian = true) != GC_MAGIC) return null
+            return String(ram, 0, 6, Charsets.US_ASCII).takeIf { id -> id.all { it in 'A'..'Z' || it in '0'..'9' } }
+        }
+
+        private const val GC_MAGIC_AT = 0x1C
+        private const val GC_MAGIC = 0xC2339F3DL
 
         private val PSP_ID = Regex("(?<![A-Z0-9])(?:UL|UC|NP)[A-Z]{2}\\d{5}(?![0-9])")
 

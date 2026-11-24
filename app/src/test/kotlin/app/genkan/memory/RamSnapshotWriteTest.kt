@@ -56,6 +56,57 @@ class RamSnapshotWriteTest {
         assertArrayEquals(vram, gunzip(snapshots.vramOf(meta)))
     }
 
+    /** A made-up GameCube MEM1: a disc header (id GTST01, magic C2339F3D at 0x1C, big-endian) and filler. */
+    private fun mem1(id: String = "GTST01", swapped: Boolean = false): ByteArray {
+        val ram = ByteArray(0x1800000) { (it % 247).toByte() }
+        id.toByteArray(Charsets.US_ASCII).copyInto(ram, 0)
+        val magic = byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D)
+        (if (swapped) magic.reversedArray() else magic).copyInto(ram, 0x1C)
+        return ram
+    }
+
+    private val gamecube = NowPlaying.Game("game:9", "A GameCube game", "ngc", 9)
+
+    private fun gcExtras(ram: ByteArray, stateBytes: Long? = null) = object : RamSnapshots.Extras {
+        override fun moment(ram: MainRam, scratch: File) = RamSnapshots.Moment(null, ramBytes, null)
+        override fun state(file: File): Long? = stateBytes?.also { file.writeBytes(byteArrayOf(1, 2, 3)) }
+        val ramBytes = ram
+    }
+
+    @Test
+    fun `a GameCube snapshot is MEM1 whole at 0x80000000, in the console's byte order`() {
+        val ram = mem1()
+        assertEquals("GTST01", RamSnapshots.gameId("ngc", ram))
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "あいうえお", "test", gcExtras(ram, 40L * 1024 * 1024), "taken on demand"))
+        val meta = snapshots.pending().single()
+        val json = JSONObject(meta.readText())
+        assertEquals("ngc", json.getString("platform"))
+        assertEquals("0x80000000", json.getString("base_address"))
+        assertEquals("GTST01", json.getString("id"))
+        assertEquals(40L * 1024 * 1024, json.getJSONObject("state").getLong("bytes"))
+        val sent = gunzip(snapshots.ramOf(meta))
+        assertEquals(0x1800000, sent.size)
+        assertArrayEquals(ram, sent)
+        assertEquals("C2339F3D", sent.copyOfRange(0x1C, 0x20).joinToString("") { "%02X".format(it) })
+    }
+
+    @Test
+    fun `a GameCube state over the inbox's 64 MB is left out, the snapshot still taken`() {
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1(), RamSnapshots.MAX_STATE + 1), "taken on demand: no text on screen"))
+        val meta = snapshots.pending().single()
+        assertFalse(JSONObject(meta.readText()).has("state"))
+        assertFalse(snapshots.stateOf(meta).exists())
+    }
+
+    @Test
+    fun `MEM1 that isn't the disc's, or is word-swapped, is no snapshot`() {
+        assertFalse(snapshots.takeNow(memory, gamecube, "GTST01", "あいうえお", "test", gcExtras(mem1(id = "GOTH02")), "taken on demand"))
+        assertFalse(snapshots.takeNow(memory, gamecube, "GTST01", "あいうえお", "test", gcExtras(mem1(swapped = true)), "taken on demand"))
+        assertTrue(snapshots.pending().isEmpty())
+        assertEquals(null, RamSnapshots.gameId("ngc", mem1(swapped = true)))
+        assertEquals(null, RamSnapshots.gameId("ngc", ByteArray(0x1800000)))
+    }
+
     @Test
     fun `a press with nothing read is a no-text snapshot, not refused`() {
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "", "test", extras(ByteArray(128 * 1024), null), "taken on demand: no text on screen"))
