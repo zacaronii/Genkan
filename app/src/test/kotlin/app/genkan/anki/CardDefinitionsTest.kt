@@ -133,4 +133,39 @@ class CardDefinitionsTest {
         assertFalse(fields["MainDefinition"]!!.contains("例文"))
         assertEquals("<ol><li>everything</li></ol>", fields["Glossary"])
     }
+
+    /** A made-up text entry in 新和英's layout without sense numbers: a headword, then long lines. */
+    private val longUnnumbered = "[\"ためし【試し】 [ローマ字](tameshi)\\n" +
+        "〔使い方〕 a trial run of something new, as one makes before deciding whether to keep it at all.\\n" +
+        "《分野》 a test.\\n" + "an attempt.\\n" + "a sample (aside).\\n" + "a specimen.\\n" + "a long tail of further usage notes.\"]"
+
+    @Test
+    fun `unnumbered text gives a short definition, a gloss per line without the headword`() {
+        val glossaries = listOf(GlossaryEntry("Text", longUnnumbered))
+        val short = CardDefinitions.selectionText(glossaries)
+        assertEquals(
+            "a trial run of something new, as one makes before deciding whether to keep it a…; a test; an attempt",
+            short,
+        )
+        assertFalse(short.contains("【"))
+        val main = CardDefinitions.mainDefinition(glossaries)!!
+        assertFalse(main.contains("ローマ字"))
+        assertFalse(main.contains("試し"))
+        assertTrue(main.contains("<li>a test</li><li>an attempt</li><li>a sample</li>"))
+    }
+
+    @Test
+    fun `a line that is the entry's own word is its headword`() {
+        val entry = GlossaryEntry("Text", "[\"試し ためし\\nan attempt.\"]")
+        assertEquals("an attempt", CardDefinitions.selectionText(listOf(entry), headwords = listOf("試し", "ためし")))
+        assertEquals("試し ためし; an attempt", CardDefinitions.selectionText(listOf(entry)))
+    }
+
+    @Test
+    fun `a long gloss is cut at 80 characters`() {
+        val long = "x".repeat(120)
+        val short = CardDefinitions.shortDefinition(listOf(listOf(long)))
+        assertEquals(80, short.length)
+        assertTrue(short.endsWith("…"))
+    }
 }

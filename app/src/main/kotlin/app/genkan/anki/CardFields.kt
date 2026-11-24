@@ -36,8 +36,9 @@ object CardFields {
             put("ExpressionReading", hit.reading.ifEmpty { hit.expression })
             // A short definition Lapis shows in MainDefinition's place, and MainDefinition with
             // only the first dictionary's glosses; Glossary keeps every entry in full.
-            put("SelectionText", CardDefinitions.selectionText(hit.glossaries))
-            put("MainDefinition", CardDefinitions.mainDefinition(hit.glossaries) ?: source.firstGlossaryHtml)
+            val headwords = listOf(hit.expression, hit.reading)
+            put("SelectionText", CardDefinitions.selectionText(hit.glossaries, headwords))
+            put("MainDefinition", CardDefinitions.mainDefinition(hit.glossaries, headwords) ?: source.firstGlossaryHtml)
             put("Sentence", sentenceWithWord(source.sentence, source.matchStart, source.matchLength))
             put("Glossary", source.glossaryHtml)
             put("PitchPosition", pitchPositions(hit))

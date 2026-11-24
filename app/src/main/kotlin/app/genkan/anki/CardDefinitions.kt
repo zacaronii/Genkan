@@ -11,13 +11,14 @@ import com.squareup.moshi.Moshi
  * A sense is a list of glosses. Structured content (JMdict, Jitendex) gives its senses from its
  * glossary lists only, so example sentences, forms, cross-references and notes never come in. A
  * plain-text definition with numbered sense lines (新和英: `1 〔…〕 dark; deep.`) gives a sense per
- * line, its bracketed notes removed; other text is one sense.
+ * line, its bracketed notes removed; other text is one sense with a gloss per line, its headword
+ * line left out.
  */
 object CardDefinitions {
     private val json = Moshi.Builder().build().adapter(Any::class.java).lenient()
 
-    /** [glossary]'s senses, each its glosses. */
-    fun glosses(glossary: String): List<List<String>> {
+    /** [glossary]'s senses, each its glosses; [headwords]: the entry's expression and reading. */
+    fun glosses(glossary: String, headwords: Collection<String> = emptyList()): List<List<String>> {
         val parsed = try {
             json.fromJson(glossary)
         } catch (e: Exception) {
@@ -33,23 +34,35 @@ object CardDefinitions {
             }
         }
         val text = strings.map { it.trim() }.filter { it.isNotEmpty() }
-        return textSenses(text) + senses
+        return textSenses(text, headwords) + senses
     }
 
     /**
      * Plain-text definitions as senses: numbered lines (`1 …`), each without its 〔〕《》[]() notes
-     * and split at semicolons, when the text has them; else the text as one sense.
+     * and split at semicolons, when the text has them; else one sense, a gloss per line (notes
+     * removed), leaving out the headword line (`かな【漢字】…`, or the entry's own word).
      */
-    private fun textSenses(text: List<String>): List<List<String>> {
-        if (text.isEmpty()) return emptyList()
-        val numbered = text.flatMap { it.lines() }.mapNotNull { NUMBERED_LINE.matchEntire(it.trim())?.groupValues?.get(1) }
-        if (numbered.isEmpty()) return listOf(text)
+    private fun textSenses(text: List<String>, headwords: Collection<String>): List<List<String>> {
+        val lines = text.flatMap { it.lines() }.map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return emptyList()
+        val numbered = lines.mapNotNull { NUMBERED_LINE.matchEntire(it)?.groupValues?.get(1) }
+        if (numbered.isEmpty()) {
+            val glosses = lines.filterNot { isHeadword(it, headwords) }.map(::withoutTextNotes).filter { it.isNotEmpty() }
+            return if (glosses.isEmpty()) emptyList() else listOf(glosses)
+        }
         return numbered.map { line ->
             NOTES.replace(line, " ").split(';', '；')
                 .map { it.trim().trimEnd('.', '。').trim() }
                 .filter { it.isNotEmpty() }
         }.filter { it.isNotEmpty() }
     }
+
+    /** A line naming the entry rather than defining it. */
+    private fun isHeadword(line: String, headwords: Collection<String>): Boolean =
+        HEADWORD_LINE.containsMatchIn(line) ||
+            headwords.any { it.isNotBlank() && (line == it || line.startsWith("$it ") || line.startsWith("$it【")) }
+
+    private fun withoutTextNotes(line: String) = NOTES.replace(line, " ").replace(SPACES, " ").trim().trimEnd('.', '。').trim()
 
     private fun glossaryLists(value: Any?): List<List<String>> = when (value) {
         is List<*> -> value.flatMap(::glossaryLists)
@@ -79,7 +92,7 @@ object CardDefinitions {
     fun shortDefinition(senses: List<List<String>>, maxSenses: Int = 3, maxGlosses: Int = 3): String {
         val seen = mutableSetOf<String>()
         val lines = senses.mapNotNull { sense ->
-            val glosses = sense.map(::withoutNotes).filter { it.isNotEmpty() && seen.add(it) }.take(maxGlosses)
+            val glosses = sense.map(::withoutNotes).filter { it.isNotEmpty() && seen.add(it) }.take(maxGlosses).map(::capped)
             if (glosses.isEmpty()) null else glosses.joinToString("; ") { escape(it) }
         }.take(maxSenses)
         if (lines.size <= 1) return lines.firstOrNull().orEmpty()
@@ -91,14 +104,15 @@ object CardDefinitions {
      * whose entries give any glosses (a prose dictionary first doesn't leave it empty), leaving out
      * JMdict's forms entry (its spellings, not a meaning).
      */
-    fun shortSenses(glossaries: List<GlossaryEntry>): List<List<String>> {
+    fun shortSenses(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): List<List<String>> {
         val meanings = glossaries.filter { "forms" !in it.definitionTags.split(' ') }
-        val byDictionary = meanings.groupBy { it.dictionary }.mapValues { (_, entries) -> entries.flatMap { glosses(it.glossary) } }
+        val byDictionary = meanings.groupBy { it.dictionary }.mapValues { (_, entries) -> entries.flatMap { glosses(it.glossary, headwords) } }
         return meanings.map { it.dictionary }.distinct().firstNotNullOfOrNull { byDictionary[it]?.takeIf { s -> s.isNotEmpty() } }.orEmpty()
     }
 
     /** SelectionText: the short definition of [glossaries]. */
-    fun selectionText(glossaries: List<GlossaryEntry>): String = shortDefinition(shortSenses(glossaries))
+    fun selectionText(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): String =
+        shortDefinition(shortSenses(glossaries, headwords))
 
     /**
      * MainDefinition kept short: the first dictionary's entries, each as Yomitan writes it into a
@@ -106,10 +120,10 @@ object CardDefinitions {
      * one sense, a numbered list of senses for several. Null when that dictionary gives no glosses
      * at all (a format this doesn't read): the card then takes the entries in full.
      */
-    fun mainDefinition(glossaries: List<GlossaryEntry>): String? {
+    fun mainDefinition(glossaries: List<GlossaryEntry>, headwords: Collection<String> = emptyList()): String? {
         val first = glossaries.firstOrNull()?.dictionary ?: return null
         val items = glossaries.filter { it.dictionary == first && "forms" !in it.definitionTags.split(' ') }.mapNotNull { entry ->
-            val senses = glosses(entry.glossary)
+            val senses = glosses(entry.glossary, headwords)
             if (senses.isEmpty()) return@mapNotNull null
             val label = (entry.definitionTags.split(' ').filter { it.isNotEmpty() } + entry.dictionary).joinToString(", ") { escape(it) }
             val body = if (senses.size == 1) {
@@ -128,8 +142,18 @@ object CardDefinitions {
         return stripped.ifEmpty { gloss.trim() }
     }
 
+    /** A gloss at most [MAX_GLOSS] characters, cut with "…". */
+    private fun capped(gloss: String) = if (gloss.length <= MAX_GLOSS) gloss else gloss.take(MAX_GLOSS - 1).trimEnd() + "…"
+
     private fun escape(text: String) =
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+    private const val MAX_GLOSS = 80
+
+    /** A headword line, `かな【漢字】…`: kana, then the written forms in 【】, at its start. */
+    private val HEADWORD_LINE = Regex("""^\S{0,20}?【[^】]*】""")
+
+    private val SPACES = Regex("""\s+""")
 
     private val PARENTHESES = Regex("""\s*[(（][^()（）]*[)）]\s*""")
 
