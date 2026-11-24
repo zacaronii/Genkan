@@ -53,9 +53,14 @@ interface ICoreSession {
     /** A cartridge's catalog id and header CRC-32 (SnesCartridge), "id crc"; null for a game that isn't one. */
     String cartridgeId() = 15;
     /**
+     * The last millis of the game's picture as a looping GIF, written to the file at path (in the
+     * Anki media folder); whether there were frames enough to make one.
+     */
+    boolean recentGif(String path, int millis) = 16;
+    /**
      * Runs a Yomikata script for the game from now on (docs/script-api.md there): its source, its
      * data files by name (byte arrays), and the game's id and build as the catalog writes them.
-     * Null when it loaded, else why not. (16 is the animated picture's, on its own branch.)
+     * Null when it loaded, else why not.
      */
     String loadScript(String name, in byte[] source, in Bundle data, String gameId, String buildId) = 17;
     /** Stops running the script. */

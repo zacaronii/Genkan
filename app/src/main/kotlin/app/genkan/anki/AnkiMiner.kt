@@ -86,10 +86,16 @@ class AnkiMiner @Inject constructor(
 
     /**
      * Queues a card for [source], with [picture] (the top screen) and [audio] (the line's voice,
-     * mono PCM at [GameAudioRecorder.SAMPLE_RATE]) when there are any.
+     * mono PCM at [GameAudioRecorder.SAMPLE_RATE]) when there are any. [animated] writes the last
+     * seconds of the game as a GIF into the file it's given, the card's Picture when it can;
+     * [picture] is the still otherwise.
      */
-    suspend fun mine(source: MineSource, picture: Bitmap?, audio: ShortArray? = null) = withContext(Dispatchers.IO) {
-        val pictureFile = picture?.let { savePicture(it) }
+    suspend fun mine(source: MineSource, picture: Bitmap?, audio: ShortArray? = null, animated: ((File) -> Boolean)? = null) = withContext(Dispatchers.IO) {
+        val gif = animated?.let { write ->
+            File(mediaDir, "genkan_${System.currentTimeMillis()}.gif").takeIf { f -> write(f) && f.length() > 0 }
+                .also { if (it == null) Log.i(TAG, "No animated picture: a still instead") }
+        }
+        val pictureFile = gif?.name ?: picture?.let { savePicture(it) }
         val audioFile = audio?.let { saveAudio(it) }
         val fields = CardFields.lapis(source.copy(pictureFile = pictureFile, sentenceAudioFile = audioFile))
         dao.enqueue(

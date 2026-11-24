@@ -383,6 +383,8 @@ class ReaderViewModel @Inject constructor(
                 ),
                 picture,
                 voice,
+                // The built-in player keeps the last seconds of the game: the card's picture moves.
+                animated = if (fromManual || player.game.value == null) null else { file -> player.recentGif(file, ANIMATED_PICTURE_MS) },
             )
             // The page's crop is this card's alone once its file is written.
             if (fromManual) picture?.recycle()
@@ -449,6 +451,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     private companion object {
+        /** How much of the game a card's animated picture shows, up to the moment it's mined. */
+        const val ANIMATED_PICTURE_MS = 2_500
         /** The line id of a lookup from the overlay whose text isn't in the backlog. */
         const val SCREEN_LINE = -1L
         /** Lines scanned between showing their marks, on a full backlog. */
