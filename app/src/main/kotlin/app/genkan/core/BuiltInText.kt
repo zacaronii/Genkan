@@ -222,10 +222,11 @@ class BuiltInText @Inject constructor(
             val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
                 ?: ocr.latest.value?.takeIf { it.isNotBlank() }
                 ?: ""
-            // With OCR off and no layout, an empty line means nothing read the screen, not that it was blank.
-            val unread = line.isEmpty() && read == null && !ocr.enabled.value
+            // Only a layout being read knows the screen has no text; an empty line otherwise means
+            // nothing read it (OCR off, or reading elsewhere on the screen), not that it was blank.
+            val unread = RamSnapshots.screenUnread(line, layoutRead = read != null)
             val moment = when {
-                unread -> "OCR off, screen not read"
+                unread -> if (ocr.enabled.value) "OCR read nothing yet" else "OCR off, screen not read"
                 line.isEmpty() -> "no text on screen"
                 read?.asking == true -> "a question on screen"
                 read?.waitingOnLine == true -> "waiting for a press"

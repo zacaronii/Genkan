@@ -332,11 +332,23 @@ class GLRetroView(
     private fun readFrame() {
         val request = frameRequest ?: return
         frameRequest = null
-        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+        val (pixels, width, height) = readShownFrame() ?: return
+        request(pixels, width, height)
+    }
+
+    /**
+     * Genkan: the frame on screen as RGBA, bottom row first (GL's order), with its width and
+     * height; on the GL thread (afterFrame), null before the surface has a size. The screen's own
+     * framebuffer, whatever a hardware-rendered core left bound.
+     */
+    fun readShownFrame(): Triple<ByteBuffer, Int, Int>? {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return null
         val pixels = ByteBuffer.allocateDirect(surfaceWidth * surfaceHeight * 4).order(ByteOrder.nativeOrder())
-        GLES20.glReadPixels(0, 0, surfaceWidth, surfaceHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        DefaultRead.read(DefaultRead.GLES) {
+            GLES20.glReadPixels(0, 0, surfaceWidth, surfaceHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        }
         pixels.rewind()
-        request(pixels, surfaceWidth, surfaceHeight)
+        return Triple(pixels, surfaceWidth, surfaceHeight)
     }
 
     inner class Renderer : GLSurfaceView.Renderer {

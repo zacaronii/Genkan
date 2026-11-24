@@ -136,6 +136,13 @@ class RamSnapshotWriteTest {
     }
 
     @Test
+    fun `only a layout being read knows the screen has no text`() {
+        assertEquals(false, RamSnapshots.screenUnread("", layoutRead = true))
+        assertEquals(true, RamSnapshots.screenUnread("", layoutRead = false))
+        assertEquals(false, RamSnapshots.screenUnread("あいうえお", layoutRead = false))
+    }
+
+    @Test
     fun `a press with nothing read is a no-text snapshot, not refused`() {
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "", "test", extras(ByteArray(128 * 1024), null), "taken on demand: no text on screen"))
         val json = JSONObject(snapshots.pending().single().readText())
