@@ -95,6 +95,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_RAM -n app.genkan/.debug.DictionaryDebugReceiver --es name line1
  * (writes each region of the built-in player's game memory, as it is, to files/debug-ram/<name>-<start>.bin, to search
  *  off the device; it holds script text, so it goes nowhere else and is deleted after)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_GIF -n app.genkan/.debug.DictionaryDebugReceiver [--ei millis 2500]
+ * (writes the built-in player's last seconds as a card's GIF would be, to files/anki-media/debug-clip.gif, and logs
+ *  its size and how long it took; not a card)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FRAMES -n app.genkan/.debug.DictionaryDebugReceiver
  * (writes the built-in player's frame as a snapshot takes it, read on its own and with a moment's memory, to
  *  files/debug-ram/frame-{screen,moment}.png; the memory isn't kept)
@@ -301,6 +304,12 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
+                    "app.genkan.debug.PLAYER_GIF" -> {
+                        val file = File(context.filesDir, "anki-media/debug-clip.gif").apply { parentFile?.mkdirs() }
+                        val started = System.currentTimeMillis()
+                        val made = player.recentGif(file, intent.getIntExtra("millis", 2_500))
+                        Log.i(TAG, "GIF: ${if (made) "${file.length()} bytes" else "none"} in ${System.currentTimeMillis() - started} ms")
                     }
                     "app.genkan.debug.PLAYER_FRAMES" -> {
                         val dir = File(context.filesDir, "debug-ram").apply { mkdirs() }
