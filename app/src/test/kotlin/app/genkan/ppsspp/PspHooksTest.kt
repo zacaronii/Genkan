@@ -37,6 +37,13 @@ class PspHooksTest {
     }
 
     @Test
+    fun `big-endian UTF-16 ends at a two-byte terminator too`() {
+        val bytes = "希望の学園".toByteArray(Charsets.UTF_16BE) + byteArrayOf(0, 0, 0, 0x41)
+        assertEquals("希望の学園", PspHooks.decode(bytes, Charsets.UTF_16BE))
+        assertEquals("A", PspHooks.decode(byteArrayOf(0, 0x41, 0, 0), Charsets.UTF_16BE))
+    }
+
+    @Test
     fun `ported LunaHook filters`() {
         assertEquals("ちょっと待ってー", PspHooks.myMerryMay("%Kちょっと%N待って├%P"))
         assertEquals("希望の学園", PspHooks.danganronpa("<CLT 3>希望の\n学園<CLT>"))

@@ -196,7 +196,7 @@ class BuiltInPlayer @Inject constructor() {
         }
         val base = game.core.ramBase
         val regions = raw.toList().chunked(3).map { (start, length, mirror) -> (base + start until base + start + length) to (mirror != 0L) }
-        return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base)
+        return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base, game.core.bigEndian)
     }
 
     /** The running game's savestate, gzipped into [file] (in the snapshot folder); its size before gzip, or null. */
@@ -250,6 +250,7 @@ private class CoreMemory(
     private val pointerMask: Long,
     /** Added to the core's own addresses to give the game's. */
     private val base: Long,
+    override val bigEndian: Boolean,
 ) : MemorySource {
     override val maxRead: Int = MAX_READ
 

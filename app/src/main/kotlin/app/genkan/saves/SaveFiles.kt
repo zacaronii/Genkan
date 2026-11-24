@@ -49,6 +49,16 @@ data class WatchedEmulator(
             // PPSSPP's memory stick: a folder chosen in PPSSPP, or PSP/ at the root of storage.
             "psp" to WatchedEmulator("ppsspp", listOf("ppsspp", "", "PPSSPP"), listOf("PSP/SAVEDATA"), privileged = false),
         )
+
+        /**
+         * The built-in player's, by platform, for a core that keeps its saves in a folder of its own
+         * (CoreDef.savesFolder). Dolphin's User folder also holds its config and shader cache: only
+         * the memory cards' GC folder is watched. Its GCI files are standalone Dolphin's, under the
+         * same paths, so the two share saves through RomM.
+         */
+        val BUILT_IN = mapOf(
+            "ngc" to WatchedEmulator("dolphin", listOf("Genkan/saves/dolphin/User"), listOf("GC"), privileged = false),
+        )
     }
 }
 

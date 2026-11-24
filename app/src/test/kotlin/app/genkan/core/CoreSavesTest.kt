@@ -49,4 +49,18 @@ class CoreSavesTest {
         assertEquals(File(storage, "ppsspp"), CoreSaves.directoryFor(core, fallback, storage))
         storage.deleteRecursively()
     }
+
+    @Test
+    fun `Dolphin keeps its User folder in Genkan's saves, and syncs only its memory cards`() {
+        val core = CoreCatalog.forPlatform("ngc")!!
+        assertEquals(File(storage, "Genkan/saves/dolphin"), CoreSaves.directoryFor(core, File(storage, "private"), storage))
+        // Its GCI files sync as standalone Dolphin's, through the watched folders, not as an .srm.
+        assertNull(CoreSaves.ownTarget("ngc", core, File("/storage/ROMs/ngc/Game.rvz"), storage))
+        val watched = app.genkan.saves.WatchedEmulator.BUILT_IN.getValue("ngc")
+        assertEquals("dolphin", watched.emulator)
+        assertEquals(listOf("Genkan/saves/dolphin/User"), watched.bases)
+        // Never its config or shader cache, beside GC in the User folder.
+        assertEquals(listOf("GC"), watched.folders)
+        assertEquals(app.genkan.saves.WatchedEmulator.BY_PLATFORM.getValue("ngc").folders, watched.folders)
+    }
 }

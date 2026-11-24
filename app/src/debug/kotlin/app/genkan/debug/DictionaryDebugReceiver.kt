@@ -92,6 +92,9 @@ import javax.inject.Inject
  * (hands the line to the built-in player's text source as if OCR had read it)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_REGIONS -n app.genkan/.debug.DictionaryDebugReceiver
  * (logs the memory regions the built-in player's core describes)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_RAM -n app.genkan/.debug.DictionaryDebugReceiver --es name line1
+ * (writes each region of the built-in player's game memory, as it is, to files/debug-ram/<name>-<start>.bin, to search
+ *  off the device; it holds script text, so it goes nowhere else and is deleted after)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -292,6 +295,27 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
+                    "app.genkan.debug.PLAYER_RAM" -> {
+                        val memory = player.memory()
+                        val name = intent.getStringExtra("name").orEmpty().filter { it.isLetterOrDigit() || it == '-' }.ifEmpty { "dump" }
+                        val dir = File(context.filesDir, "debug-ram").apply { mkdirs() }
+                        val started = System.currentTimeMillis()
+                        memory?.regions.orEmpty().forEach { region ->
+                            val file = File(dir, "%s-%08x.bin".format(name, region.first))
+                            var short = 0
+                            file.outputStream().buffered().use { out ->
+                                var at = region.first
+                                while (at <= region.last) {
+                                    val n = minOf(memory!!.maxRead.toLong(), region.last - at + 1).toInt()
+                                    // An unreadable stretch stays zeros, so offsets in the file are the region's.
+                                    out.write(memory.read(at, n) ?: ByteArray(n).also { short++ })
+                                    at += n
+                                }
+                            }
+                            Log.i(TAG, "Dumped 0x%08x-0x%08x to %s, %d unreadable chunks".format(region.first, region.last, file.name, short))
+                        }
+                        Log.i(TAG, "Dump took ${System.currentTimeMillis() - started} ms")
                     }
                     "app.genkan.debug.SHIZUKU_PROBE" -> {
                         val files = privileged.files()
