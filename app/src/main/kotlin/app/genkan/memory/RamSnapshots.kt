@@ -135,7 +135,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
      * A snapshot taken when asked (a line still typing out, or waiting for a press), with none
      * of [take]'s rules and not counted against them; [note] says what moment it caught.
      * [ocrUnavailable]: nothing read the screen (OCR off), so an empty [line] says nothing about
-     * whether text was on it.
+     * whether text was on it. [screenLine], given an empty [line]: reads the screen once the
+     * moment is captured (OCR of this snapshot's own screen, not an earlier one's line).
      */
     @Synchronized
     fun takeNow(
@@ -147,9 +148,10 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         extras: Extras?,
         note: String,
         ocrUnavailable: Boolean = false,
+        screenLine: (() -> String?)? = null,
     ): Boolean {
         val ram = MainRam.of(game.platform) ?: return false
-        return write(memory, game, ram, id, line, emulator, extras, note, ocrUnavailable)
+        return write(memory, game, ram, id, line, emulator, extras, note, ocrUnavailable, screenLine)
     }
 
     private fun write(
@@ -162,6 +164,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         extras: Extras?,
         note: String?,
         ocrUnavailable: Boolean = false,
+        screenLine: (() -> String?)? = null,
     ): Boolean {
         dir.mkdirs()
         val name = "$id-${System.currentTimeMillis()}".replace(Regex("[^A-Za-z0-9_.-]"), "_")
@@ -180,19 +183,21 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             return false
         }
         GZIPOutputStream(File(dir, "$name.ram.gz").outputStream()).use { it.write(bytes) }
+        // The screen's line, read now that the moment is taken: what this snapshot shows.
+        val text = line.ifBlank { screenLine?.invoke()?.trim().orEmpty() }
         val meta = JSONObject()
             .put("id", id)
             .put("platform", TextSamples.yomikataPlatform(game.platform!!))
             .put("base_address", "0x%08X".format(ram.baseAddress))
             // No text on screen (a scene change, no window): said so, as the inbox asks.
-            .put("ocr", JSONArray(listOfNotNull(line.takeIf { it.isNotBlank() })))
+            .put("ocr", JSONArray(listOfNotNull(text.takeIf { it.isNotBlank() })))
             .put("title", game.title)
             .put("app", "Genkan ${BuildConfig.VERSION_NAME}")
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
         // Nothing read the screen: said so, rather than that no text was on it.
-        if (line.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
+        if (text.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
         (if (moment != null) moment.vram else extras?.vram())?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             val format = vramFormat(game.platform!!)
@@ -217,7 +222,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             meta.put("screen", JSONObject().put("width", frame.width).put("height", frame.height))
         }
         File(dir, "$name.meta.json").writeText(meta.toString())
-        Log.i(TAG, "Snapshot${note?.let { " ($it)" }.orEmpty()} (${meta.optJSONObject("state")?.optLong("bytes")?.let { "state $it bytes" } ?: "no state"}) for ${game.title} ($id): ${bytes.size / 1024} KB at \"${line.take(12)}\"")
+        Log.i(TAG, "Snapshot${note?.let { " ($it)" }.orEmpty()} (${meta.optJSONObject("state")?.optLong("bytes")?.let { "state $it bytes" } ?: "no state"}) for ${game.title} ($id): ${bytes.size / 1024} KB at \"${text.take(12)}\"")
         return true
     }
 

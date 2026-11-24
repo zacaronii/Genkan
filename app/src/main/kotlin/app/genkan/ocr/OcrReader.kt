@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -169,6 +170,18 @@ class OcrReader @Inject constructor(
         _lines.tryEmit(text)
     }
 
+    /**
+     * One read of the screen as it is now, in the game's area, whether OCR is on or not: what a
+     * snapshot taken this moment shows, rather than [latest], which may be an earlier screen's.
+     * Not put in the backlog. Null when there's no frame or the read fails or takes over [timeoutMs].
+     */
+    suspend fun readNow(timeoutMs: Long = READ_NOW_MS): String? = withTimeoutOrNull(timeoutMs) {
+        val frame = capture.frame() ?: return@withTimeoutOrNull null
+        val area = area(frame, region.value) ?: return@withTimeoutOrNull null
+        val box = Bitmap.createBitmap(frame, area.left, area.top, area.width(), area.height())
+        runCatching { OcrText.join(engine.value.read(box)) }.onFailure { Log.w(TAG, "OCR failed: $it") }.getOrNull()
+    }
+
     /** The part of [frame] that [region] covers, in pixels. */
     private fun area(frame: Bitmap, region: OcrRegion): Rect? {
         val r = region.cleaned() ?: return null
@@ -183,5 +196,6 @@ class OcrReader @Inject constructor(
     private companion object {
         const val TAG = "OcrReader"
         const val INTERVAL_MS = 250L
+        const val READ_NOW_MS = 4_000L
     }
 }

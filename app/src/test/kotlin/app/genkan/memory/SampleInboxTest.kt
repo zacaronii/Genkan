@@ -7,12 +7,12 @@ import org.junit.Test
 
 class SampleInboxTest {
     @Test
-    fun `a size limit keeps the snapshot, anything else drops it`() {
-        assertTrue(SampleInbox.isSizeLimit(400, """{"detail":"state is larger than 32 MB"}"""))
-        assertTrue(SampleInbox.isSizeLimit(413, "Request Entity Too Large"))
-        assertTrue(SampleInbox.isSizeLimit(400, """{"detail":"ram exceeds the limit"}"""))
-        assertFalse(SampleInbox.isSizeLimit(400, """{"detail":"base_address is outside main RAM"}"""))
-        assertFalse(SampleInbox.isSizeLimit(400, """{"detail":"meta is not valid JSON"}"""))
+    fun `a refused snapshot stays on the device, for size or for what it is`() {
+        assertTrue(SampleInbox.keepsRefused(413))
+        // A meta the inbox doesn't take yet (ocr_unavailable before it knew the field) is kept too.
+        assertTrue(SampleInbox.keepsRefused(400))
+        assertFalse(SampleInbox.keepsRefused(500))
+        assertFalse(SampleInbox.keepsRefused(200))
     }
 
     @Test
