@@ -250,7 +250,8 @@ val buildBsnes = tasks.register<BuildLibretroCore>("buildBsnes") {
  * checkout skips (`update = none` in .gitmodules: its externals are large). Built once per commit
  * into [cacheDir] with the zip of the [sysEntries] under the source's Data/Sys the core needs in its
  * system folder, so later builds (and CI, which caches the folder) only copy both; the source and
- * its externals are fetched, shallow, only when the cache has no build of the commit.
+ * its externals are fetched, shallow, only when the cache has no build of the commit. The zip is
+ * cached by its list of entries too: a changed list makes only a new zip.
  */
 abstract class BuildCmakeCore : DefaultTask() {
     @get:Input abstract val commit: Property<String>
@@ -285,8 +286,10 @@ abstract class BuildCmakeCore : DefaultTask() {
         val stem = libraryName.get().removeSuffix(".so")
         val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}")
         val library = cached.resolve("${abi.get()}/${libraryName.get()}")
-        val sysZip = cached.resolve(sysZipName.get())
-        if (!library.isFile || !sysZip.isFile) {
+        val entriesKey = MessageDigest.getInstance("SHA-256").digest(sysEntries.get().joinToString("\n").toByteArray())
+            .joinToString("") { "%02x".format(it) }.take(12)
+        val sysZip = cached.resolve("${sysZipName.get().removeSuffix(".zip")}-$entriesKey.zip")
+        if (!library.isFile) {
             fetch(root, source, path)
             logger.lifecycle("Building ${libraryName.get()} at ${commit.get().take(7)}")
             val work = temporaryDir.apply { deleteRecursively(); mkdirs() }
@@ -307,6 +310,10 @@ abstract class BuildCmakeCore : DefaultTask() {
             // The host's own prebuilt LLVM: there is one per NDK.
             val strip = ndk.resolve("toolchains/llvm/prebuilt").listFiles()!!.single().resolve("bin/llvm-strip")
             exec.exec { commandLine(strip.path, "-o", library.path, built.path) }
+        }
+        if (!sysZip.isFile) {
+            fetch(root, source, path)
+            cached.listFiles { f -> f.name.startsWith(sysZipName.get().removeSuffix(".zip") + "-") }?.forEach { it.delete() }
             zipSys(source.resolve("Data/Sys"), sysZip)
         }
         val libs = libsDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
@@ -354,7 +361,8 @@ val buildDolphin = tasks.register<BuildCmakeCore>("buildDolphin") {
     cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DENABLE_LTO=ON", "-DANDROID_PLATFORM=android-21"))
     target.set("dolphin_libretro")
     skipExternals.set(listOf("Externals/Qt", "Externals/FFmpeg-bin", "Externals/wil"))
-    sysEntries.set(listOf("GameSettings", "GC", "Shaders", "Resources", "ApprovedInis.json"))
+    // codehandler.bin runs Gecko codes; the core says the files are missing without it.
+    sysEntries.set(listOf("GameSettings", "GC", "Shaders", "Resources", "ApprovedInis.json", "codehandler.bin"))
     sysZipName.set("dolphin.zip")
     ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
     cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })

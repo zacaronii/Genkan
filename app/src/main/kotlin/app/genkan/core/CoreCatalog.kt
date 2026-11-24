@@ -33,6 +33,11 @@ data class CoreDef(
     /** The system keeps its words big-endian (a GameCube): its pointers and UTF-16 text. */
     val bigEndian: Boolean = false,
     /**
+     * The libretro device each controller port gets once the game is loaded, by port; empty, the
+     * core's own default. Dolphin's ports start empty: without this no controller is plugged in.
+     */
+    val portDevices: List<Int> = emptyList(),
+    /**
      * A folder under shared storage the core keeps everything in as its saves folder (Dolphin's
      * User folder: memory cards, and its config and shader cache), instead of Genkan's own files.
      */
@@ -43,6 +48,9 @@ data class CoreDef(
 }
 
 object CoreCatalog {
+
+    /** libretro's RETRO_DEVICE_JOYPAD. */
+    const val RETRO_DEVICE_JOYPAD = 1
 
     val cores: List<CoreDef> = listOf(
         CoreDef(
@@ -115,6 +123,8 @@ object CoreCatalog {
             extensions = setOf("rvz", "iso", "gcm", "gcz", "ciso"),
             bigEndian = true,
             savesFolder = "Genkan/saves/dolphin",
+            // A GameCube controller in port 1: Dolphin plugs one in for any device but none.
+            portDevices = listOf(RETRO_DEVICE_JOYPAD),
         ),
     )
 

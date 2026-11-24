@@ -35,6 +35,11 @@ class GLRetroViewData(context: Context) {
     var skipDuplicateFrames: Boolean = false
     var enableMicrophone: Boolean = false
     var immersiveMode: ImmersiveMode? = null
+    /**
+     * Genkan: the libretro device to put in each port (by index) once the game is loaded, as
+     * RetroArch tells every core; empty, none. Dolphin connects no controller until it's told.
+     */
+    var portDevices: IntArray = IntArray(0)
 }
 
 enum class ViewportAlignment(val value: Int) {

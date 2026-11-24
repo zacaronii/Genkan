@@ -150,9 +150,9 @@ License: GPL-2.0-or-later (COPYING and LICENSES/ at that commit; parts under
   NDK's CMake toolchain as libretro's buildbot does (-DLIBRETRO=ON
   -DENABLE_LTO=ON, android-21, c++_static, stripped) and bundles it as
   libdolphin_libretro_android.so; and zips GameSettings, GC, Shaders,
-  Resources and ApprovedInis.json from its Data/Sys, unmodified, as
-  assets/cores/dolphin.zip. Neither is committed; the source they are built
-  from is the submodule at that commit.
+  Resources, ApprovedInis.json and codehandler.bin from its Data/Sys,
+  unmodified, as assets/cores/dolphin.zip. Neither is committed; the source
+  they are built from is the submodule at that commit.
 
 --------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
