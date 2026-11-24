@@ -216,17 +216,16 @@ class BuiltInText @Inject constructor(
                 ?: return@withContext "This game's id isn't known yet"
             ids[game.key] = id
             yomikataIds.learned(game.rommRomId, id)
-            // The line as far as anything has read it: the layout's, else OCR's last. None is a
+            // The layout's line, as the game holds it. Without a layout, OCR reads the screen once the
+            // moment is taken (OCR's last line may be an earlier screen's). None from a layout is a
             // snapshot of its own: the same game with no text on screen.
             val read = lastRead
-            val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() }
-                ?: ocr.latest.value?.takeIf { it.isNotBlank() }
-                ?: ""
-            // Only a layout being read knows the screen has no text; an empty line otherwise means
-            // nothing read it (OCR off, or reading elsewhere on the screen), not that it was blank.
+            val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() } ?: ""
+            // Only a layout being read knows the screen has no text; OCR reading nothing means
+            // nothing was read (or it read another part of the screen), not that it was blank.
             val unread = RamSnapshots.screenUnread(line, layoutRead = read != null)
             val moment = when {
-                unread -> if (ocr.enabled.value) "OCR read nothing yet" else "OCR off, screen not read"
+                unread -> "the screen read by OCR"
                 line.isEmpty() -> "no text on screen"
                 read?.asking == true -> "a question on screen"
                 read?.waitingOnLine == true -> "waiting for a press"
@@ -234,7 +233,12 @@ class BuiltInText @Inject constructor(
                 else -> "line on screen"
             }
             val core = player.game.value?.core?.displayName ?: "built-in player"
-            if (snapshots.takeNow(m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment", ocrUnavailable = unread)) {
+            val screenLine: (() -> String?)? = if (unread) ({ kotlinx.coroutines.runBlocking { ocr.readNow() } }) else null
+            val taken = snapshots.takeNow(
+                m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment",
+                ocrUnavailable = unread, screenLine = screenLine,
+            )
+            if (taken) {
                 "Snapshot taken ($moment); it goes to Yomikata with the next sync"
             } else {
                 "Couldn't take a snapshot of this system's memory"

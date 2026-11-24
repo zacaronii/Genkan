@@ -143,6 +143,42 @@ class RamSnapshotWriteTest {
     }
 
     @Test
+    fun `the screen is read once the moment is taken, and its line is the snapshot's`() {
+        val order = mutableListOf<String>()
+        val extras = object : RamSnapshots.Extras {
+            override fun moment(ram: MainRam, scratch: File): RamSnapshots.Moment {
+                order += "moment"
+                return RamSnapshots.Moment(null, mem1(), null)
+            }
+        }
+        assertTrue(
+            snapshots.takeNow(memory, gamecube, "GTST01", "", "test", extras, "taken on demand", ocrUnavailable = true,
+                screenLine = { order += "ocr"; "今の画面の行" }),
+        )
+        assertEquals(listOf("moment", "ocr"), order)
+        val json = JSONObject(snapshots.pending().single().readText())
+        assertEquals("今の画面の行", json.getJSONArray("ocr").getString(0))
+        assertFalse(json.has("ocr_unavailable"))
+        assertFalse(json.has("no_text"))
+    }
+
+    @Test
+    fun `a screen read that finds nothing says the screen wasn't read`() {
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1()), "taken on demand", ocrUnavailable = true, screenLine = { null }))
+        val json = JSONObject(snapshots.pending().single().readText())
+        assertTrue(json.getBoolean("ocr_unavailable"))
+        assertEquals(0, json.getJSONArray("ocr").length())
+    }
+
+    @Test
+    fun `a line already read is kept, the screen not read again`() {
+        var asked = false
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "レイアウトの行", "test", gcExtras(mem1()), "taken on demand", screenLine = { asked = true; "別の行" }))
+        assertFalse(asked)
+        assertEquals("レイアウトの行", JSONObject(snapshots.pending().single().readText()).getJSONArray("ocr").getString(0))
+    }
+
+    @Test
     fun `a press with nothing read is a no-text snapshot, not refused`() {
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "", "test", extras(ByteArray(128 * 1024), null), "taken on demand: no text on screen"))
         val json = JSONObject(snapshots.pending().single().readText())
