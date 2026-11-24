@@ -190,11 +190,12 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         }
         val stateFile = File(dir, "$name.state.gz")
         extras?.state(stateFile)?.let { size ->
-            // The inbox takes a state of up to MAX_STATE unpacked; a larger one stays behind.
-            if (size <= MAX_STATE) {
+            // The inbox takes a state of up to the platform's cap unpacked; a larger one stays behind.
+            val cap = maxState(game.platform)
+            if (size <= cap) {
                 meta.put("state", JSONObject().put("bytes", size))
             } else {
-                Log.i(TAG, "Savestate of $size bytes is over the inbox's ${MAX_STATE / 1024 / 1024} MB: left out")
+                Log.i(TAG, "Savestate of $size bytes is over the inbox's ${cap / 1024 / 1024} MB: left out")
                 stateFile.delete()
             }
         }
@@ -210,8 +211,13 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     companion object {
         private const val TAG = "RamSnapshots"
         const val PER_GAME = 5
-        /** The largest savestate the inbox takes, unpacked. */
+        /** The largest savestate the inbox takes, unpacked; a GameCube's ([MAX_GC_STATE]) is larger. */
         const val MAX_STATE = 64L * 1024 * 1024
+        /** Dolphin's states are about 93 MB unpacked (17 MB gzipped, within the upload's 80 MB). */
+        const val MAX_GC_STATE = 128L * 1024 * 1024
+
+        /** The largest savestate the inbox takes for [platform] (RomM's slug), unpacked. */
+        fun maxState(platform: String?): Long = if (platform == "ngc" || platform == "gc") MAX_GC_STATE else MAX_STATE
         private const val PS1_VRAM = "ps1-15bit"
 
         /** The label of a console's video RAM for the inbox (`meta.vram_format`): PS1's frame buffer, else the core's raw block. */

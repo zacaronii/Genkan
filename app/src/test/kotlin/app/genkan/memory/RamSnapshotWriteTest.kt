@@ -91,11 +91,30 @@ class RamSnapshotWriteTest {
     }
 
     @Test
-    fun `a GameCube state over the inbox's 64 MB is left out, the snapshot still taken`() {
-        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1(), RamSnapshots.MAX_STATE + 1), "taken on demand: no text on screen"))
+    fun `a GameCube state goes up to the inbox's 128 MB, a larger one is left out`() {
+        // Dolphin's is about 93 MB: over the other platforms' 64 MB, sent for the GameCube.
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1(), 93L * 1024 * 1024), "taken on demand: no text on screen"))
+        val kept = snapshots.pending().single()
+        assertEquals(93L * 1024 * 1024, JSONObject(kept.readText()).getJSONObject("state").getLong("bytes"))
+        assertTrue(snapshots.stateOf(kept).isFile)
+        snapshots.remove(kept)
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1(), RamSnapshots.MAX_GC_STATE + 1), "taken on demand: no text on screen"))
         val meta = snapshots.pending().single()
         assertFalse(JSONObject(meta.readText()).has("state"))
         assertFalse(snapshots.stateOf(meta).exists())
+    }
+
+    @Test
+    fun `the state cap is 128 MB for the GameCube, 64 MB for the rest`() {
+        assertEquals(128L * 1024 * 1024, RamSnapshots.maxState("ngc"))
+        assertEquals(64L * 1024 * 1024, RamSnapshots.maxState("psx"))
+        assertEquals(64L * 1024 * 1024, RamSnapshots.maxState("snes"))
+        // A Super Famicom state over 64 MB stays behind.
+        assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "あいうえお", "test", object : RamSnapshots.Extras {
+            override fun moment(ram: MainRam, scratch: File) = RamSnapshots.Moment(null, ByteArray(128 * 1024), null)
+            override fun state(file: File): Long = (RamSnapshots.MAX_STATE + 1).also { file.writeBytes(byteArrayOf(1)) }
+        }, "taken on demand"))
+        assertFalse(JSONObject(snapshots.pending().single().readText()).has("state"))
     }
 
     @Test
