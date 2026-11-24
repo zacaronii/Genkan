@@ -22,7 +22,7 @@ data class PopupPrefs(
     val maxResults: Int = LOCAL_MAX_RESULTS,
     /** The frequency dictionary results are sorted by, by title (null: the first one enabled). */
     val frequencyDictionary: String? = null,
-    /** The host's frequency order ("auto", "ascending", …); null: by the dictionary's mode. */
+    /** The host's frequency order ("ascending", "descending", "disabled" override; "auto" or null: by the dictionary's mode). */
     val frequencyOrder: String? = null,
     /** Whether these came from a Hachidori host. */
     val fromHachidori: Boolean = false,

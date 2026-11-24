@@ -14,13 +14,13 @@ enum class FrequencyOrder(val native: Int) {
 
     companion object {
         /**
-         * A linked Hachidori's own setting ([hostOrder], passed on as it is, as Hachidori's lookups
-         * do); else by the dictionary's frequencyMode, as Yomitan and Hachidori read it: counts of
+         * By the dictionary's frequencyMode, as Yomitan and Hachidori read it: counts of
          * occurrences sort the highest first, ranks (or no mode, as most Japanese lists have) the
-         * lowest first.
+         * lowest first. A linked Hachidori's explicit "ascending", "descending" or "disabled"
+         * ([hostOrder]) overrides it; its "auto", or none, is the mode, as Amatsubame reads it (#241),
+         * so the common word comes first in both apps.
          */
         fun of(hostOrder: String?, mode: String?): FrequencyOrder = when (hostOrder) {
-            "auto" -> AUTO
             "ascending" -> ASCENDING
             "descending" -> DESCENDING
             "disabled" -> DISABLED
