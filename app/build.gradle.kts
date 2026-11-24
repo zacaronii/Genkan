@@ -335,7 +335,33 @@ val nativeLookupTest = tasks.register<NativeLookupTest>("nativeLookupTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest) }
+/**
+ * The popup page's script tests (src/test/js), with Node's own test runner: no packages. The unit
+ * tests wait for it, so CI and the local check run it.
+ */
+abstract class JsPopupTest : DefaultTask() {
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val tests: DirectoryProperty
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val popup: DirectoryProperty
+    @get:OutputFile abstract val passed: RegularFileProperty
+    @get:Inject abstract val exec: ExecOperations
+
+    @TaskAction
+    fun run() {
+        // The files themselves: Node before 26 reads a directory argument as a module to run.
+        val files = tests.get().asFile.listFiles { f -> f.name.endsWith(".test.js") }.orEmpty().sortedBy { it.name }
+        check(files.isNotEmpty()) { "No *.test.js in ${tests.get().asFile}" }
+        exec.exec { commandLine(listOf("node", "--test") + files.map { it.path }) }
+        passed.get().asFile.writeText("passed\n")
+    }
+}
+
+val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
+    tests.set(layout.projectDirectory.dir("src/test/js"))
+    popup.set(layout.projectDirectory.dir("src/main/assets/popup"))
+    passed.set(layout.buildDirectory.file("js-tests/passed"))
+}
+
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->
