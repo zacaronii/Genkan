@@ -53,6 +53,45 @@ class CardDefinitionsTest {
     }
 
     @Test
+    fun `a single sense is followed by the other dictionaries' senses, up to three`() {
+        val glossaries = listOf(
+            GlossaryEntry("First", structured(listOf("attribute", "property"))),
+            GlossaryEntry("Second", "[\"1 alignment.\\n2 element; type.\\n3 a fourth sense.\"]"),
+        )
+        assertEquals("1. attribute; property<br>2. alignment<br>3. element; type", CardDefinitions.selectionText(glossaries))
+        // Several senses of its own: the first dictionary's alone.
+        val two = listOf(GlossaryEntry("First", structured(listOf("one"))), GlossaryEntry("First", structured(listOf("two")))) + glossaries.drop(1)
+        assertEquals("1. one<br>2. two", CardDefinitions.selectionText(two))
+    }
+
+    @Test
+    fun `senses are borrowed only from the mined word's own reading`() {
+        // The lookup gives each expression and reading its own hit: another reading of 生 is
+        // another hit, whose senses never reach this one's card.
+        val mined = TermHit(matched = "生", deinflected = "生", expression = "生", reading = "なま",
+            glossaries = listOf(GlossaryEntry("First", structured(listOf("raw"))), GlossaryEntry("Second", structured(listOf("uncooked", "fresh")))))
+        val otherReading = TermHit(matched = "生", deinflected = "生", expression = "生", reading = "せい",
+            glossaries = listOf(GlossaryEntry("Second", structured(listOf("life", "living")))))
+        val fields = CardFields.lapis(MineSource(mined, "生", 0, 1, "", "", "生[なま]", ""))
+        assertEquals("1. raw<br>2. uncooked; fresh", fields["SelectionText"])
+        assertFalse(fields["SelectionText"]!!.contains("life"))
+        assertEquals("life; living", CardDefinitions.selectionText(otherReading.glossaries))
+    }
+
+    @Test
+    fun `a gloss repeated with an article or a full stop is a repeat, and a sense of repeats is skipped`() {
+        assertEquals("run", CardDefinitions.sameGloss("to run."))
+        assertEquals("apple", CardDefinitions.sameGloss("an apple"))
+        assertEquals("theory", CardDefinitions.sameGloss("theory"))
+        val glossaries = listOf(
+            GlossaryEntry("First", structured(listOf("to run", "to dash"))),
+            GlossaryEntry("Second", "[\"1 run.\\n2 a dash; dash.\\n3 to sprint.\"]"),
+        )
+        // The second dictionary's first two senses repeat the first's: only "to sprint" is new.
+        assertEquals("1. to run; to dash<br>2. to sprint", CardDefinitions.selectionText(glossaries))
+    }
+
+    @Test
     fun `the forms entry is not a meaning`() {
         val glossaries = listOf(
             GlossaryEntry("Terms", structured(listOf("desperate", "frantic"))),
