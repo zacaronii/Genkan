@@ -392,6 +392,8 @@ class GLRetroView(
             LibretroDroid.unserializeSRAM(data.saveRAMState)
             data.saveRAMState = null
         }
+        // Genkan: after the load and before the first frame, on this thread, as RetroArch does.
+        data.portDevices.forEachIndexed { port, device -> LibretroDroid.setControllerType(port, device) }
         LibretroDroid.onSurfaceCreated()
         isGameLoaded = true
 
