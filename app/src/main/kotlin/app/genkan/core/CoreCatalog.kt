@@ -38,6 +38,11 @@ data class CoreDef(
      */
     val portDevices: List<Int> = emptyList(),
     /**
+     * The console has sticks of its own: the left stick is only its main stick and the right only
+     * its second, never also the D-pad, which Android otherwise makes of an unhandled stick.
+     */
+    val sticksOnly: Boolean = false,
+    /**
      * A folder under shared storage the core keeps everything in as its saves folder (Dolphin's
      * User folder: memory cards, and its config and shader cache), instead of Genkan's own files.
      */
@@ -125,6 +130,8 @@ object CoreCatalog {
             savesFolder = "Genkan/saves/dolphin",
             // A GameCube controller in port 1: Dolphin plugs one in for any device but none.
             portDevices = listOf(RETRO_DEVICE_JOYPAD),
+            // Games put menus on its D-pad: the stick mustn't press it too.
+            sticksOnly = true,
         ),
     )
 

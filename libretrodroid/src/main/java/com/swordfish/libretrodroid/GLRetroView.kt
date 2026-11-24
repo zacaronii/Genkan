@@ -286,24 +286,13 @@ class GLRetroView(
         if (port >= 0) {
             when (event?.source) {
                 InputDevice.SOURCE_JOYSTICK -> {
-                    sendMotionEvent(
-                        MOTION_SOURCE_DPAD,
-                        event.getAxisValue(MotionEvent.AXIS_HAT_X),
-                        event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-                        port
-                    )
-                    sendMotionEvent(
-                        MOTION_SOURCE_ANALOG_LEFT,
-                        event.getAxisValue(MotionEvent.AXIS_X),
-                        event.getAxisValue(MotionEvent.AXIS_Y),
-                        port
-                    )
-                    sendMotionEvent(
-                        MOTION_SOURCE_ANALOG_RIGHT,
-                        event.getAxisValue(MotionEvent.AXIS_Z),
-                        event.getAxisValue(MotionEvent.AXIS_RZ),
-                        port
-                    )
+                    // Genkan: see StickMotion, which also says whether the motion is handled here.
+                    StickMotion.moves(
+                        event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                        event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
+                        event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ),
+                    ).forEach { sendMotionEvent(it.source, it.x, it.y, port) }
+                    if (StickMotion.handled(data.sticksOnly)) return true
                 }
             }
         }
@@ -343,11 +332,23 @@ class GLRetroView(
     private fun readFrame() {
         val request = frameRequest ?: return
         frameRequest = null
-        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+        val (pixels, width, height) = readShownFrame() ?: return
+        request(pixels, width, height)
+    }
+
+    /**
+     * Genkan: the frame on screen as RGBA, bottom row first (GL's order), with its width and
+     * height; on the GL thread (afterFrame), null before the surface has a size. The screen's own
+     * framebuffer, whatever a hardware-rendered core left bound.
+     */
+    fun readShownFrame(): Triple<ByteBuffer, Int, Int>? {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return null
         val pixels = ByteBuffer.allocateDirect(surfaceWidth * surfaceHeight * 4).order(ByteOrder.nativeOrder())
-        GLES20.glReadPixels(0, 0, surfaceWidth, surfaceHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        DefaultRead.read(DefaultRead.GLES) {
+            GLES20.glReadPixels(0, 0, surfaceWidth, surfaceHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        }
         pixels.rewind()
-        request(pixels, surfaceWidth, surfaceHeight)
+        return Triple(pixels, surfaceWidth, surfaceHeight)
     }
 
     inner class Renderer : GLSurfaceView.Renderer {

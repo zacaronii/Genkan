@@ -127,6 +127,22 @@ class RamSnapshotWriteTest {
     }
 
     @Test
+    fun `a press with OCR off says the screen wasn't read, not that it had no text`() {
+        assertTrue(snapshots.takeNow(memory, gamecube, "GTST01", "", "test", gcExtras(mem1()), "taken on demand: OCR off, screen not read", ocrUnavailable = true))
+        val json = JSONObject(snapshots.pending().single().readText())
+        assertTrue(json.getBoolean("ocr_unavailable"))
+        assertFalse(json.has("no_text"))
+        assertEquals(0, json.getJSONArray("ocr").length())
+    }
+
+    @Test
+    fun `only a layout being read knows the screen has no text`() {
+        assertEquals(false, RamSnapshots.screenUnread("", layoutRead = true))
+        assertEquals(true, RamSnapshots.screenUnread("", layoutRead = false))
+        assertEquals(false, RamSnapshots.screenUnread("あいうえお", layoutRead = false))
+    }
+
+    @Test
     fun `a press with nothing read is a no-text snapshot, not refused`() {
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "", "test", extras(ByteArray(128 * 1024), null), "taken on demand: no text on screen"))
         val json = JSONObject(snapshots.pending().single().readText())

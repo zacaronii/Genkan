@@ -169,6 +169,7 @@ class CoreActivity : ComponentActivity() {
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
+            sticksOnly = def.sticksOnly
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
             shader = look.shader(::readAsset)
             // Per console (Settings > Playing): low latency unless it was switched off there.
@@ -453,10 +454,10 @@ class CoreActivity : ComponentActivity() {
                     requested = true
                     return@capture false
                 }
-                if (GenkanTap.frameSize() == null) return@capture false
                 // The emulation thread waits here, so nothing moves while the frame and the
-                // memory are copied.
-                captured = keptPixels()
+                // memory are copied. A core that draws with GL (Dolphin, PPSSPP) hands over no
+                // pixels to keep: the frame is read off the screen instead, as shown.
+                captured = keptPixels() ?: shownPixels() ?: return@capture false
                 var at = 0
                 val chunk = ByteArray(CAPTURE_CHUNK)
                 while (at < length) {
@@ -527,6 +528,12 @@ class CoreActivity : ComponentActivity() {
         val pixels = ByteBuffer.allocateDirect(width * height * 4)
         if (!GenkanTap.copyFrame(pixels, 0, height)) return null
         return KeptFrame(pixels, width, height)
+    }
+
+    /** The frame on screen, top row first, read on the emulation thread right after it was drawn. */
+    private fun shownPixels(): KeptFrame? {
+        val (bottomUp, width, height) = retroView.readShownFrame() ?: return null
+        return KeptFrame(TopDown.of(bottomUp, width, height), width, height)
     }
 
     private class KeptFrame(val pixels: ByteBuffer, val width: Int, val height: Int)

@@ -134,11 +134,22 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     /**
      * A snapshot taken when asked (a line still typing out, or waiting for a press), with none
      * of [take]'s rules and not counted against them; [note] says what moment it caught.
+     * [ocrUnavailable]: nothing read the screen (OCR off), so an empty [line] says nothing about
+     * whether text was on it.
      */
     @Synchronized
-    fun takeNow(memory: MemorySource, game: NowPlaying.Game, id: String, line: String, emulator: String, extras: Extras?, note: String): Boolean {
+    fun takeNow(
+        memory: MemorySource,
+        game: NowPlaying.Game,
+        id: String,
+        line: String,
+        emulator: String,
+        extras: Extras?,
+        note: String,
+        ocrUnavailable: Boolean = false,
+    ): Boolean {
         val ram = MainRam.of(game.platform) ?: return false
-        return write(memory, game, ram, id, line, emulator, extras, note)
+        return write(memory, game, ram, id, line, emulator, extras, note, ocrUnavailable)
     }
 
     private fun write(
@@ -150,6 +161,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         emulator: String,
         extras: Extras?,
         note: String?,
+        ocrUnavailable: Boolean = false,
     ): Boolean {
         dir.mkdirs()
         val name = "$id-${System.currentTimeMillis()}".replace(Regex("[^A-Za-z0-9_.-]"), "_")
@@ -179,7 +191,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
-        if (line.isBlank()) meta.put("no_text", true)
+        // Nothing read the screen: said so, rather than that no text was on it.
+        if (line.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
         (if (moment != null) moment.vram else extras?.vram())?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             val format = vramFormat(game.platform!!)
@@ -215,6 +228,13 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         const val MAX_STATE = 64L * 1024 * 1024
         /** Dolphin's states are about 93 MB unpacked (17 MB gzipped, within the upload's 80 MB). */
         const val MAX_GC_STATE = 128L * 1024 * 1024
+
+        /**
+         * Whether an on-demand snapshot's empty [line] means nothing read the screen
+         * (`ocr_unavailable`) rather than that it had no text (`no_text`): only a layout being
+         * read ([layoutRead]) knows the screen is empty; OCR may be off, or reading elsewhere.
+         */
+        fun screenUnread(line: String, layoutRead: Boolean): Boolean = line.isBlank() && !layoutRead
 
         /** The largest savestate the inbox takes for [platform] (RomM's slug), unpacked. */
         fun maxState(platform: String?): Long = if (platform == "ngc" || platform == "gc") MAX_GC_STATE else MAX_STATE
@@ -265,7 +285,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         }
 
         /**
-         * The disc id (G8MJ01) a GameCube game's MEM1 starts with: the apploader copies the disc's
+         * The disc id (GTST01, say) a GameCube game's MEM1 starts with: the apploader copies the disc's
          * header there, its magic word C2339F3D at 0x1C, in the console's big-endian order. Null
          * for anything else, a word-swapped dump among them.
          */

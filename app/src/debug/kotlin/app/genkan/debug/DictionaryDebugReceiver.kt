@@ -95,6 +95,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_RAM -n app.genkan/.debug.DictionaryDebugReceiver --es name line1
  * (writes each region of the built-in player's game memory, as it is, to files/debug-ram/<name>-<start>.bin, to search
  *  off the device; it holds script text, so it goes nowhere else and is deleted after)
+ *   adb shell am broadcast -a app.genkan.debug.PLAYER_FRAMES -n app.genkan/.debug.DictionaryDebugReceiver
+ * (writes the built-in player's frame as a snapshot takes it, read on its own and with a moment's memory, to
+ *  files/debug-ram/frame-{screen,moment}.png; the memory isn't kept)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_STATE_SIZE -n app.genkan/.debug.DictionaryDebugReceiver
  * (logs how large the built-in player's savestate is, unpacked and gzipped, as a snapshot would take it; the state is
  *  deleted at once)
@@ -298,6 +301,18 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
+                    "app.genkan.debug.PLAYER_FRAMES" -> {
+                        val dir = File(context.filesDir, "debug-ram").apply { mkdirs() }
+                        fun save(name: String, frame: android.graphics.Bitmap?) {
+                            val out = File(dir, "frame-$name.png")
+                            frame?.let { f -> out.outputStream().use { f.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
+                            Log.i(TAG, "Frame $name: ${frame?.let { "${it.width}x${it.height}" } ?: "none"}")
+                        }
+                        save("screen", player.frame())
+                        val ram = player.game.value?.core?.platforms?.firstNotNullOfOrNull { app.genkan.memory.MainRam.of(it) }
+                        val scratch = File(context.filesDir, "yomikata-snapshots/frames.capture").apply { parentFile?.mkdirs() }
+                        save("moment", ram?.let { player.moment(it.range, scratch)?.frame })
                     }
                     "app.genkan.debug.PLAYER_STATE_SIZE" -> {
                         val file = File(context.filesDir, "yomikata-snapshots/state-size.state.gz").apply { parentFile?.mkdirs() }
