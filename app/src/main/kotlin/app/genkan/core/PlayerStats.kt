@@ -3,7 +3,8 @@ package app.genkan.core
 /**
  * How fast the built-in player's game runs, a second at a time: the core's frames against its
  * own rate, and how long the core took over them (the wait for the next frame left out), with
- * the reader's own work between frames beside it. [behind] says the game has been slow for the
+ * the reader's own work between frames beside it. A threaded core's frame waits on its workers,
+ * so for how much room is left, the busiest thread and the GPU's load count, not the frame's time. [behind] says the game has been slow for the
  * last [WINDOW] seconds, for whatever should give way to it.
  */
 class PlayerStats {
@@ -20,6 +21,10 @@ class PlayerStats {
         /** The reader's own work between frames: the script, and the frame ring's shots. */
         val scriptNanos: Long = 0,
         val ringNanos: Long = 0,
+        /** The player's busiest thread over the period (see [ThreadLoad]), and the GPU's load and clock; null where unknown. */
+        val busiest: ThreadLoad.Busy? = null,
+        val gpuBusyPercent: Int? = null,
+        val gpuMhz: Int? = null,
     )
 
     /** One second of play, as logged. */
@@ -33,9 +38,14 @@ class PlayerStats {
         val longestMs: Double,
         val scriptMs: Double,
         val ringMs: Double,
+        val busiest: ThreadLoad.Busy?,
+        val gpuBusyPercent: Int?,
+        val gpuMhz: Int?,
     ) {
-        fun line(): String = "fps %.1f speed %.0f%% shown %.1f core avg %.2f p95 %.2f max %.2f ms, script %.2f, ring %.2f ms/s"
-            .format(fps, speed * 100, shownFps, averageMs, p95Ms, longestMs, scriptMs, ringMs)
+        fun line(): String = "fps %.1f speed %.0f%% shown %.1f core avg %.2f p95 %.2f max %.2f ms, script %.2f, ring %.2f ms/s".format(
+            fps, speed * 100, shownFps, averageMs, p95Ms, longestMs, scriptMs, ringMs,
+        ) + " | busiest " + (busiest?.let { "%s#%d %.0f%%".format(it.name, it.tid, it.share * 100) } ?: "?") +
+            " | gpu " + (gpuBusyPercent?.let { "$it%" } ?: "?") + " @ " + (gpuMhz?.let { "$it MHz" } ?: "?")
     }
 
     private val speeds = ArrayDeque<Double>()
@@ -67,6 +77,9 @@ class PlayerStats {
             longestMs = sample.longestNanos / 1e6,
             scriptMs = sample.scriptNanos / 1e6 / seconds,
             ringMs = sample.ringNanos / 1e6 / seconds,
+            busiest = sample.busiest,
+            gpuBusyPercent = sample.gpuBusyPercent,
+            gpuMhz = sample.gpuMhz,
         )
     }
 

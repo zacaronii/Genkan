@@ -28,6 +28,15 @@ class PlayerStatsTest {
     }
 
     @Test
+    fun `the busiest thread and the GPU go into the row and its line`() {
+        val busy = ThreadLoad.Busy(25308, "CPU thread", 0.38)
+        val row = PlayerStats().add(sample(60).copy(busiest = busy, gpuBusyPercent = 64, gpuMhz = 401))!!
+        assertEquals(busy, row.busiest)
+        assertTrue(row.line(), row.line().endsWith("| busiest CPU thread#25308 38% | gpu 64% @ 401 MHz"))
+        assertTrue(PlayerStats().add(sample(60))!!.line().endsWith("| busiest ? | gpu ? @ ?"))
+    }
+
+    @Test
     fun `two steps of two runs each are two frames shown, four run`() {
         val row = PlayerStats().add(sample(runs = 120, steps = 60))!!
         assertEquals(120.0, row.fps, 0.001)
