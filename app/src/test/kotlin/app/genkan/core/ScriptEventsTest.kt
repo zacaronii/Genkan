@@ -18,4 +18,14 @@ class ScriptEventsTest {
     fun `event kinds have names for the log`() {
         assertEquals(listOf("text", "layout", "cursor", "log", "kind 9"), listOf(1, 2, 3, 4, 9).map(ScriptEvents::kindName))
     }
+
+    @Test
+    fun `a build is a GameCube disc's id and version, or a cartridge's header CRC`() {
+        val ram = ByteArray(0x40)
+        "GTST01".toByteArray().copyInto(ram)
+        byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D).copyInto(ram, 0x1C)
+        assertEquals("GTST01-00", ScriptEvents.buildId("ngc", ram, null))
+        assertEquals("1a2b3c4d", ScriptEvents.buildId("snes", null, "1A2B3C4D"))
+        assertEquals(null, ScriptEvents.buildId("psx", ByteArray(16), null))
+    }
 }

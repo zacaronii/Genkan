@@ -13,6 +13,17 @@ object ScriptEvents {
     /** The catalog's name for RomM's platform [slug]: `gc` for `ngc`, `ps1` for `psx`, `sfc` for the Super Famicom. */
     fun catalogPlatform(slug: String): String = CATALOG_PLATFORMS[slug] ?: slug
 
+    /**
+     * The game's build as scripts name it, where Genkan can tell: a GameCube disc's id and version
+     * from its RAM (`XXXXXX-00`), a cartridge's header CRC-32 (`1a2b3c4d`, as SnesCartridge reads
+     * it); null otherwise, and the script's own check decides.
+     */
+    fun buildId(platform: String?, ram: ByteArray?, cartridgeCrc: String?): String? = when {
+        platform == "ngc" -> ram?.let { app.genkan.memory.RamSnapshots.gcBuildId(it) }
+        cartridgeCrc != null -> cartridgeCrc.lowercase()
+        else -> null
+    }
+
     fun kindName(kind: Int): String = when (kind) {
         TEXT -> "text"
         LAYOUT -> "layout"

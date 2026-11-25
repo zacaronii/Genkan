@@ -209,7 +209,8 @@ class BuiltInText @Inject constructor(
         }
         val script = files.script
         val ram = withContext(Dispatchers.IO) { player.memory()?.use { RamSnapshots.mainRamOf(it, game.platform) } }
-        val buildId = ram?.takeIf { game.platform == "ngc" }?.let { RamSnapshots.gcBuildId(it) }
+        val cartridge = fallback?.third?.takeIf { it.id == id }
+        val buildId = ScriptEvents.buildId(game.platform, ram, cartridge?.headerCrc32)
         val regions = if (withContext(Dispatchers.IO) { player.hasVideoRam() }) setOf("vram") else emptySet()
         script.unusable(withContext(Dispatchers.IO) { player.scriptLevel() }, buildId, regions)?.let { why ->
             Log.i(TAG, "${game.title} ($id): its script can't run here: $why")
