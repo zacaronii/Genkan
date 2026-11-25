@@ -22,6 +22,7 @@ import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
 import android.opengl.GLES20
+import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.util.Log
 import android.view.InputDevice
@@ -335,6 +336,58 @@ class GLRetroView(
         val (pixels, width, height) = readShownFrame() ?: return
         request(pixels, width, height)
     }
+
+    /**
+     * Genkan: the frame on screen scaled to at most [maxWidth] wide by the GPU (a blit into a
+     * framebuffer of that size), so only the small picture is read back: RGBA, bottom row first,
+     * with its width and height. On the GL thread (afterFrame); the core's bindings, scissor and
+     * packing are put back.
+     */
+    fun readShownFrameScaled(maxWidth: Int): Triple<ByteBuffer, Int, Int>? {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return null
+        val width = minOf(maxWidth, surfaceWidth)
+        val height = maxOf(1, surfaceHeight * width / surfaceWidth)
+        val saved = IntArray(2)
+        GLES30.glGetIntegerv(GLES30.GL_DRAW_FRAMEBUFFER_BINDING, saved, 0)
+        GLES30.glGetIntegerv(GLES30.GL_RENDERBUFFER_BINDING, saved, 1)
+        val scissor = GLES30.glIsEnabled(GLES30.GL_SCISSOR_TEST)
+        if (smallWidth != width || smallHeight != height) {
+            if (smallFramebuffer == 0) {
+                val ids = IntArray(1)
+                GLES30.glGenFramebuffers(1, ids, 0)
+                smallFramebuffer = ids[0]
+                GLES30.glGenRenderbuffers(1, ids, 0)
+                smallRenderbuffer = ids[0]
+            }
+            GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, smallRenderbuffer)
+            GLES30.glRenderbufferStorage(GLES30.GL_RENDERBUFFER, GLES30.GL_RGBA8, width, height)
+            GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, smallFramebuffer)
+            GLES30.glFramebufferRenderbuffer(GLES30.GL_DRAW_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_RENDERBUFFER, smallRenderbuffer)
+            smallWidth = width
+            smallHeight = height
+        }
+        val pixels = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.nativeOrder())
+        try {
+            DefaultRead.read(DefaultRead.GLES) {
+                GLES30.glDisable(GLES30.GL_SCISSOR_TEST)
+                GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, smallFramebuffer)
+                GLES30.glBlitFramebuffer(0, 0, surfaceWidth, surfaceHeight, 0, 0, width, height, GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_LINEAR)
+                GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, smallFramebuffer)
+                GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+            }
+        } finally {
+            GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, saved[0])
+            GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, saved[1])
+            if (scissor) GLES30.glEnable(GLES30.GL_SCISSOR_TEST)
+        }
+        pixels.rewind()
+        return Triple(pixels, width, height)
+    }
+
+    private var smallFramebuffer = 0
+    private var smallRenderbuffer = 0
+    private var smallWidth = 0
+    private var smallHeight = 0
 
     /**
      * Genkan: the frame on screen as RGBA, bottom row first (GL's order), with its width and
