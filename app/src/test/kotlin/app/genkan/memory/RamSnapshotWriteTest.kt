@@ -136,13 +136,6 @@ class RamSnapshotWriteTest {
     }
 
     @Test
-    fun `only a layout being read knows the screen has no text`() {
-        assertEquals(false, RamSnapshots.screenUnread("", layoutRead = true))
-        assertEquals(true, RamSnapshots.screenUnread("", layoutRead = false))
-        assertEquals(false, RamSnapshots.screenUnread("あいうえお", layoutRead = false))
-    }
-
-    @Test
     fun `the screen is read once the moment is taken, and its line is the snapshot's`() {
         val order = mutableListOf<String>()
         val extras = object : RamSnapshots.Extras {

@@ -8,46 +8,30 @@ import org.junit.Test
 class TextSourceTest {
     private fun entry(json: String) = CatalogEntry.parse(json)
 
-    private val layout = entry(
-        """{"id": "SLPS-00001", "platform": "ps1", "encoding": "table", "tables": ["t.tbl"], "unit": 2,
-            "layouts": [{"message": {"address": "0x80000000", "charset": "table", "max_bytes": 8}}]}""",
-    )
-    // A layout only for a version of another release: the built-in player wouldn't pick it for this one.
-    private val otherVersion = entry(
-        """{"id": "SLPS-00002", "platform": "ps1", "encoding": "table", "tables": ["t.tbl"], "unit": 2,
-            "versions": [{"id": "SLPS-09999", "exe_sha1": "aa"}],
-            "layouts": [{"versions": ["aa"], "message": {"address": "0x80000000", "charset": "table", "max_bytes": 8}}]}""",
-    )
+    private val scripted = entry("""{"id": "SLPS-00001", "platform": "ps1", "encoding": "table", "tables": ["t.tbl"], "unit": 2}""")
     private val tableOnly = entry("""{"id": "SLPS-00003", "platform": "ps1", "encoding": "table", "tables": ["t.tbl"], "unit": 2}""")
     private val hook = entry(
         """{"id": "NPJH00001", "platform": "psp", "encoding": "utf16le",
             "hooks": [{"address": "0x08800000", "register": "a0", "charset": "utf16le"}]}""",
     )
     private val standard = entry("""{"id": "SLPS-00004", "platform": "ps1", "encoding": "shift_jis"}""")
-
-    // A PSP release with both a layout and a hook, and one with only a layout.
+    // A PSP release with both a script and a hook, and a PS2 one with a script.
     private val pspBoth = entry(
         """{"id": "NPJH00002", "platform": "psp", "encoding": "utf16le",
-            "hooks": [{"address": "0x08800000", "register": "a0", "charset": "utf16le"}],
-            "layouts": [{"message": {"address": "0x08800000", "charset": "utf16le", "max_bytes": 8}}]}""",
+            "hooks": [{"address": "0x08800000", "register": "a0", "charset": "utf16le"}]}""",
     )
-    private val pspLayout = entry(
-        """{"id": "NPJH00003", "platform": "psp", "encoding": "utf16le",
-            "layouts": [{"message": {"address": "0x08800000", "charset": "utf16le", "max_bytes": 8}}]}""",
-    )
-    private val all = listOf(layout, otherVersion, tableOnly, hook, standard, pspBoth, pspLayout).associateBy { it.id }
+    private val ps2 = entry("""{"id": "SLPM-12345", "platform": "ps2", "encoding": "shift_jis"}""")
+    private val all = listOf(scripted, tableOnly, hook, standard, pspBoth, ps2).associateBy { it.id }
+    private val scripts = setOf("SLPS-00001", "NPJH00002", "SLPM-12345")
 
     /** The source with the built-in player ([builtIn]) or in the emulator app. */
-    private fun source(id: String?, tablesHere: Boolean = true, builtIn: Boolean = true) = TextSource.of(id, all::get, { tablesHere }, builtIn)
+    private fun source(id: String?, tablesHere: Boolean = true, builtIn: Boolean = true) =
+        TextSource.of(id, all::get, { tablesHere }, builtIn, scripts::contains)
 
     @Test
-    fun `a layout this build would use says layout`() {
-        assertEquals(TextSource.LAYOUT, source("SLPS-00001"))
-    }
-
-    @Test
-    fun `a layout this build wouldn't pick falls to the table`() {
-        assertEquals(TextSource.TABLE, source("SLPS-00002"))
+    fun `a script the index lists says script, before the table`() {
+        assertEquals(TextSource.SCRIPT, source("SLPS-00001"))
+        assertEquals("Text: script", TextSource.SCRIPT.label)
     }
 
     @Test
@@ -64,22 +48,22 @@ class TextSourceTest {
     }
 
     @Test
-    fun `in PPSSPP a PSP hook says hook, and a layout alone says nothing`() {
+    fun `in PPSSPP a PSP hook says hook, the script being the built-in player's`() {
         assertEquals(TextSource.HOOK, source("NPJH00001", builtIn = false))
         assertEquals(TextSource.HOOK, source("NPJH00002", builtIn = false))
-        assertNull(source("NPJH00003", builtIn = false))
     }
 
     @Test
-    fun `in the built-in player a PSP layout is read, and a hook isn't`() {
-        assertEquals(TextSource.LAYOUT, source("NPJH00002"))
+    fun `in the built-in player a PSP script is read, and a hook isn't`() {
+        assertEquals(TextSource.SCRIPT, source("NPJH00002"))
         assertNull(source("NPJH00001"))
     }
 
     @Test
-    fun `in an emulator app a PS1 layout or table reads nothing`() {
+    fun `in an emulator app a PS1 script or table reads nothing, a PS2 script does in ARMSX2`() {
         assertNull(source("SLPS-00001", builtIn = false))
         assertNull(source("SLPS-00003", builtIn = false))
+        assertEquals(TextSource.SCRIPT, source("SLPM-12345", builtIn = false))
     }
 
     @Test

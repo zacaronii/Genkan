@@ -7,7 +7,7 @@ import org.json.JSONObject
  * What a Yomikata script's events (yomikata_reader.h) mean for the reader. Dialogue goes to the
  * backlog whole, with its speaker and the script's id for it (the same id again is a reread, not
  * counted twice); a choice becomes the choice on screen, its cursor following the game's, and the
- * answer taken goes to the backlog when it closes ([ChosenAnswer]'s way). Interface text (menus,
+ * answer taken goes to the backlog when it closes ([answerLine]). Interface text (menus,
  * item names) never reaches the backlog, and neither does a channel this doesn't know. Which of
  * the script's windows are open says whether OCR, kept on for screens the script doesn't read,
  * may put its lines in the backlog.
@@ -159,7 +159,7 @@ class ScriptReader {
     private fun closeChoice(lines: MutableList<HookMessage>) {
         if (answers.isEmpty()) return
         val taken = cursor?.takeIf { it in answers.indices }?.let { answers[it] }
-        if (taken != null) lines += HookMessage(ChosenAnswer.line(taken), whole = true)
+        if (taken != null) lines += HookMessage(answerLine(taken), whole = true)
         answers = emptyList()
         cursor = null
         choiceWindow?.let(openWindows::remove)
@@ -183,6 +183,9 @@ class ScriptReader {
     }
 
     companion object {
+        /** How an answer reads in the backlog: marked as the player's, after the question. */
+        fun answerLine(answer: String): String = "→ $answer"
+
         const val DIALOGUE = "dialogue"
         const val CHOICE = "choice"
         const val INTERFACE = "interface"

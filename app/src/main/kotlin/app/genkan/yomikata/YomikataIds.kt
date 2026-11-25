@@ -38,9 +38,9 @@ class YomikataIds @Inject constructor(@ApplicationContext private val context: C
 
 /** How this build would read a game's text, as the game's details say. */
 enum class TextSource(val label: String) {
-    /** A layout this build would use for the release: the game's own lines from memory. */
-    LAYOUT("Text: layout"),
-    /** The game's own character table (memory checked against OCR), with no layout to use. */
+    /** A Yomikata script reads the game: its own lines from memory. */
+    SCRIPT("Text: script"),
+    /** The game's own character table (memory checked against OCR), with no script. */
     TABLE("Text: table"),
     /** The same, from a table the catalog marks as partial: some characters may not read. */
     TABLE_PARTIAL("Text: table (partial)"),
@@ -50,23 +50,30 @@ enum class TextSource(val label: String) {
     companion object {
         /**
          * The source for a game known as [id] (null before it has run), with [entryFor] the
-         * cached catalog's entry and [tablesHere] whether an entry's table files are on the
-         * device. [builtIn] is whether the game starts in the built-in player (the setting is on
-         * and Genkan has a core for its console): only there are layouts and tables read; in an
-         * emulator app only PPSSPP's hooks are. Null, no chip, when nothing applies: then OCR
-         * reads it.
+         * cached catalog's entry, [tablesHere] whether an entry's table files are on the device,
+         * and [hasScript] whether the cached index lists a script for the id. [builtIn] is whether
+         * the game starts in the built-in player (the setting is on and Genkan has a core for its
+         * console): scripts and tables are read there, scripts in ARMSX2 too; in another emulator
+         * app only PPSSPP's hooks are. Null, no chip, when nothing applies: then OCR reads it.
          */
-        fun of(id: String?, entryFor: (String) -> CatalogEntry?, tablesHere: (CatalogEntry) -> Boolean, builtIn: Boolean): TextSource? {
+        fun of(
+            id: String?,
+            entryFor: (String) -> CatalogEntry?,
+            tablesHere: (CatalogEntry) -> Boolean,
+            builtIn: Boolean,
+            hasScript: (String) -> Boolean = { false },
+        ): TextSource? {
             val entry = id?.let(entryFor) ?: return null
+            if (hasScript(id) && (builtIn || entry.platform == PS2)) return SCRIPT
             if (!builtIn) return HOOK.takeIf { entry.platform == "psp" && entry.hooks.isNotEmpty() }
             return when {
-                // The layout the built-in player would pick for this release (and, with a reader
-                // that passes over layouts it doesn't understand, only one it does).
-                Layouts.pick(entry, id) != null -> LAYOUT
                 entry.encoding == "table" && entry.tables.isNotEmpty() && tablesHere(entry) ->
                     if (entry.status == "partial") TABLE_PARTIAL else TABLE
                 else -> null
             }
         }
+
+        /** ARMSX2 runs a PS2 game's script, as the built-in player does. */
+        private const val PS2 = "ps2"
     }
 }

@@ -96,7 +96,6 @@ fun ReaderScreen(
     val ppsspp by viewModel.ppsspp.status.collectAsStateWithLifecycle()
     val marks by viewModel.lineMarks.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
-    val layoutActive by viewModel.builtIn.layoutActive.collectAsStateWithLifecycle()
     val scriptActive by viewModel.builtIn.scriptActive.collectAsStateWithLifecycle()
     val playing by viewModel.builtIn.playing.collectAsStateWithLifecycle()
     val sampling by viewModel.builtIn.sampling.collectAsStateWithLifecycle(false)
@@ -169,7 +168,6 @@ fun ReaderScreen(
                             manualNotice != null -> manualNotice!!
                             ocrOn && !capturing -> "OCR: waiting for capture"
                             scriptActive -> "Text from the game's memory (Yomikata script)"
-                            layoutActive -> "Text from the game's memory (Yomikata layout)"
                             builtIn == MemoryTextStatus.Locked -> "Text from the game's memory"
                             builtIn == MemoryTextStatus.Searching -> "Looking for this line in the game's memory…"
                             builtIn == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from the game's memory"

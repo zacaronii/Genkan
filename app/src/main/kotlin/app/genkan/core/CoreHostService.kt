@@ -29,9 +29,6 @@ class CoreHostService : Service() {
             audio.feed(pcm, sampleRate, endMs)
         }
 
-        override fun layout(readJson: String) {
-            player.layoutRead(readJson)
-        }
 
         override fun scriptEvents(events: Array<String>) {
             player.scriptEvents(events.map { line -> line.substringBefore('\t').toInt() to line.substringAfter('\t') })
