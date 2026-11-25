@@ -80,12 +80,16 @@ object MemoryScan {
             c in '\u4E00'..'\u9FFF' || c in '\uFF00'..'\uFFEF'
         )
 
+    /** No rules of the game's own. */
+    val NO_RULES: (String) -> String = { it }
+
     /**
-     * [raw] as shown: markup tags and control characters (line breaks, colour codes' markers)
+     * [raw] as shown: first the game's own [rules] (its catalog entry's cleanup, for codes of its
+     * engine), then markup tags and control characters (line breaks, colour codes' markers)
      * dropped, and furigana (`[奇跡/きせき]`, Layton's) reduced to the kanji under it.
      */
-    fun clean(raw: String): String =
-        raw.replace(TAG, "").replace(FURIGANA, "$1").filter { it >= ' ' && it != '\uFFFF' }.trim()
+    fun clean(raw: String, rules: (String) -> String = NO_RULES): String =
+        rules(raw).replace(TAG, "").replace(FURIGANA, "$1").filter { it >= ' ' && it != '\uFFFF' }.trim()
 
     /** A page of a game's script: where its bytes start in what was read, and what it shows. */
     data class Page(val offset: Int, val text: String)
@@ -94,7 +98,8 @@ object MemoryScan {
      * [bytes] of a script split into the pages the player sees: at page tags (`<PAGE>`) and at
      * terminators, each cleaned of markup. Pages that show nothing are left out.
      */
-    fun pages(bytes: ByteArray, charset: Charset): List<Page> = spans(bytes, charset).map { Page(it.offset, it.text) }
+    fun pages(bytes: ByteArray, charset: Charset, rules: (String) -> String = NO_RULES): List<Page> =
+        spans(bytes, charset, rules).map { Page(it.offset, it.text) }
 
     /**
      * The run of adjacent pages in [bytes] that reads most like OCR's [line], joined, with the
@@ -102,10 +107,10 @@ object MemoryScan {
      * games keep each line of a text box as a string of its own, a few control bytes from the
      * next, whose bytes also decode as stray characters (`ｽK` before a line, `’` after it).
      */
-    fun bestRun(bytes: ByteArray, charset: Charset, line: String): Pair<Page, Double>? {
+    fun bestRun(bytes: ByteArray, charset: Charset, line: String, rules: (String) -> String = NO_RULES): Pair<Page, Double>? {
         val seen = line.filter { !it.isWhitespace() }
         if (seen.isEmpty()) return null
-        val spans = spans(bytes, charset)
+        val spans = spans(bytes, charset, rules)
         var best: Pair<Page, Double>? = null
         for (first in spans.indices) {
             var text = ""
@@ -142,14 +147,14 @@ object MemoryScan {
     /** A page and where its bytes end. */
     private class Span(val offset: Int, val end: Int, val text: String)
 
-    private fun spans(bytes: ByteArray, charset: Charset): List<Span> {
+    private fun spans(bytes: ByteArray, charset: Charset, rules: (String) -> String = NO_RULES): List<Span> {
         val width = unit(charset)
         val breaks = PAGE_BREAKS.map { it.toByteArray(charset) }
         val spans = mutableListOf<Span>()
         var start = 0
         var i = 0
         fun close(end: Int, skip: Int) {
-            val text = clean(PspHooks.decode(bytes.copyOfRange(start, end), charset))
+            val text = clean(PspHooks.decode(bytes.copyOfRange(start, end), charset), rules)
             if (text.isNotEmpty()) spans += Span(start, end, text)
             start = end + skip
         }
@@ -169,9 +174,9 @@ object MemoryScan {
      * Whether [memory] is the string OCR saw as [ocr]: most of what OCR read is in it, in order,
      * and it isn't a much longer text that merely contains those characters.
      */
-    fun matches(memory: String, ocr: String): Boolean {
+    fun matches(memory: String, ocr: String, rules: (String) -> String = NO_RULES): Boolean {
         val seen = ocr.filter { !it.isWhitespace() }
-        val text = clean(memory).filter { !it.isWhitespace() }
+        val text = clean(memory, rules).filter { !it.isWhitespace() }
         if (seen.length < 2 || text.length > seen.length * 3 + 8) return false
         return commonLength(text, seen) >= seen.length * 0.7
     }

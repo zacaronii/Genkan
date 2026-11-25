@@ -1,7 +1,9 @@
 package app.genkan.memory
 
+import app.genkan.yomikata.CatalogEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -155,5 +157,42 @@ class MemoryScanTest {
         assertEquals(2, MemoryScan.scriptLines(table, sjis))
         val buffer = "今帰りかい？\u0000\u0000\u0000ab\u0000".toByteArray(sjis)
         assertEquals(1, MemoryScan.scriptLines(buffer, sjis))
+    }
+
+    /** A made-up engine's codes: `W` and a wait in frames, `／` a break inside the box. */
+    private val entry = CatalogEntry.parse(
+        """{"id": "SLPM-12345", "platform": "ps2", "encoding": "shift_jis", "status": "auto",
+           "cleanup": [{"regex": "W\\d+", "replace": ""}, {"regex": "／", "replace": ""}]}""",
+    )
+
+    @Test
+    fun `the game's own codes come off before the generic clean`() {
+        val rules = MemoryText.rulesOf(entry)
+        assertEquals("雨の日でもいや、雨の日だから", MemoryScan.clean("雨の日でもW30／いや、W15雨の日だから", rules))
+        // Without them the codes stay.
+        assertEquals("雨の日でもW30／いや", MemoryScan.clean("雨の日でもW30／いや"))
+        // The game's rules see the raw text, before markup comes off.
+        assertEquals("前W5", MemoryScan.clean("前W<E003 20>5", rules))
+    }
+
+    @Test
+    fun `a line of nothing but codes is empty, and no rules are no rules`() {
+        assertEquals("", MemoryScan.clean("W30／", MemoryText.rulesOf(entry)))
+        assertSame(MemoryScan.NO_RULES, MemoryText.rulesOf(null))
+        assertSame(MemoryScan.NO_RULES, MemoryText.rulesOf(CatalogEntry.parse("""{"id": "SLPM-12345", "platform": "ps2", "encoding": "shift_jis"}""")))
+    }
+
+    @Test
+    fun `OCR's line is matched and paged against the text without the codes`() {
+        val rules = MemoryText.rulesOf(entry)
+        val memory = "駅前の広場を歩きながら、W15／古い時計台をW15／見上げると鐘が鳴った。"
+        val ocr = "駅前の広場を歩きながら、古い時計台を見上げると鐘が鳴った。"
+        assertTrue(MemoryScan.matches(memory, ocr, rules))
+
+        val sjis = MemoryScan.SHIFT_JIS
+        val bytes = "前の行。\u0000$memory\u0000次の行。\u0000".toByteArray(sjis)
+        val (page, score) = MemoryScan.bestRun(bytes, sjis, ocr, rules)!!
+        assertEquals(ocr, page.text)
+        assertEquals(1.0, score, 0.0)
     }
 }

@@ -70,6 +70,7 @@ class BuiltInText @Inject constructor(
                 if (game != null) {
                     // A game with its own codes: OCR's lines are put right from memory with its table.
                     ocr.corrector = ::tableLine
+                    text.rules = MemoryScan.NO_RULES
                     stopLayout()
                     gameStartedMs = System.currentTimeMillis()
                     launch { watchLayout() }
@@ -146,6 +147,8 @@ class BuiltInText @Inject constructor(
             if (id != null) {
                 ids[game.key] = id
                 yomikataIds.learned(game.rommRomId, id)
+                // The entry's cleanup, for the game's own codes in the lines memory gives.
+                text.rules = MemoryText.rulesOf(runCatching { catalog.entry(id) }.getOrNull())
                 // A Yomikata script first; the entry's layout when there's none, or it won't run.
                 fallback = Triple(game, id, cartridge)
                 if (startScript(game, id)) return
