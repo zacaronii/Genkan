@@ -72,6 +72,57 @@ object GenkanTap {
     /** A touch on the lower screen, from 0 to 1 across and down it; negative for a release. */
     @JvmStatic external fun touchLowerScreen(x: Float, y: Float)
 
+    /**
+     * Loads a Yomikata script for the running game (docs/script-api.md there), with its data files
+     * by name; null when it loaded, else why not. [platform] is the catalog's name ("gc"), and a game's
+     * address folds as (address and [pointerMask]) - [ramBase] onto the core's. On the emulation thread.
+     */
+    fun scriptLoad(
+        name: String,
+        source: ByteArray,
+        data: Map<String, ByteArray>,
+        platform: String,
+        gameId: String,
+        buildId: String?,
+        pointerMask: Long,
+        ramBase: Long,
+    ): String? {
+        val names = data.keys.toTypedArray()
+        val files = names.map { data.getValue(it) }.toTypedArray()
+        return scriptLoadNative(name, source, names, files, platform, gameId, buildId, pointerMask, ramBase)?.toString(Charsets.UTF_8)
+    }
+
+    /**
+     * Runs the loaded script for [frame] (frames the game has run): its events, each the runtime's
+     * kind (1 text, 2 layout, 3 cursor, 4 log) and JSON. Between two frames, on the emulation thread.
+     */
+    fun scriptFrame(frame: Long): List<Pair<Int, String>> =
+        scriptFrameNative(frame)?.map { bytes ->
+            val line = bytes.toString(Charsets.UTF_8)
+            line.substringBefore('\t').toInt() to line.substringAfter('\t')
+        }.orEmpty()
+
+    /** The script feature level the runtime gives (yk_script_level): a script needing more is left alone. */
+    @JvmStatic external fun scriptLevel(): Int
+
+    @JvmStatic external fun scriptUnload()
+    @JvmStatic external fun scriptLoaded(): Boolean
+    /** After a savestate was loaded, before the next [scriptFrame]. */
+    @JvmStatic external fun scriptStateLoaded()
+    /** The size of the game's picture in pixels, for the script's reader.picture(). */
+    @JvmStatic external fun scriptPicture(width: Int, height: Int)
+
+    @JvmStatic
+    @JvmName("scriptLoad")
+    private external fun scriptLoadNative(
+        name: String, source: ByteArray, dataNames: Array<String>, dataFiles: Array<ByteArray>,
+        platform: String, gameId: String, buildId: String?, pointerMask: Long, ramBase: Long,
+    ): ByteArray?
+
+    @JvmStatic
+    @JvmName("scriptFrame")
+    private external fun scriptFrameNative(frame: Long): Array<ByteArray>?
+
     @JvmStatic private external fun memoryRegions(): LongArray
 
     @JvmStatic private external fun packedFrameSize(): Long

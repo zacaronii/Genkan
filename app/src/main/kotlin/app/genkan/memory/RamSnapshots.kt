@@ -300,6 +300,15 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             return String(ram, 0, 6, Charsets.US_ASCII).takeIf { id -> id.all { it in 'A'..'Z' || it in '0'..'9' } }
         }
 
+        /**
+         * A GameCube game's build as scripts name it: the disc id and the disc's version (the byte at
+         * 0x80000007) as two hex digits, `GTST01-00`; null without the disc's header.
+         */
+        fun gcBuildId(ram: ByteArray): String? {
+            val id = gcDiscId(ram) ?: return null
+            return "%s-%02X".format(id, ram[7].toInt() and 0xFF)
+        }
+
         private const val GC_MAGIC_AT = 0x1C
         private const val GC_MAGIC = 0xC2339F3DL
 

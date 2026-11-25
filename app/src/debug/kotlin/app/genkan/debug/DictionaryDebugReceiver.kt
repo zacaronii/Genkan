@@ -95,6 +95,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_RAM -n app.genkan/.debug.DictionaryDebugReceiver --es name line1
  * (writes each region of the built-in player's game memory, as it is, to files/debug-ram/<name>-<start>.bin, to search
  *  off the device; it holds script text, so it goes nowhere else and is deleted after)
+ *   adb shell am broadcast -a app.genkan.debug.SCRIPT_RUN -n app.genkan/.debug.DictionaryDebugReceiver --es path /sdcard/Download/x.lua [--es data tbl=/sdcard/Download/x.tbl]
+ * (runs a Yomikata script in the built-in player for the game running, its events logged under CoreActivity;
+ *  --ez stop true stops it)
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_FRAMES -n app.genkan/.debug.DictionaryDebugReceiver
  * (writes the built-in player's frame as a snapshot takes it, read on its own and with a moment's memory, to
  *  files/debug-ram/frame-{screen,moment}.png; the memory isn't kept)
@@ -301,6 +304,22 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     }
                     "app.genkan.debug.PLAYER_REGIONS" -> player.memory()?.regions.orEmpty().forEach {
                         Log.i(TAG, "  region 0x%08x-0x%08x".format(it.first, it.last))
+                    }
+                    "app.genkan.debug.SCRIPT_RUN" -> {
+                        if (intent.getBooleanExtra("stop", false)) {
+                            player.unloadScript()
+                            Log.i(TAG, "Script stopped")
+                        } else {
+                            val file = File(intent.getStringExtra("path").orEmpty())
+                            val data = intent.getStringExtra("data").orEmpty().split(',').filter { '=' in it }
+                                .associate { it.substringBefore('=') to File(it.substringAfter('=')).readBytes() }
+                            val platform = player.game.value?.core?.platforms?.first()
+                            val ram = player.memory()?.use { app.genkan.memory.RamSnapshots.mainRamOf(it, platform) }
+                            val gameId = ram?.let { app.genkan.memory.RamSnapshots.gameId(platform, it) } ?: file.nameWithoutExtension
+                            val buildId = ram?.takeIf { platform == "ngc" }?.let { app.genkan.memory.RamSnapshots.gcBuildId(it) }
+                            val error = player.loadScript(file.name, file.readBytes(), data, gameId, buildId)
+                            Log.i(TAG, "Script ${file.name} for $gameId ($buildId): ${error ?: "loaded"}")
+                        }
                     }
                     "app.genkan.debug.PLAYER_FRAMES" -> {
                         val dir = File(context.filesDir, "debug-ram").apply { mkdirs() }

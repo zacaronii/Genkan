@@ -10,6 +10,11 @@ find_package (oboe REQUIRED CONFIG)
 
 include_directories("libretro/libretro-common/include")
 
+# Genkan: the Yomikata reader runtime (third_party/yomikata, a submodule), linked in whole: only its yk_
+# functions are used, from scripthost.cpp, and Lua stays hidden inside this library.
+set(YOMIKATA_READER_SHARED OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/yomikata/runtime yomikata EXCLUDE_FROM_ALL)
+
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
         libretro/libretro-common/string/stdstring.c
@@ -76,6 +81,9 @@ add_library(libretrodroid SHARED
         genkantap.h
         genkantap.cpp
         genkantapjni.cpp
+        scripthost.h
+        scripthost.cpp
+        scriptjni.cpp
         vfs/vfs.h
         vfs/vfs.cpp
         vfs/vfsinterfacenegotiation.h
@@ -100,4 +108,5 @@ target_link_libraries(libretrodroid
                       EGL
                       oboe::oboe
                       GLESv3
+                      yomikata_reader
 )

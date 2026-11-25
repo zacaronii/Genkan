@@ -12,3 +12,7 @@
 	url = https://github.com/libretro/dolphin
 	shallow = true
 	update = none
+[submodule "third_party/yomikata"]
+	path = third_party/yomikata
+	url = ../yomikata
+	shallow = true

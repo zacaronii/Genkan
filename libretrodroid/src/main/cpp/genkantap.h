@@ -52,6 +52,11 @@ public:
     void clear();
     std::vector<Region> regions();
     bool read(uint64_t address, uint8_t *out, size_t size);
+    /**
+     * Up to `size` bytes at `address` from `among` (a copy of [regions] taken once a frame): how many
+     * were there, fewer where the region ends, 0 outside every region. For the script's many small reads.
+     */
+    static size_t readClipped(const std::vector<Region> &among, uint64_t address, uint8_t *out, size_t size);
     /** The core's video RAM (a PS1's 1 MB frame buffer and texture pages), 0 when it gives none. */
     size_t videoRamSize();
     bool readVideoRam(uint64_t offset, uint8_t *out, size_t size);

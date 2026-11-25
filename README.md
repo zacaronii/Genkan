@@ -182,7 +182,8 @@ a Yomitan dictionary popup. See
 
 Requires JDK 21 and the Android SDK (platform 37, build-tools, NDK 29, CMake 3.31.6).
 Clone with `--recursive`, or run `git submodule update --init --recursive`, for the
-dictionary engine in `third_party/hoshidicts`. The GameCube core (`third_party/dolphin`) is
+dictionary engine in `third_party/hoshidicts` and Yomikata's reader runtime in `third_party/yomikata`
+(which runs a game's Yomikata script in the built-in player). The GameCube core (`third_party/dolphin`) is
 skipped by that: the first build fetches it with its externals (about 600 MB) and builds it
 (a few minutes), once per pinned commit, into `.gradle/cores`.
 

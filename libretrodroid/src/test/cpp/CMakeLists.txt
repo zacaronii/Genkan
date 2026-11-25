@@ -1,0 +1,14 @@
+# Genkan: the Yomikata script host (src/main/cpp/scripthost.cpp) with the reader runtime, built for this
+# machine and run on made-up memory. app/build.gradle.kts's scriptHostTest builds and runs it.
+cmake_minimum_required(VERSION 3.20)
+project(script_host_test LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(YOMIKATA_READER_SHARED OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/yomikata/runtime yomikata EXCLUDE_FROM_ALL)
+
+add_executable(script_host_test script_host_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/scripthost.cpp)
+target_include_directories(script_host_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+target_link_libraries(script_host_test PRIVATE yomikata_reader)

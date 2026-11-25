@@ -135,7 +135,21 @@ License: GPL-3.0 (LICENSE at that commit; sfc/sfc.hpp states GPLv3)
   libbsnes_mercury_libretro_android.so. The binary is not committed; the
   source it is built from is the submodule at that commit.
 
---------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Yomikata's reader runtime (GPL-3.0-or-later)
+The yomikata repository beside Genkan's own on GitHub (third_party/yomikata's
+URL is relative to Genkan's)
+Pinned commit: e7bda5412e09f483ca6f810efd14020bc08bbf78
+
+  A submodule at third_party/yomikata, unmodified; its runtime/ is built into
+  libretrodroid's native library (a static library, Lua's names hidden) to
+  run a game's Yomikata script in the built-in player. It includes Lua 5.4.8
+  (MIT, runtime/third_party/lua) and files derived from Furoshiki's reader
+  (GPL-2.0-or-later, runtime/src: each says what was changed); its own
+  NOTICE.md and runtime/README.md give the details. Genkan's host for it is
+  libretrodroid/src/main/cpp/scripthost.* and scriptjni.cpp.
+
+-----
 Dolphin, libretro's port (GPL-2.0-or-later), the GameCube core
 https://github.com/libretro/dolphin
 Pinned commit: e0f0bfec5003270c6252a51d1eae6e6bbec6c3ed

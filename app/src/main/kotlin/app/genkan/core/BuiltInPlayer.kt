@@ -199,6 +199,28 @@ class BuiltInPlayer @Inject constructor() {
         return CoreMemory(game.session, regions.filter { !it.second }.map { it.first }, regions.map { it.first }, game.core.pointerMask, base, game.core.bigEndian)
     }
 
+    /**
+     * Runs a Yomikata script for the running game from now on: [source], its [data] files by name,
+     * and the game's id and build as the catalog writes them. Null when it loaded, else why not.
+     */
+    fun loadScript(name: String, source: ByteArray, data: Map<String, ByteArray>, gameId: String, buildId: String?): String? {
+        val session = _game.value?.session ?: return "no game in the built-in player"
+        val files = android.os.Bundle().apply { data.forEach { (key, bytes) -> putByteArray(key, bytes) } }
+        return try {
+            session.loadScript(name, source, files, gameId, buildId)
+        } catch (e: RemoteException) {
+            "the player didn't answer"
+        }
+    }
+
+    fun unloadScript() {
+        try {
+            _game.value?.session?.unloadScript()
+        } catch (e: RemoteException) {
+            // The player is gone, and its script with it.
+        }
+    }
+
     /** The running game's savestate, gzipped into [file] (in the snapshot folder); its size before gzip, or null. */
     fun saveState(file: java.io.File): Long? {
         val session = _game.value?.session ?: return null
