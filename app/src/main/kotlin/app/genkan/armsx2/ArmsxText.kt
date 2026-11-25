@@ -41,7 +41,8 @@ private val Context.armsxStore: DataStore<Preferences> by preferencesDataStore(n
  * memory, so the text is found and followed by [MemoryText], with OCR alongside. PINE is off in
  * ARMSX2 by default (it listens on the device only), so Genkan turns it on in ARMSX2's settings
  * file when the player asks (setting), and puts ARMSX2's own value back after. ARMSX2 reads the
- * switch as a game starts.
+ * switch as a game starts. A game the Yomikata catalog has a script for is read by that script
+ * instead, run here (AppScriptHost) on a clock of its own ([PineTicks]).
  */
 @Singleton
 class ArmsxText @Inject constructor(
@@ -50,6 +51,7 @@ class ArmsxText @Inject constructor(
     private val nowPlaying: NowPlaying,
     private val ocr: OcrReader,
     private val privileged: Privileged,
+    private val catalog: app.genkan.yomikata.YomikataCatalog,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var started = false
@@ -60,6 +62,10 @@ class ArmsxText @Inject constructor(
     internal val offered: MutableSharedFlow<String> get() = text.offered
 
     val status: StateFlow<MemoryTextStatus> = text.status
+
+    private val _scriptActive = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** The game's text comes from its Yomikata script. */
+    val scriptActive: StateFlow<Boolean> = _scriptActive
 
     val enabled: Flow<Boolean> = context.armsxStore.data.map { it[ENABLED] == true }
 
@@ -94,14 +100,102 @@ class ArmsxText @Inject constructor(
         scope.launch {
             combine(enabled, nowPlaying.game) { on, game -> on && game.platform == PS2 }.collectLatest { active ->
                 if (active) {
-                    val port = context.armsxStore.data.first()[PORT] ?: Pine.PORT
-                    text.follow { openGame(port) }
+                    follow(context.armsxStore.data.first()[PORT] ?: Pine.PORT)
                 } else {
                     text.off()
                     client?.close()
                     client = null
                 }
             }
+        }
+    }
+
+    /**
+     * Waits for ARMSX2 to run a game, then reads it by its script while the catalog has one it can
+     * run (again for each game that follows), else follows its text through [MemoryText].
+     */
+    private suspend fun follow(port: Int) {
+        val client = client ?: PineClient(port).also { client = it }
+        while (true) {
+            val game = withContext(Dispatchers.IO) { client.takeIf { it.status() == PineStatus.RUNNING }?.game() }
+            if (game == null) {
+                kotlinx.coroutines.delay(WAIT_MS)
+                continue
+            }
+            if (runScript(client, game)) continue
+            text.follow { openGame(port) }
+            return
+        }
+    }
+
+    /**
+     * Runs the catalog's script for [game] until the game stops or another starts: true then, false
+     * when it has none this Genkan can run, or it died (the text is then followed as without one).
+     */
+    private suspend fun runScript(client: PineClient, game: PineGame): Boolean {
+        val id = game.serial
+        val files = when (val found = runCatching { catalog.script(id) }.getOrElse { app.genkan.yomikata.ScriptLookup.Failed(it.message ?: "") }) {
+            is app.genkan.yomikata.ScriptLookup.Found -> found.files
+            app.genkan.yomikata.ScriptLookup.NotListed -> return false
+            is app.genkan.yomikata.ScriptLookup.Failed -> return false.also { Log.w(TAG, "${game.title} ($id): no script, ${found.reason}") }
+        }
+        val script = files.script
+        script.unusable(app.genkan.script.AppScriptHost.level(), game.buildId, emptySet())?.let { why ->
+            Log.i(TAG, "${game.title} ($id): its script can't run here: $why")
+            return false
+        }
+        val startedMs = System.currentTimeMillis()
+        while (true) {
+            val error = withContext(Dispatchers.IO) {
+                app.genkan.script.AppScriptHost.load(
+                    script.path.substringAfterLast('/'), files.source, files.data, PS2, id, game.buildId, POINTER_MASK, 0L, PineMemory(client),
+                )
+            } ?: break
+            if (!app.genkan.core.ScriptRetry.again(error, System.currentTimeMillis(), startedMs, null)) {
+                Log.i(TAG, "${game.title} ($id): its script didn't load: $error")
+                return false
+            }
+            kotlinx.coroutines.delay(app.genkan.core.ScriptRetry.EVERY_MS)
+        }
+        Log.i(TAG, "${game.title} ($id, ${game.buildId}): reading its Yomikata script")
+        val reader = app.genkan.core.ScriptReader()
+        val ticks = PineTicks(System.currentTimeMillis())
+        var sinceCheck = 0
+        _scriptActive.value = true
+        try {
+            while (true) {
+                val now = System.currentTimeMillis()
+                when (withContext(Dispatchers.IO) { ticks.step(client.status(), now) }) {
+                    PineTicks.Step.STOP -> return true
+                    PineTicks.Step.WAIT -> Unit
+                    PineTicks.Step.STATE_LOADED -> {
+                        app.genkan.script.AppScriptHost.stateLoaded()
+                        reader.stateLoaded()
+                    }
+                    PineTicks.Step.FRAME -> {
+                        val events = withContext(Dispatchers.IO) { app.genkan.script.AppScriptHost.frame(ticks.frame, PineMemory(client)) }
+                        events.filter { it.first == app.genkan.core.ScriptEvents.LOG }.forEach { Log.i(TAG, "Script log: ${it.second}") }
+                        val step = reader.read(events, now)
+                        step.lines.forEach(session::submit)
+                        if (step.dead) {
+                            Log.w(TAG, "The script was switched off: following the text in memory from here")
+                            return false
+                        }
+                    }
+                }
+                // OCR stays on for the screens the script doesn't read, out of the backlog while its windows are up.
+                ocr.quiet = reader.windowOpen(now)
+                // Another game started (a disc changed, or a new one launched): its own script, if any.
+                if (++sinceCheck >= GAME_CHECK_TICKS) {
+                    sinceCheck = 0
+                    if (withContext(Dispatchers.IO) { client.game() }?.serial != game.serial) return true
+                }
+                kotlinx.coroutines.delay(TICK_MS)
+            }
+        } finally {
+            app.genkan.script.AppScriptHost.unload()
+            _scriptActive.value = false
+            ocr.quiet = false
         }
     }
 
@@ -149,6 +243,14 @@ class ArmsxText @Inject constructor(
     private companion object {
         const val TAG = "ArmsxText"
         const val PS2 = "ps2"
+        /** The EE sees its 32 MB through several segments: a script's pointer folds back to it. */
+        const val POINTER_MASK = 0x01FFFFFFL
+        /** A script's tick: ARMSX2's memory read a page at a time each, ten times a second. */
+        const val TICK_MS = 100L
+        /** How often the game is checked for having changed, in ticks. */
+        const val GAME_CHECK_TICKS = 50
+        /** How often to look for a game in ARMSX2 while it runs none. */
+        const val WAIT_MS = 2_000L
         val ENABLED = booleanPreferencesKey("enabled")
         val SAVED_PINE = stringPreferencesKey("saved_pine")
         val PORT = intPreferencesKey("port")
