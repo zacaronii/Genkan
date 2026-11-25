@@ -142,13 +142,7 @@ class YomikataCatalog @Inject constructor(
             ?: return@withLock ScriptLookup.NotListed
         val script = runCatching { CatalogScript.parse(id, record) }
             .getOrElse { return@withLock ScriptLookup.Failed("its index record doesn't read: ${it.message}") }
-        try {
-            val source = file(script.path, script.sha256)
-            val data = script.data.mapValues { (_, file) -> file(file.first, file.second) }
-            ScriptLookup.Found(ScriptFiles(script, source, data))
-        } catch (e: IOException) {
-            ScriptLookup.Failed(e.message ?: e.javaClass.simpleName)
-        }
+        script.files { path, sha256 -> file(path, sha256) }
     }
 
     /** A catalog file's bytes: the device's copy while it matches [sha256], else fetched again (and checked). */

@@ -43,6 +43,8 @@ data class HookMessage(
      * reading stats count it once, and a repeat as reread. Null: the line's own text stands in.
      */
     val sourceId: String? = null,
+    /** The game's own furigana over [text], when the source gives them (a Yomikata script's). */
+    val ruby: List<Ruby> = emptyList(),
 ) {
     companion object {
         fun parse(frame: String): HookMessage? {

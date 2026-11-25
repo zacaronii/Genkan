@@ -97,6 +97,7 @@ class ScriptReader {
                     whole = true,
                     speaker = event.optString("speaker").takeIf { it.isNotBlank() },
                     sourceId = event.optString("id").takeIf { it.isNotEmpty() }?.let { "$SOURCE$it" },
+                    ruby = app.genkan.reader.Ruby.fromCodePoints(text, event.optJSONArray("ruby")),
                 )
             }
             CHOICE -> {

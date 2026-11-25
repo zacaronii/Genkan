@@ -36,6 +36,13 @@ class ScriptReaderTest {
     }
 
     @Test
+    fun `the game's own furigana come with the line`() {
+        val event = ScriptEvents.TEXT to """{"seq":1,"frame":1,"channel":"dialogue","speaker":"","text":"古い港","ruby":[[0,1,"ふる"],[2,1,"みなと"]],"id":"r1","meta":{}}"""
+        val line = ScriptReader().read(listOf(event), 0).lines.single()
+        assertEquals(listOf(app.genkan.reader.Ruby(0, 1, "ふる"), app.genkan.reader.Ruby(2, 3, "みなと")), line.ruby)
+    }
+
+    @Test
     fun `interface text and unknown channels never reach the backlog`() {
         val reader = ScriptReader()
         val step = reader.read(listOf(text("どうぐ", "m1", channel = "interface", window = "menu"), text("何か", "x1", channel = "narration")), 0)
