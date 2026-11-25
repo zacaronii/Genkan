@@ -31,6 +31,18 @@ data class CatalogScript(
         else -> null
     }
 
+    /**
+     * The script's source and every data file, each through [file] (a path and the index's hash to
+     * its bytes, or an IOException): Found with all of them, Failed when any is missing. A script
+     * without its data can't run, so it isn't offered at all and the game takes its JSON layout.
+     */
+    inline fun files(file: (path: String, sha256: String) -> ByteArray): ScriptLookup = try {
+        val source = file(path, sha256)
+        ScriptLookup.Found(ScriptFiles(this, source, data.mapValues { (_, f) -> file(f.first, f.second) }))
+    } catch (e: java.io.IOException) {
+        ScriptLookup.Failed(e.message ?: e.javaClass.simpleName)
+    }
+
     companion object {
         fun parse(id: String, record: JSONObject): CatalogScript {
             val data = record.optJSONObject("data")

@@ -97,7 +97,12 @@ class ReaderSession @Inject constructor(
             // Known to be whole: kept as it is, even a repeat of the line before.
             val text = Lines.normalise(message.text)
             // Its speaker goes with it: only whole lines know theirs.
-            if (text.isNotBlank()) handOver(LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread, message.speaker, message.sourceId)
+            if (text.isNotBlank()) {
+                handOver(
+                    LineFeed.Out(text, takesBack = message.takesBack?.let(Lines::normalise)), message.thread, message.speaker, message.sourceId,
+                    Ruby.remap(message.ruby, message.text, text),
+                )
+            }
             return
         }
         val feed = feeds.getOrPut(message.thread) { LineFeed() }
@@ -111,14 +116,20 @@ class ReaderSession @Inject constructor(
         }
     }
 
-    private suspend fun handOver(out: LineFeed.Out, thread: String, speaker: String? = null, sourceId: String? = null) {
+    private suspend fun handOver(
+        out: LineFeed.Out,
+        thread: String,
+        speaker: String? = null,
+        sourceId: String? = null,
+        ruby: List<Ruby> = emptyList(),
+    ) {
         val key = nowPlaying.game.value.key
         val now = System.currentTimeMillis()
         val last = out.takesBack?.let { dao.last(key) }
         if (last != null && last.text == out.takesBack) {
             dao.replace(last.id, out.text, now)
         } else {
-            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now, thread = thread.ifEmpty { null }, speaker = speaker))
+            dao.insert(ReaderLineEntity(gameKey = key, text = out.text, at = now, thread = thread.ifEmpty { null }, speaker = speaker, ruby = Ruby.toJson(ruby)))
         }
         // A line that carries on one already counted adds only its new part to the stats.
         val takenBack = out.takesBack

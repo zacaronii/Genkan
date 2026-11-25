@@ -46,6 +46,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.widthIn
@@ -406,6 +407,9 @@ internal fun TapCloses(active: Boolean, onClose: () -> Unit, content: @Composabl
     }
 }
 
+/** The size of a line's furigana. */
+private val RUBY_SIZE = 13.sp
+
 /** A speaker known only by number ("#7"): kept to break runs, not shown. */
 private val UNNAMED_SPEAKER = Regex("#\\d+")
 
@@ -465,7 +469,10 @@ internal fun Backlog(
                 if (name != null && (i == 0 || newRun)) {
                     Text(name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                TappableLine(line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty(), onMiss = onBackground) { onTap(line, it) }
+                TappableLine(
+                    line.text, highlight?.start, highlight?.end, marks[line.id].orEmpty(), onMiss = onBackground,
+                    ruby = remember(line.ruby) { app.genkan.reader.Ruby.fromJson(line.ruby) },
+                ) { onTap(line, it) }
             }
         }
     }
@@ -477,9 +484,20 @@ internal fun Backlog(
  * is [onMiss], not the nearest character.
  */
 @Composable
-private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineMark>, onMiss: () -> Unit, onTapAt: (Int) -> Unit) {
+internal fun TappableLine(
+    text: String,
+    start: Int?,
+    end: Int?,
+    marks: List<LineMark>,
+    onMiss: () -> Unit,
+    /** The game's own furigana, drawn small over their characters. */
+    ruby: List<app.genkan.reader.Ruby> = emptyList(),
+    onTapAt: (Int) -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val rubyStyle = androidx.compose.ui.text.TextStyle(color = colors.onBackground.copy(alpha = 0.8f), fontSize = RUBY_SIZE)
     val annotated = buildAnnotatedString {
         if (start == null || end == null || end <= start) {
             append(text)
@@ -491,9 +509,23 @@ private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineM
     }
     BasicText(
         annotated,
-        style = MaterialTheme.typography.headlineSmall.copy(color = colors.onBackground, fontSize = 26.sp, lineHeight = 38.sp),
+        // With furigana, each row is taller and its characters sit at the bottom, the readings above them.
+        style = MaterialTheme.typography.headlineSmall.copy(color = colors.onBackground, fontSize = 26.sp, lineHeight = 38.sp).let {
+            if (ruby.isEmpty()) it else it.copy(
+                lineHeight = 52.sp,
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    androidx.compose.ui.text.style.LineHeightStyle.Alignment.Bottom,
+                    androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                ),
+            )
+        },
         onTextLayout = { layout.value = it },
-        modifier = Modifier.fillMaxWidth().drawBehind { layout.value?.let { drawMarks(it, marks, text.length) } }.pointerInput(text) {
+        modifier = Modifier.fillMaxWidth().drawBehind {
+            layout.value?.let {
+                drawMarks(it, marks, text.length)
+                drawRuby(it, ruby, text.length, measurer, rubyStyle)
+            }
+        }.pointerInput(text) {
             detectTapGestures { position ->
                 val result = layout.value ?: return@detectTapGestures
                 val offset = result.getOffsetForPosition(position).coerceAtMost(text.length - 1)
@@ -501,6 +533,29 @@ private fun TappableLine(text: String, start: Int?, end: Int?, marks: List<LineM
             }
         },
     )
+}
+
+/**
+ * Each reading centred over its characters, at the top of their row (the room [TappableLine] makes
+ * above them); over a word broken across rows, over its part on the first.
+ */
+private fun DrawScope.drawRuby(
+    layout: TextLayoutResult,
+    ruby: List<app.genkan.reader.Ruby>,
+    length: Int,
+    measurer: androidx.compose.ui.text.TextMeasurer,
+    style: androidx.compose.ui.text.TextStyle,
+) {
+    for (r in ruby) {
+        if (r.start < 0 || r.end > length || r.end <= r.start) continue
+        val row = layout.getLineForOffset(r.start)
+        val boxes = (r.start until r.end).filter { layout.getLineForOffset(it) == row }.map { layout.getBoundingBox(it) }
+        val left = boxes.minOf { it.left }
+        val right = boxes.maxOf { it.right }
+        val reading = measurer.measure(r.reading, style)
+        val x = ((left + right) / 2 - reading.size.width / 2).coerceIn(0f, (size.width - reading.size.width).coerceAtLeast(0f))
+        drawText(reading, topLeft = Offset(x, layout.getLineTop(row) + 2.dp.toPx()))
+    }
 }
 
 /** Whether [position] is on character [offset]'s box (as wide as the glyph, as tall as its row). */

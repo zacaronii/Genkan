@@ -33,4 +33,17 @@ class CatalogScriptTest {
         assertTrue(script.copy(needs = listOf("vram")).unusable(level = 1, buildId = null, regions = emptySet())!!.contains("vram"))
         assertNull(script.copy(needs = listOf("vram")).unusable(level = 1, buildId = null, regions = setOf("vram")))
     }
+
+    @Test
+    fun `the source and every data file come along, and a missing one means no script`() {
+        val script = CatalogScript.parse("GTST01", record)
+        val asked = mutableListOf<String>()
+        val found = script.files { path, _ -> asked += path; path.toByteArray() }
+        assertEquals(listOf("scripts/gc/GTST01.lua", "scripts/gc/GTST01.tbl"), asked)
+        val files = (found as ScriptLookup.Found).files
+        assertEquals("scripts/gc/GTST01.tbl", String(files.data.getValue("tbl")))
+        // The table can't be had: the game takes its JSON layout instead.
+        val missing = script.files { path, _ -> if (path.endsWith(".tbl")) throw java.io.IOException("couldn't fetch $path") else ByteArray(1) }
+        assertTrue((missing as ScriptLookup.Failed).reason.contains(".tbl"))
+    }
 }

@@ -22,6 +22,8 @@ data class ReaderLineEntity(
     val thread: String? = null,
     /** Who says it, when the source knew (shown above the line). */
     val speaker: String? = null,
+    /** The game's own furigana over it ([Ruby]'s JSON), when its source gave them. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val ruby: String? = null,
 )
 
 /** The hook thread chosen as a game's dialogue. */

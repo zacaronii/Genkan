@@ -301,6 +301,35 @@ class ScreenshotTest {
         )
     }
 
+    /**
+     * Backlog lines with the game's own furigana (made-up text, as a Yomikata script gives them):
+     * readings over their kanji, one over a word broken across rows; a looked-up word highlighted;
+     * a line without any, at the usual height.
+     */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun backlogFurigana() = shoot("backlog_furigana", BOTTOM_PIXELS) {
+        androidx.compose.foundation.layout.Column(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background)
+                .padding(androidx.compose.ui.unit.Dp(16f)),
+        ) {
+            val first = "古い港町の灯台に、今夜も明かりが灯った。"
+            TappableLine(
+                first, start = 4, end = 6, marks = emptyList(), onMiss = {},
+                ruby = listOf(app.genkan.reader.Ruby(0, 1, "ふる"), app.genkan.reader.Ruby(2, 4, "みなとまち"), app.genkan.reader.Ruby(5, 7, "とうだい"),
+                    app.genkan.reader.Ruby(9, 11, "こんや"), app.genkan.reader.Ruby(12, 13, "あ"), app.genkan.reader.Ruby(16, 17, "とも")),
+            ) {}
+            TappableLine("見張りの交代は、まだ先だ。", start = null, end = null, marks = emptyList(), onMiss = {}) {}
+            val long = "遠くの海から帰ってきた船乗りたちは、口々に不思議な光の話をした。"
+            TappableLine(
+                long, start = null, end = null, marks = emptyList(), onMiss = {},
+                ruby = listOf(app.genkan.reader.Ruby(0, 1, "とお"), app.genkan.reader.Ruby(3, 4, "うみ"), app.genkan.reader.Ruby(6, 7, "かえ"),
+                    app.genkan.reader.Ruby(11, 13, "ふなの"), app.genkan.reader.Ruby(18, 20, "くちぐち"), app.genkan.reader.Ruby(21, 24, "ふしぎ"),
+                    app.genkan.reader.Ruby(25, 26, "ひかり"), app.genkan.reader.Ruby(27, 28, "はなし")),
+            ) {}
+        }
+    }
+
     /** A choice a layout reads (made-up answers), the cursor on the second, under the backlog. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
