@@ -40,6 +40,7 @@ public:
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) override;
     void setPixelFormat(int pixelFormat) override;
     void updateRenderedResolution(unsigned int width, unsigned int height) override;
+    std::pair<float, float> filledFraction() override;
 
     bool rendersInVideoCallback() override;
 

@@ -46,6 +46,9 @@ public:
     virtual void setShaders(ShaderManager::Chain shaders) = 0;
     virtual PassData getPassData(unsigned int layer) = 0;
 
+    /** Genkan: the part of the texture the last frame filled (see framefill.h); all of it here. */
+    virtual std::pair<float, float> filledFraction() { return {1.0F, 1.0F}; }
+
     virtual ~Renderer() = default;
 
 public:
