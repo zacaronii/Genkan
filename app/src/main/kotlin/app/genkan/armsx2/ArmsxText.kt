@@ -115,6 +115,7 @@ class ArmsxText @Inject constructor(
                 continue
             }
             if (runScript(client, game)) continue
+            text.rules = MemoryText.rulesOf(withContext(Dispatchers.IO) { runCatching { catalog.entry(game.serial) }.getOrNull() })
             text.follow { openGame() }
             return
         }

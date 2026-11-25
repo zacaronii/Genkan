@@ -45,6 +45,12 @@ class MemoryText(
     /** Lines handed in as if OCR had read them (debug builds). */
     val offered = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
+    /**
+     * The game's own cleanup (its catalog entry's, [rulesOf]), applied before the generic one to
+     * the lines passed on and to the text compared with OCR's. Set as a game starts.
+     */
+    @Volatile var rules: (String) -> String = MemoryScan.NO_RULES
+
     private val _status = MutableStateFlow(MemoryTextStatus.Off)
     val status: StateFlow<MemoryTextStatus> = _status.asStateFlow()
 
@@ -139,7 +145,7 @@ class MemoryText(
         val from = maxOf(region.first, (address - window) and 1L.inv())
         val to = minOf(region.last + 1, address + window)
         val bytes = readSpan(memory, from, (to - from).toInt()) ?: return null
-        val (best, score) = MemoryScan.bestRun(bytes, charset, line) ?: return null
+        val (best, score) = MemoryScan.bestRun(bytes, charset, line, rules) ?: return null
         if (score < PAGE_SIMILARITY) return null
         return ScriptPage(from + best.offset, charset, best.text)
     }
@@ -164,7 +170,7 @@ class MemoryText(
     private suspend fun lockOn(open: () -> MemorySource?, line: String): Found? = withContext(Dispatchers.IO) {
         open()?.use { memory ->
             val results = search(memory, line)
-            val candidate = results.firstOrNull { MemoryScan.matches(it.text, line) }
+            val candidate = results.firstOrNull { MemoryScan.matches(it.text, line, rules) }
                 ?: return@use results.firstNotNullOfOrNull { pageNear(memory, it.hit.address, it.hit.charset, line, PAGE_CONTEXT) }
                     ?.let { Found.Script(it) }
             // More script right after the line: the game steps through a table of lines (Layton,
@@ -197,7 +203,7 @@ class MemoryText(
             val charset = lock.found.hit.charset
             var current = lock.found.start
             val pointers = lock.pointers.associateWith { current }.toMutableMap()
-            var lastSent = MemoryScan.clean(lock.found.text)
+            var lastSent = MemoryScan.clean(lock.found.text, rules)
             var previous = lastSent
             var misses = 0
             while (isActive) {
@@ -216,7 +222,7 @@ class MemoryText(
                     continue
                 }
                 misses = 0
-                val text = MemoryScan.clean(PspHooks.decode(bytes, charset))
+                val text = MemoryScan.clean(PspHooks.decode(bytes, charset), rules)
                 if (text == previous && text != lastSent && text.isNotEmpty()) {
                     if (!ocr.quiet) session.submit(HookMessage(text))
                     lastSent = text
@@ -247,7 +253,7 @@ class MemoryText(
         return hits.take(MAX_HITS)
             .mapNotNull { hit -> widen(memory, hit) }
             .distinctBy { it.start }
-            .sortedByDescending { MemoryScan.similarity(MemoryScan.clean(it.text), line) }
+            .sortedByDescending { MemoryScan.similarity(MemoryScan.clean(it.text, rules), line) }
     }
 
     /** Every pointer in the game's memory into [targets], as slot to address (debug builds). */
@@ -298,20 +304,24 @@ class MemoryText(
         data class Script(val page: ScriptPage) : Found()
     }
 
-    private companion object {
-        const val CONTEXT = 0x400L
-        const val MAX_HITS = 64
-        const val MAX_POINTERS = 16
-        const val LINE_BYTES = 512
+    companion object {
+        /** [entry]'s cleanup as rules; a line it cleans to nothing becomes empty, so it isn't passed on. */
+        fun rulesOf(entry: app.genkan.yomikata.CatalogEntry?): (String) -> String =
+            if (entry == null || entry.cleanup.isEmpty()) MemoryScan.NO_RULES else { raw -> entry.clean(raw).orEmpty() }
+
+        private const val CONTEXT = 0x400L
+        private const val MAX_HITS = 64
+        private const val MAX_POINTERS = 16
+        private const val LINE_BYTES = 512
         /** How far past a found line to look for the next one. */
-        const val TABLE_PEEK = 1024
-        const val POLL_MS = 250L
-        const val RETRY_MS = 10_000L
+        private const val TABLE_PEEK = 1024
+        private const val POLL_MS = 250L
+        private const val RETRY_MS = 10_000L
         /** How far around the last page the next one is looked for: scenes jump, but not far. */
-        const val SCRIPT_WINDOW = 64 * 1024L
+        private const val SCRIPT_WINDOW = 64 * 1024L
         /** How much of a script around a search hit is split into pages. */
-        const val PAGE_CONTEXT = 4 * 1024L
-        const val PAGE_SIMILARITY = 0.6
-        const val SCRIPT_MISSES = 3
+        private const val PAGE_CONTEXT = 4 * 1024L
+        private const val PAGE_SIMILARITY = 0.6
+        private const val SCRIPT_MISSES = 3
     }
 }
