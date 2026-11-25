@@ -105,7 +105,9 @@ class YomikataCatalog @Inject constructor(
         val entries = index(force = false)
             ?: return@withLock if (_status.value == CatalogStatus.NotSet) EntryLookup.NotListed
             else EntryLookup.Failed("the catalog's index can't be read", retry = true)
-        val record = entries.optJSONObject(id) ?: return@withLock EntryLookup.NotListed
+        val record = entries.optJSONObject(id)
+            ?: (if (fetchAgainIfStale()) index(force = false)?.optJSONObject(id) else null)
+            ?: return@withLock EntryLookup.NotListed
         val path = record.getString("path")
         val cached = File(dir, path)
         val fresh = cached.isFile && sha256(cached.readBytes()) == record.optString("sha256")
@@ -136,13 +138,38 @@ class YomikataCatalog @Inject constructor(
      * the entries (or the device's copy, while its hash matches the index's, and offline).
      */
     suspend fun script(id: String): ScriptLookup = lock.withLock {
-        index(force = false) ?: return@withLock if (_status.value == CatalogStatus.NotSet) ScriptLookup.NotListed
+        val first = scriptNow(id)
+        // Not listed, or a file changed since: the index may be behind the catalog.
+        val behind = (first == ScriptLookup.NotListed && _status.value != CatalogStatus.NotSet) ||
+            (first is ScriptLookup.Failed && first.indexBehind)
+        if (behind && fetchAgainIfStale()) scriptNow(id) else first
+    }
+
+    /**
+     * Fetches the index again when a game asked for something it doesn't have and it's older than
+     * [IndexAge.STALE_MS] (at most that often); whether a new one came.
+     */
+    private suspend fun fetchAgainIfStale(): Boolean {
+        val now = System.currentTimeMillis()
+        val fetchedAt = context.catalogStore.data.first()[FETCHED_AT] ?: 0L
+        if (!IndexAge.fetchAgain(now, fetchedAt, staleTriedAt)) return false
+        staleTriedAt = now
+        Log.i(TAG, "Not in the index fetched ${(now - fetchedAt) / 60_000} min ago: fetching it again")
+        index(force = true)
+        return (context.catalogStore.data.first()[FETCHED_AT] ?: 0L) != fetchedAt
+    }
+
+    /** When [fetchAgainIfStale] last tried. */
+    private var staleTriedAt = 0L
+
+    private suspend fun scriptNow(id: String): ScriptLookup {
+        index(force = false) ?: return if (_status.value == CatalogStatus.NotSet) ScriptLookup.NotListed
             else ScriptLookup.Failed("the catalog's index can't be read")
         val record = runCatching { JSONObject(File(dir, INDEX).readText()).optJSONObject("scripts")?.optJSONObject(id) }.getOrNull()
-            ?: return@withLock ScriptLookup.NotListed
+            ?: return ScriptLookup.NotListed
         val script = runCatching { CatalogScript.parse(id, record) }
-            .getOrElse { return@withLock ScriptLookup.Failed("its index record doesn't read: ${it.message}") }
-        script.files { path, sha256 -> file(path, sha256) }
+            .getOrElse { return ScriptLookup.Failed("its index record doesn't read: ${it.message}") }
+        return script.files { path, sha256 -> file(path, sha256) }
     }
 
     /** A catalog file's bytes: the device's copy while it matches [sha256], else fetched again (and checked). */
@@ -154,7 +181,7 @@ class YomikataCatalog @Inject constructor(
             // Offline: the last copy, even one the index has moved past.
             return cached.takeIf { f -> f.isFile }?.readBytes() ?: throw IOException("couldn't fetch $path: ${it.message}")
         }
-        if (sha256(fetched) != sha256) throw IOException("$path doesn't match the index's hash")
+        if (sha256(fetched) != sha256) throw IndexBehind("$path doesn't match the index's hash")
         saveBytes(path, fetched)
         return fetched
     }

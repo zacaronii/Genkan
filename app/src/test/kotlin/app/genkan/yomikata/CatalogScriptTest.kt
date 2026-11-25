@@ -46,4 +46,25 @@ class CatalogScriptTest {
         val missing = script.files { path, _ -> if (path.endsWith(".tbl")) throw java.io.IOException("couldn't fetch $path") else ByteArray(1) }
         assertTrue((missing as ScriptLookup.Failed).reason.contains(".tbl"))
     }
+
+    @Test
+    fun `a file that moved past the index's hash says the index is behind`() {
+        val lookup = CatalogScript.parse("GTST01", record).files { path, _ -> throw IndexBehind("$path doesn't match") }
+        assertTrue((lookup as ScriptLookup.Failed).indexBehind)
+        val offline = CatalogScript.parse("GTST01", record).files { path, _ -> throw java.io.IOException("no network for $path") }
+        assertTrue(!(offline as ScriptLookup.Failed).indexBehind)
+    }
+
+    @Test
+    fun `the index is fetched again for a missing id only when it's ten minutes old, and at most that often`() {
+        val minute = 60_000L
+        val now = 1_000_000_000L
+        // Fetched five minutes ago: kept.
+        assertTrue(!IndexAge.fetchAgain(now, fetchedAtMs = now - 5 * minute, lastTriedMs = 0))
+        // Fetched an hour ago, never tried since: fetched again.
+        assertTrue(IndexAge.fetchAgain(now, fetchedAtMs = now - 60 * minute, lastTriedMs = 0))
+        // Tried three minutes ago (offline, so the fetch time didn't move): not again yet.
+        assertTrue(!IndexAge.fetchAgain(now, fetchedAtMs = now - 60 * minute, lastTriedMs = now - 3 * minute))
+        assertTrue(IndexAge.fetchAgain(now, fetchedAtMs = now - 60 * minute, lastTriedMs = now - 11 * minute))
+    }
 }
