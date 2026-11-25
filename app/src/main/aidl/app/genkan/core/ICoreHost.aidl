@@ -23,4 +23,8 @@ interface ICoreHost {
     oneway void setManual(boolean open) = 7;
     /** A Back in the player: closes what is open on the bottom screen first; whether it did. */
     boolean bottomBack() = 8;
+    /** What the running Yomikata script said this frame: each "kind<TAB>json" (yomikata_reader.h's events). */
+    oneway void scriptEvents(in String[] events) = 9;
+    /** A savestate was loaded: the script was told, and forgot what was on screen. */
+    oneway void scriptStateLoaded() = 10;
 }

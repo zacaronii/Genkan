@@ -317,7 +317,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                             val ram = player.memory()?.use { app.genkan.memory.RamSnapshots.mainRamOf(it, platform) }
                             val gameId = ram?.let { app.genkan.memory.RamSnapshots.gameId(platform, it) } ?: file.nameWithoutExtension
                             val buildId = ram?.takeIf { platform == "ngc" }?.let { app.genkan.memory.RamSnapshots.gcBuildId(it) }
-                            val error = player.loadScript(file.name, file.readBytes(), data, gameId, buildId)
+                            val error = builtInText.debugScript(file.name, file.readBytes(), data, gameId, buildId)
                             Log.i(TAG, "Script ${file.name} for $gameId ($buildId): ${error ?: "loaded"}")
                         }
                     }

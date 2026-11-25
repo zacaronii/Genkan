@@ -212,8 +212,22 @@ class CoreActivity : ComponentActivity() {
             if (scriptStateLoaded) {
                 scriptStateLoaded = false
                 GenkanTap.scriptStateLoaded()
+                try {
+                    host?.scriptStateLoaded()
+                } catch (e: RemoteException) {
+                    host = null
+                }
             }
-            for ((kind, json) in GenkanTap.scriptFrame(framesRun++)) Log.i(TAG, "Script ${ScriptEvents.kindName(kind)}: $json")
+            val events = GenkanTap.scriptFrame(framesRun++)
+            if (events.isNotEmpty()) {
+                // The script's own log lines go to logcat here; everything goes to the reader.
+                events.filter { it.first == ScriptEvents.LOG }.forEach { Log.i(TAG, "Script log: ${it.second}") }
+                try {
+                    host?.scriptEvents(events.map { "${it.first}\t${it.second}" }.toTypedArray())
+                } catch (e: RemoteException) {
+                    host = null
+                }
+            }
         }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
@@ -386,6 +400,8 @@ class CoreActivity : ComponentActivity() {
             Log.i(TAG, if (error == null) "Script $name loaded for $gameId" else "Script $name didn't load: $error")
             return error
         }
+
+        override fun scriptLevel(): Int = GenkanTap.scriptLevel()
 
         override fun unloadScript() {
             retroView.queueEvent { GenkanTap.scriptUnload() }

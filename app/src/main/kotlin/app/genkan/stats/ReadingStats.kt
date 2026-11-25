@@ -53,12 +53,15 @@ class ReadingStats @Inject constructor(
         }
     }
 
-    /** A line reached the backlog. [counted] is the part that is new reading (see takesBack). */
-    fun onLine(text: String, counted: String) {
+    /**
+     * A line reached the backlog. [counted] is the part that is new reading (see takesBack);
+     * [sourceId] what the line is in the game, when its source says (else its text stands in).
+     */
+    fun onLine(text: String, counted: String, sourceId: String? = null) {
         val now = System.currentTimeMillis()
         scope.launch {
             val t = trackerFor(nowPlaying.game.value) ?: return@launch
-            t.onLine(TextLine(text = counted, sourceId = Lines.sourceId(text)), now)
+            t.onLine(TextLine(text = counted, sourceId = sourceId ?: Lines.sourceId(text)), now)
             publish()
         }
     }
