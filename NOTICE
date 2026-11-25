@@ -139,7 +139,7 @@ License: GPL-3.0 (LICENSE at that commit; sfc/sfc.hpp states GPLv3)
 Yomikata's reader runtime (GPL-3.0-or-later)
 The yomikata repository beside Genkan's own on GitHub (third_party/yomikata's
 URL is relative to Genkan's)
-Pinned commit: 43fa322f62dd9b50a88b1f2598abe3a43c66f7e6
+Pinned commit: 03383f82686b29f12a1fb7262cb620610cd2349c
 
   A submodule at third_party/yomikata, unmodified; its runtime/ is built into
   libretrodroid's native library (a static library, Lua's names hidden) to

@@ -520,6 +520,13 @@ void LibretroDroid::setAudioEnabled(bool enabled) {
     audioEnabled = enabled;
 }
 
+bool LibretroDroid::pictureBounds(float out[4]) {
+    if (!video) return false;
+    auto &bounds = video->getLayout().getRelativeForegroundBounds();
+    for (int i = 0; i < 4; i++) out[i] = bounds[i];
+    return bounds[2] > bounds[0] && bounds[3] > bounds[1];
+}
+
 void LibretroDroid::setShaderConfig(ShaderManager::Config shaderConfig) {
     fragmentShaderConfig = std::move(shaderConfig);
     if (video) {

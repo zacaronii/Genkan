@@ -62,9 +62,12 @@ class GameOverlay @Inject constructor(
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
     init {
-        // What the player draws: OCR's lines while on, nothing while off.
+        // What the player draws while on: where a Yomikata script says its texts are, while any
+        // is up, else OCR's lines; nothing while off.
         scope.launch {
-            combine(enabled, ocr.screen, player.game) { on, screen, game -> Triple(on, screen, game) }
+            combine(enabled, ocr.screen, builtIn.scriptScreen, player.game) { on, screen, script, game ->
+                Triple(on, if (script.lines.isNotEmpty()) script else screen, game)
+            }
                 .distinctUntilChanged()
                 .collect { (on, screen, game) -> game?.let { send(it, if (on) screen else ScreenText.EMPTY) } }
         }

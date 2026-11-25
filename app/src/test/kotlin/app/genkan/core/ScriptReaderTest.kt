@@ -9,12 +9,12 @@ import org.junit.Test
 /** A script's events (made-up text) as the reader takes them. */
 class ScriptReaderTest {
 
-    private fun text(text: String, id: String, channel: String = "dialogue", speaker: String = "", window: String? = null) =
-        ScriptEvents.TEXT to """{"seq":1,"frame":1,"channel":"$channel","speaker":"$speaker","text":"$text","ruby":[],"id":"$id","meta":{}""" +
+    private fun text(text: String, id: String, channel: String = "dialogue", speaker: String = "", window: String? = null, seq: Int = 1) =
+        ScriptEvents.TEXT to """{"seq":$seq,"frame":1,"channel":"$channel","speaker":"$speaker","text":"$text","ruby":[],"id":"$id","meta":{}""" +
             (window?.let { ""","window":"$it"""" } ?: "") + "}"
 
-    private fun layout(window: String, closed: Boolean = false) =
-        ScriptEvents.LAYOUT to if (closed) """{"window":"$window","seq":1,"closed":true}""" else """{"window":"$window","seq":1,"space":[640,480],"glyphs":[]}"""
+    private fun layout(window: String, closed: Boolean = false, seq: Int = 1, glyphs: String = "[]") =
+        ScriptEvents.LAYOUT to if (closed) """{"window":"$window","seq":$seq,"closed":true}""" else """{"window":"$window","seq":$seq,"space":[608,480],"glyphs":$glyphs}"""
 
     private fun cursor(index: Int) = ScriptEvents.CURSOR to """{"index":$index,"horizontal":false}"""
     private val cursorClosed = ScriptEvents.CURSOR to """{"closed":true}"""
@@ -89,6 +89,29 @@ class ScriptReaderTest {
         reader.stateLoaded()
         assertNull(reader.choice)
         assertFalse(reader.windowOpen(ScriptReader.QUIET_MS))
+    }
+
+    @Test
+    fun `a layout is kept for its window's text, interface text's too, until the window closes or shows another`() {
+        val reader = ScriptReader()
+        var step = reader.read(listOf(text("あい", "d1", window = "w1", seq = 1), layout("w1", seq = 1, glyphs = "[[10,20,16,16],[26,20,16,16]]")), 0)
+        assertTrue(step.layoutsChanged)
+        val layout = reader.layouts.single()
+        assertEquals("あい", layout.text)
+        assertEquals(608f, layout.width)
+        assertEquals(26f, layout.glyphs[1]!![0])
+        // Interface text: drawn and looked up on the picture, never a backlog line.
+        step = reader.read(listOf(text("どうぐ", "m1", channel = "interface", window = "menu", seq = 2), layout("menu", seq = 2, glyphs = "[[0,0,8,8],[8,0,8,8],[16,0,8,8]]")), 1)
+        assertTrue(step.lines.isEmpty())
+        assertEquals(listOf("w1", "menu"), reader.layouts.map { it.window })
+        // A layout for an older text of the window is dropped.
+        reader.read(listOf(text("うえ", "d2", window = "w1", seq = 3), layout("w1", seq = 1, glyphs = "[[0,0,8,8],[8,0,8,8]]")), 2)
+        assertEquals(listOf("menu"), reader.layouts.map { it.window })
+        assertTrue(reader.read(listOf(layout("menu", closed = true, seq = 2)), 3).layoutsChanged)
+        assertTrue(reader.layouts.isEmpty())
+        reader.read(listOf(text("あい", "d3", window = "w1", seq = 4), layout("w1", seq = 4, glyphs = "[[0,0,8,8],[8,0,8,8]]")), 4)
+        reader.stateLoaded()
+        assertTrue(reader.layouts.isEmpty())
     }
 
     @Test
