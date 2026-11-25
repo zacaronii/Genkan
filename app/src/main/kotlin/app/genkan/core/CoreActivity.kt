@@ -93,6 +93,14 @@ class CoreActivity : ComponentActivity() {
     /** The reader's own work between frames since the last second's stats: the script, the ring's shots. */
     private val scriptNanos = java.util.concurrent.atomic.AtomicLong()
     private val ringNanos = java.util.concurrent.atomic.AtomicLong()
+    /** What the player does to keep the game at speed (all on, but for a debug build's tuning file). */
+    private val switches by lazy { TuningSwitches.read(this, app.genkan.BuildConfig.DEBUG) }
+    /** Performance hints for the frame's work: the emulation thread (known after its first frame) and the core's busy workers. */
+    @Volatile private var hints: PerformanceHints? = null
+    /** The core's own frame rate, once the game runs; the display is asked to keep to it. */
+    @Volatile private var contentRate = 0f
+    @Volatile private var emulationTid = 0
+    private var hintThreads: Set<Int> = emptySet()
     @Volatile private var capture: (() -> Boolean)? = null
     /** The frame the last capture took, beside its memory; what keptFrame() gives. */
     @Volatile private var captured: KeptFrame? = null
@@ -201,7 +209,18 @@ class CoreActivity : ComponentActivity() {
         lifecycleScope.launch { retroView.getGLRetroErrors().collect { code -> fail(PlayerMessages.loadError(code, def.displayName)) } }
         logOutputs()
         watchSound()
+        if (switches.frameRate) {
+            // A surface made again (after a pause) is asked again.
+            retroView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                override fun surfaceCreated(holder: android.view.SurfaceHolder) = keepFrameRate()
+                override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) = Unit
+            })
+        }
+        if (switches.gameState) gameState(loading = true)
         retroView.afterFrame = {
+            if (emulationTid == 0) emulationTid = Process.myTid()
+            hints?.report(GenkanTap.lastStepNanos())
             capture?.let { if (it()) capture = null }
             // A Yomikata script reads the game between two frames (its events, logged for now).
             if (scriptStateLoaded) {
@@ -837,6 +856,8 @@ class CoreActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        hints?.close()
+        hints = null
         deviceCallback?.let { getSystemService(AudioManager::class.java).unregisterAudioDeviceCallback(it) }
         deviceCallback = null
         lowerScreen?.dismiss()
@@ -849,9 +870,26 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
+    /** Asks the display to keep to the game's own rate (60 Hz, not the screen's 120), so frames are paced evenly. */
+    private fun keepFrameRate() {
+        val rate = contentRate.takeIf { it > 0f } ?: return
+        runCatching { retroView.holder.surface.takeIf { it.isValid }?.setFrameRate(rate, android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE) }
+            .onFailure { Log.w(STATS_TAG, "No frame rate: $it") }
+    }
+
+    /** Tells the system the game is loading (it may speed loads up) or being played. */
+    private fun gameState(loading: Boolean) {
+        runCatching {
+            getSystemService(android.app.GameManager::class.java)?.setGameState(
+                android.app.GameState(loading, if (loading) android.app.GameState.MODE_NONE else android.app.GameState.MODE_GAMEPLAY_INTERRUPTIBLE),
+            )
+        }
+    }
+
     /** Each second: how fast the game ran (logged in debug builds, with the CPU's clock and heat). */
     private suspend fun measure() {
         var last = System.nanoTime()
+        var loading = switches.gameState
         val threads = ThreadLoad()
         threads.sample(0)
         GenkanTap.frameStats()
@@ -859,14 +897,26 @@ class CoreActivity : ComponentActivity() {
             delay(STATS_EVERY_MS)
             val now = System.nanoTime()
             val v = GenkanTap.frameStats()
+            val busy = threads.sample(now - last)
+            hints?.let { h -> HintThreads.choose(emulationTid.takeIf { it != 0 }, busy, hintThreads)?.let { hintThreads = it; h.use(it) } }
             val row = stats.add(
                 PlayerStats.Sample(
                     runs = v[0], runNanos = v[1], longestNanos = v[2], p95Nanos = v[3], steps = v[4], contentFpsMilli = v[5],
                     elapsedNanos = now - last, scriptNanos = scriptNanos.getAndSet(0), ringNanos = ringNanos.getAndSet(0),
-                    busiest = threads.sample(now - last).firstOrNull(), gpuBusyPercent = DeviceHeat.gpuBusyPercent(), gpuMhz = DeviceHeat.gpuMhz(),
+                    busiest = busy.firstOrNull(), gpuBusyPercent = DeviceHeat.gpuBusyPercent(), gpuMhz = DeviceHeat.gpuMhz(),
                 ),
             )
             last = now
+            if (row != null && contentRate == 0f) {
+                // The first second the game ran: its rate is known now.
+                contentRate = (v[5] / 1000f).takeIf { it > 0f } ?: DEFAULT_RATE
+                if (switches.hints) hints = PerformanceHints(this, (1e9 / contentRate).toLong())
+                if (switches.frameRate) runOnUiThread { keepFrameRate() }
+            }
+            if (row != null && loading) {
+                loading = false
+                gameState(loading = false)
+            }
             if (row != null && app.genkan.BuildConfig.DEBUG) {
                 Log.i(STATS_TAG, "${row.line()} | cpu ${DeviceHeat.fastestMhz() ?: "?"} MHz, ${DeviceHeat.hottestCpuC() ?: "?"} °C" + if (stats.behind) " | behind" else "")
             }
@@ -877,6 +927,8 @@ class CoreActivity : ComponentActivity() {
         private const val TAG = "CoreActivity"
         private const val STATS_TAG = "PlayerStats"
         private const val STATS_EVERY_MS = 1_000L
+        /** The rate assumed when a core doesn't give its own. */
+        private const val DEFAULT_RATE = 60f
         const val EXTRA_ROM = "rom"
         const val EXTRA_ROM_ID = "rom_id"
         const val EXTRA_PLATFORM = "platform"

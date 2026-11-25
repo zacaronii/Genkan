@@ -10,6 +10,7 @@
 #ifndef LIBRETRODROID_FRAMESTATS_H
 #define LIBRETRODROID_FRAMESTATS_H
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -37,6 +38,9 @@ public:
     /** One step of the frame loop: [runs] retro_runs, then the frame shown. */
     void recordStep();
 
+    /** The retro_runs of the last step together, in ns: one frame's work, for a performance hint. */
+    int64_t lastStepNanos() const { return lastStep.load(std::memory_order_relaxed); }
+
     /**
      * Since the last take: runs, their total, longest and 95th-percentile time (ns), steps, and
      * the content rate in thousandths of a frame a second. Starts the next period.
@@ -50,6 +54,8 @@ private:
     std::vector<int64_t> runs;
     int64_t steps = 0;
     int64_t contentFpsMilli = 0;
+    int64_t stepNanos = 0;
+    std::atomic<int64_t> lastStep{0};
 };
 
 }
