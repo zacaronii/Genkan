@@ -22,6 +22,7 @@ void FrameStats::setContentFps(double fps) {
 
 void FrameStats::recordRun(int64_t nanos) {
     std::lock_guard<std::mutex> guard(lock);
+    stepNanos += nanos;
     // A second's worth with fast-forward to spare; a period nobody takes doesn't grow without end.
     if (runs.size() < 4096) runs.push_back(nanos);
 }
@@ -29,6 +30,8 @@ void FrameStats::recordRun(int64_t nanos) {
 void FrameStats::recordStep() {
     std::lock_guard<std::mutex> guard(lock);
     steps++;
+    lastStep.store(stepNanos, std::memory_order_relaxed);
+    stepNanos = 0;
 }
 
 std::vector<int64_t> FrameStats::take() {

@@ -105,6 +105,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.PLAYER_STATE_SIZE -n app.genkan/.debug.DictionaryDebugReceiver
  * (logs how large the built-in player's savestate is, unpacked and gzipped, as a snapshot would take it; the state is
  *  deleted at once)
+ *   adb shell am broadcast -a app.genkan.debug.TUNING -n app.genkan/.debug.DictionaryDebugReceiver --ez hints false --ez frame_rate true --ez game_state true --ez priority true
+ * (which of the player's speed aids are on from the next game started, to measure one without the others; any
+ *  left out are on; --ez reset true deletes the file, so all are on)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -338,6 +341,22 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         val ram = player.game.value?.core?.platforms?.firstNotNullOfOrNull { app.genkan.memory.MainRam.of(it) }
                         val scratch = File(context.filesDir, "yomikata-snapshots/frames.capture").apply { parentFile?.mkdirs() }
                         save("moment", ram?.let { player.moment(it.range, scratch)?.frame })
+                    }
+                    "app.genkan.debug.TUNING" -> {
+                        val file = File(context.filesDir, app.genkan.core.TuningSwitches.FILE)
+                        if (intent.getBooleanExtra("reset", false)) {
+                            file.delete()
+                            Log.i(TAG, "Tuning: all on")
+                        } else {
+                            val switches = app.genkan.core.TuningSwitches(
+                                hints = intent.getBooleanExtra("hints", true),
+                                frameRate = intent.getBooleanExtra("frame_rate", true),
+                                gameState = intent.getBooleanExtra("game_state", true),
+                                priority = intent.getBooleanExtra("priority", true),
+                            )
+                            file.writeText(switches.toJson())
+                            Log.i(TAG, "Tuning: $switches")
+                        }
                     }
                     "app.genkan.debug.PLAYER_STATE_SIZE" -> {
                         val file = File(context.filesDir, "yomikata-snapshots/state-size.state.gz").apply { parentFile?.mkdirs() }

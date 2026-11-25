@@ -21,6 +21,10 @@ using libretrodroid::LibretroDroid;
 
 extern "C" {
 
+JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_lastStepNanos(JNIEnv *, jclass) {
+    return FrameStats::getInstance().lastStepNanos();
+}
+
 JNIEXPORT jlongArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_frameStats(JNIEnv *env, jclass) {
     auto values = FrameStats::getInstance().take();
     jlongArray result = env->NewLongArray(static_cast<jsize>(values.size()));

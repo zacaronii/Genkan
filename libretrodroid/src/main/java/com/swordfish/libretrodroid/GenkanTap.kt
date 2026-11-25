@@ -133,6 +133,9 @@ object GenkanTap {
      */
     @JvmStatic external fun frameStats(): LongArray
 
+    /** The last frame's retro_runs together, in nanoseconds: its work, for a performance hint. */
+    @JvmStatic external fun lastStepNanos(): Long
+
     @JvmStatic private external fun memoryRegions(): LongArray
 
     @JvmStatic private external fun packedFrameSize(): Long
