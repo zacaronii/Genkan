@@ -852,6 +852,8 @@ class CoreActivity : ComponentActivity() {
     /** Each second: how fast the game ran (logged in debug builds, with the CPU's clock and heat). */
     private suspend fun measure() {
         var last = System.nanoTime()
+        val threads = ThreadLoad()
+        threads.sample(0)
         GenkanTap.frameStats()
         while (true) {
             delay(STATS_EVERY_MS)
@@ -861,6 +863,7 @@ class CoreActivity : ComponentActivity() {
                 PlayerStats.Sample(
                     runs = v[0], runNanos = v[1], longestNanos = v[2], p95Nanos = v[3], steps = v[4], contentFpsMilli = v[5],
                     elapsedNanos = now - last, scriptNanos = scriptNanos.getAndSet(0), ringNanos = ringNanos.getAndSet(0),
+                    busiest = threads.sample(now - last).firstOrNull(), gpuBusyPercent = DeviceHeat.gpuBusyPercent(), gpuMhz = DeviceHeat.gpuMhz(),
                 ),
             )
             last = now
