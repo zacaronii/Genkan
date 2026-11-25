@@ -126,6 +126,13 @@ object GenkanTap {
     @JvmName("scriptFrame")
     private external fun scriptFrameNative(frame: Long): Array<ByteArray>?
 
+    /**
+     * The core's frames since the last call, and a new period begun: retro_runs, their total,
+     * longest and 95th-percentile time in nanoseconds, frame-loop steps, and the core's rate in
+     * thousandths of a frame a second.
+     */
+    @JvmStatic external fun frameStats(): LongArray
+
     @JvmStatic private external fun memoryRegions(): LongArray
 
     @JvmStatic private external fun packedFrameSize(): Long

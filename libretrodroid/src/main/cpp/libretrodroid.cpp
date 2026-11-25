@@ -19,6 +19,7 @@
 
 #include <EGL/egl.h>
 
+#include <chrono>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +27,7 @@
 
 #include "libretrodroid.h"
 #include "genkantap.h"
+#include "framestats.h"
 #include "utils/libretrodroidexception.h"
 #include "log.h"
 #include "core.h"
@@ -458,8 +460,14 @@ void LibretroDroid::step() {
         frames = std::min(requestedFrames, 2u);
     }
 
-    for (size_t i = 0; i < frames * frameSpeed; i++)
+    for (size_t i = 0; i < frames * frameSpeed; i++) {
+        auto started = std::chrono::steady_clock::now();
         core->retro_run();
+        FrameStats::getInstance().recordRun(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count()
+        );
+    }
+    FrameStats::getInstance().recordStep();
 
     if (video && !video->rendersInVideoCallback()) {
         video->renderFrame();
@@ -627,6 +635,7 @@ void LibretroDroid::afterGameLoad() {
     core->retro_get_system_av_info(&system_av_info);
 
     fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
+    FrameStats::getInstance().setContentFps(system_av_info.timing.fps);
 
     double inputSampleRate = system_av_info.timing.sample_rate * fpsSync->getTimeStretchFactor();
 
