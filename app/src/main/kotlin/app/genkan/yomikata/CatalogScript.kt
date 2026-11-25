@@ -39,6 +39,8 @@ data class CatalogScript(
     inline fun files(file: (path: String, sha256: String) -> ByteArray): ScriptLookup = try {
         val source = file(path, sha256)
         ScriptLookup.Found(ScriptFiles(this, source, data.mapValues { (_, f) -> file(f.first, f.second) }))
+    } catch (e: IndexBehind) {
+        ScriptLookup.Failed(e.message ?: e.javaClass.simpleName, indexBehind = true)
     } catch (e: java.io.IOException) {
         ScriptLookup.Failed(e.message ?: e.javaClass.simpleName)
     }
@@ -72,5 +74,22 @@ class ScriptFiles(val script: CatalogScript, val source: ByteArray, val data: Ma
 sealed interface ScriptLookup {
     data class Found(val files: ScriptFiles) : ScriptLookup
     data object NotListed : ScriptLookup
-    data class Failed(val reason: String) : ScriptLookup
+    /** [indexBehind]: a file didn't match the index's hash, so the device's index may be older than the catalog. */
+    data class Failed(val reason: String, val indexBehind: Boolean = false) : ScriptLookup
+}
+
+/** A catalog file that doesn't match the hash the device's index gives for it: the file moved on since. */
+class IndexBehind(message: String) : java.io.IOException(message)
+
+/**
+ * When the device's copy of the index is fetched again before [YomikataCatalog]'s usual twelve
+ * hours: a game asked for an id it doesn't list (or a file it lists changed), and the copy is
+ * older than [STALE_MS], so a script or entry added since isn't missed for half a day. At most
+ * once every [STALE_MS], so an id the catalog really hasn't, or being offline, costs one request.
+ */
+object IndexAge {
+    const val STALE_MS = 10 * 60 * 1000L
+
+    fun fetchAgain(nowMs: Long, fetchedAtMs: Long, lastTriedMs: Long): Boolean =
+        nowMs - fetchedAtMs > STALE_MS && nowMs - lastTriedMs > STALE_MS
 }
