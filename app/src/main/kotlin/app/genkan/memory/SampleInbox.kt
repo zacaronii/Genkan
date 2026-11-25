@@ -44,9 +44,6 @@ data class InboxConfig(val address: String = "", val token: String = "") {
     /** Where RAM snapshots go. */
     val snapshotsEndpoint: String get() = endpoint("snapshots")
 
-    /** Where hook reports go (docs/hook-finder.md). */
-    val hooksEndpoint: String get() = endpoint("hooks")
-
     private fun endpoint(kind: String): String {
         val base = address.trim().removeSuffix("/")
         return (if ("://" in base) base else "https://$base") + "/api/$kind"
@@ -250,36 +247,6 @@ class SampleInbox @Inject constructor(
             if (response.code == 401) throw IOException("the inbox didn't accept the token")
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             JSONObject(response.body.string()).optJSONArray("games")?.length() ?: 0
-        }
-    }
-
-    /**
-     * Sends one hook report; says what the inbox did, for the finder's message. A report for the
-     * same address, register and disc version replaces the inbox's earlier one.
-     */
-    suspend fun sendHook(report: String): String = withContext(Dispatchers.IO) {
-        val config = config.first()
-        if (!config.configured) return@withContext "kept on this device (no Yomikata inbox set)"
-        val request = Request.Builder()
-            .url(config.hooksEndpoint)
-            .header("Authorization", "Bearer ${config.token.trim()}")
-            .post(report.toRequestBody(JSON))
-            .build()
-        try {
-            client.newCall(request).execute().use { response ->
-                val body = response.body.string()
-                when (response.code) {
-                    200 -> if (runCatching { JSONObject(body).optBoolean("replaced") }.getOrDefault(false)) {
-                        "sent to Yomikata (replacing the earlier report)"
-                    } else {
-                        "sent to Yomikata"
-                    }
-                    401 -> "kept on this device: the inbox didn't accept the token"
-                    else -> "kept on this device: the inbox refused it (HTTP ${response.code} ${runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()})".trimEnd()
-                }.also { Log.i(TAG, "Hook report: ${response.code} $body") }
-            }
-        } catch (e: IOException) {
-            "kept on this device: the inbox couldn't be reached (${e.message ?: e.javaClass.simpleName})"
         }
     }
 

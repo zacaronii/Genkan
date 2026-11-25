@@ -73,16 +73,16 @@ class PpssppText @Inject constructor(
 
     val enabled: Flow<Boolean> = context.ppssppStore.data.map { it[ENABLED] == true }
 
-    private val held = MutableStateFlow(false)
-
     private val _status = MutableStateFlow<PpssppStatus>(PpssppStatus.Off)
     val status: StateFlow<PpssppStatus> = _status.asStateFlow()
 
     fun start() {
         if (started) return
         started = true
+        // Hooks the hook finder used to save here, before the catalog carried them.
+        scope.launch { File(context.filesDir, "found-hooks").deleteRecursively() }
         scope.launch {
-            combine(enabled, nowPlaying.game, held) { on, game, hold -> on && game.platform == PSP && !hold }.collectLatest { active ->
+            combine(enabled, nowPlaying.game) { on, game -> on && game.platform == PSP }.collectLatest { active ->
                 if (!active) {
                     _status.value = PpssppStatus.Off
                     return@collectLatest
@@ -95,14 +95,6 @@ class PpssppText @Inject constructor(
                 }
             }
         }
-    }
-
-    /**
-     * Steps aside while [HookFinder] uses the debugger (only the newest connection gets log
-     * events), and connects again after, with any hook it found.
-     */
-    fun hold(on: Boolean) {
-        held.value = on
     }
 
     /** Turns the debugger on in PPSSPP's settings, remembering what was there; off puts it back. */
@@ -168,8 +160,8 @@ class PpssppText @Inject constructor(
                     gameId = id
                     yomikataIds.learned(nowPlaying.game.value.rommRomId, id)
                     hooks.clear()
-                    // The Yomikata catalog first, then a hook found on this device, then Genkan's own profiles.
-                    hooks += catalogHooks(id) ?: foundHooks(id) ?: PspHooks.byGameId[id].orEmpty()
+                    // The Yomikata catalog first, then Genkan's own profiles.
+                    hooks += catalogHooks(id) ?: PspHooks.byGameId[id].orEmpty()
                     if (hooks.isEmpty()) {
                         Log.i(TAG, "No hook profile for $id")
                         _status.value = PpssppStatus.NoProfile(id)
@@ -244,15 +236,6 @@ class PpssppText @Inject constructor(
             }
             PspHook(hook.address, hook.register, charset) { entry.clean(it, hook) }
         }.ifEmpty { null }
-    }
-
-    /** The hook [HookFinder] found for [id] on this device, until the catalog has one. */
-    private fun foundHooks(id: String): List<PspHook>? {
-        val file = File(context.filesDir, "found-hooks/$id.json").takeIf { it.isFile } ?: return null
-        val report = runCatching { org.json.JSONObject(file.readText()) }.getOrNull() ?: return null
-        val hook = runCatching { CatalogEntry.parseHook(report.getJSONObject("hook")) }.getOrNull() ?: return null
-        val entry = CatalogEntry(id, "psp", report.optString("title"), hook.charset, "found", hooks = listOf(hook))
-        return catalogHooks(entry)?.also { Log.i(TAG, "Using the hook found on this device for $id") }
     }
 
     /** The debugger's events, a null event first when it opens; completes when it closes. */

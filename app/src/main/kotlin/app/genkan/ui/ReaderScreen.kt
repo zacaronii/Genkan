@@ -60,7 +60,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.memory.MemoryTextStatus
-import app.genkan.ppsspp.HookFinderState
 import app.genkan.ppsspp.PpssppStatus
 import app.genkan.reader.HookStatus
 import app.genkan.reader.ReaderLineEntity
@@ -95,7 +94,6 @@ fun ReaderScreen(
     val recording by viewModel.audio.running.collectAsStateWithLifecycle()
     val reading by viewModel.stats.session.collectAsStateWithLifecycle()
     val ppsspp by viewModel.ppsspp.status.collectAsStateWithLifecycle()
-    val finder by viewModel.hookFinder.state.collectAsStateWithLifecycle()
     val marks by viewModel.lineMarks.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val layoutActive by viewModel.builtIn.layoutActive.collectAsStateWithLifecycle()
@@ -126,8 +124,6 @@ fun ReaderScreen(
             capturing = capturing,
             engine = engine.name,
             recording = recording,
-            finder = finder,
-            canFindHook = ppsspp is PpssppStatus.NoProfile,
             overlayAvailable = overlayAvailable,
             overlayOn = overlayOn,
             look = look?.let { (now, kept) -> now.label to kept },
@@ -147,9 +143,6 @@ fun ReaderScreen(
             ReaderAction.OCR_AREA -> viewModel.editArea()
             ReaderAction.OCR_ENGINE -> viewModel.ocr.nextEngine()
             ReaderAction.AUDIO -> onAskAudioPermission()
-            ReaderAction.FIND_HOOK -> viewModel.hookFinder.start()
-            ReaderAction.STOP_HOOK -> viewModel.hookFinder.stop()
-            ReaderAction.HOOK_DONE -> viewModel.hookFinder.dismiss()
             ReaderAction.OVERLAY -> viewModel.overlay.toggle()
             ReaderAction.LOOK -> viewModel.openLookPicker()
             ReaderAction.KEEP_LOOK -> viewModel.keepLook()
@@ -174,9 +167,6 @@ fun ReaderScreen(
                         (reading?.let { "${"%,d".format(it.characters)} chars, ${it.activeMs / 60_000} min  ·  " } ?: "") + when {
                             notice != null -> notice!!
                             manualNotice != null -> manualNotice!!
-                            finder is HookFinderState.Working -> (finder as HookFinderState.Working).message
-                            finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
-                            finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
                             ocrOn && !capturing -> "OCR: waiting for capture"
                             scriptActive -> "Text from the game's memory (Yomikata script)"
                             layoutActive -> "Text from the game's memory (Yomikata layout)"
@@ -193,7 +183,7 @@ fun ReaderScreen(
                             armsx == MemoryTextStatus.Searching -> "ARMSX2: looking for this line in memory…"
                             armsx == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from ARMSX2's memory"
                             ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
-                            ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR, or Find hook"
+                            ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR"
                             ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
                             ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
                                 (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "") +

@@ -32,10 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.manual.ManualFetch
-import app.genkan.ppsspp.HookFinderState
 
 /** What a row of the reader's menu does. */
-enum class ReaderAction { GAME, MANUAL, OCR_AREA, OCR_ENGINE, AUDIO, FIND_HOOK, STOP_HOOK, HOOK_DONE, OVERLAY, LOOK, KEEP_LOOK, THREAD, HEADPHONES }
+enum class ReaderAction { GAME, MANUAL, OCR_AREA, OCR_ENGINE, AUDIO, OVERLAY, LOOK, KEEP_LOOK, THREAD, HEADPHONES }
 
 /**
  * A row of the reader's menu: [state] shows on its right (on or off, the look or engine in use);
@@ -64,9 +63,6 @@ data class ReaderBarState(
     val capturing: Boolean = false,
     val engine: String = "",
     val recording: Boolean = false,
-    val finder: HookFinderState = HookFinderState.Idle,
-    /** A PSP game with no hook profile: the hook finder can look for one. */
-    val canFindHook: Boolean = false,
     val overlayAvailable: Boolean = false,
     val overlayOn: Boolean = false,
     /** The look on screen, and whether it's the game's own. */
@@ -101,12 +97,6 @@ object ReaderMenu {
         if (s.ocrOn) add(ReaderMenuItem(ReaderAction.OCR_ENGINE, "OCR engine", state = s.engine))
         // Sentence audio rides on the capture; it needs the recording permission once.
         if (s.capturing && !s.recording) add(ReaderMenuItem(ReaderAction.AUDIO, "Sentence audio", state = "Allow…"))
-        when (s.finder) {
-            is HookFinderState.Working -> add(ReaderMenuItem(ReaderAction.STOP_HOOK, "Finding the hook", state = "Stop"))
-            is HookFinderState.Found -> add(ReaderMenuItem(ReaderAction.HOOK_DONE, "Hook found", state = "OK", attention = true))
-            is HookFinderState.Failed -> add(ReaderMenuItem(ReaderAction.HOOK_DONE, "No hook found", state = "OK", attention = true))
-            HookFinderState.Idle -> if (s.canFindHook) add(ReaderMenuItem(ReaderAction.FIND_HOOK, "Find hook"))
-        }
         if (s.overlayAvailable) add(ReaderMenuItem(ReaderAction.OVERLAY, "Overlay", state = if (s.overlayOn) "On" else "Off"))
         s.look?.let { (label, kept) ->
             add(ReaderMenuItem(ReaderAction.LOOK, "Look", state = label, opens = true))

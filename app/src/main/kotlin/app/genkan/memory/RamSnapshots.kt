@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import app.genkan.BuildConfig
-import app.genkan.ppsspp.HookSearch
 import app.genkan.reader.NowPlaying
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONArray
@@ -121,7 +120,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         val key = layoutFree(line)
         if (lines.length() >= cap(id)) return false
         // OCR flickers on a line (よかった, よなった): one that close is the same line, maybe misread.
-        if ((0 until lines.length()).any { HookSearch.similarity(lines.getString(it), key) >= SAME_LINE }) return false
+        if ((0 until lines.length()).any { MemoryScan.similarity(lines.getString(it), key) >= SAME_LINE }) return false
         // A misread is a false constraint on the table: only a line OCR has read the same way
         // twice, or a long one (a story told line by line is read once each), where one is a small part.
         if (seen.add(key) && key.count { isJapanese(it) } < LONG_LINE) return false

@@ -63,7 +63,7 @@ data class CatalogEntry(
             )
         }
 
-        /** One hook, as an entry lists it and a hook report carries it. */
+        /** One hook, as an entry lists it. */
         fun parseHook(o: JSONObject) = Hook(
             address = o.getString("address").removePrefix("0x").removePrefix("0X").toLong(16),
             register = o.getString("register"),

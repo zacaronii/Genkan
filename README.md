@@ -94,11 +94,8 @@ a Yomitan dictionary popup. See
   text routine and reads each line from memory, with OCR off. PPSSPP 1.20 opens that debugger to
   the whole network while a game runs, hence off by default. Profiles must match the game's
   version: デュナミス15 1.01 doesn't match the published hook, so more profiles are still to come.
-  For a game without one, *Find hook* on the reader's bar (OCR on) finds it during play, by
-  Yomikata's method (`docs/hook-finder.md` there): it finds the line in memory, catches the code
-  that reads the next one, keeps the function handed each new line in a register for three lines
-  running, and checks it against OCR for eight more. Advance a line each time the bar asks. A
-  hook that matches is used from then on and sent to the Yomikata inbox, if one is set.
+  Hook profiles come from the Yomikata catalog (a few built into Genkan cover the same games
+  when no catalog is set up); a game without one is read with OCR.
 - **3DS text from Azahar (opt-in):** *3DS text from Azahar* (settings, *Reading text*) turns on
   Azahar's scripting RPC (`enable_rpc_server` in its `config.ini`; switching off restores Azahar's
   own value). The RPC only reads memory, so no profile is needed but OCR starts it off: the
