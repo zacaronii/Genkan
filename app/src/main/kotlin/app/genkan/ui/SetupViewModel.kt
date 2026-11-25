@@ -8,6 +8,7 @@ import app.genkan.library.LibrarySync
 import app.genkan.library.LibraryViewSettings
 import app.genkan.play.SessionTracker
 import app.genkan.privileged.Privileged
+import app.genkan.armsx2.ArmsxText
 import app.genkan.azahar.AzaharText
 import app.genkan.core.PlayerSettings
 import app.genkan.ppsspp.PpssppText
@@ -38,6 +39,7 @@ enum class SetupAction {
     SHIZUKU,
     PSP_DEBUGGER,
     AZAHAR_RPC,
+    ARMSX2_PINE,
     BUILT_IN_PLAYER,
     SCREEN_LOOK,
     INSERT_ANIMATION,
@@ -62,6 +64,7 @@ class SetupViewModel @Inject constructor(
     val privileged: Privileged,
     val ppssppText: PpssppText,
     val azaharText: AzaharText,
+    val armsxText: ArmsxText,
     val playerSettings: PlayerSettings,
     val librarySettings: LibraryViewSettings,
 ) : ViewModel() {
@@ -87,7 +90,7 @@ class SetupViewModel @Inject constructor(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
-        playerSettings.aOnRight,
+        playerSettings.aOnRight, armsxText.enabled,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -104,6 +107,7 @@ class SetupViewModel @Inject constructor(
             fullBox = v[11] as Boolean,
             prefetchManuals = v[12] as Boolean,
             faceAOnRight = v[13] as Boolean,
+            armsxPine = v[14] as Boolean,
         )
     }.stateIn(
         viewModelScope,

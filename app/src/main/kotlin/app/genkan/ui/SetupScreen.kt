@@ -71,6 +71,7 @@ data class SetupState(
     val fullBox: Boolean = true,
     val prefetchManuals: Boolean = true,
     val faceAOnRight: Boolean = false,
+    val armsxPine: Boolean = false,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -80,6 +81,7 @@ data class SetupState(
         SwitchKey.FULL_BOX -> fullBox
         SwitchKey.PREFETCH_MANUALS -> prefetchManuals
         SwitchKey.FACE_A_ON_RIGHT -> faceAOnRight
+        SwitchKey.ARMSX2_TEXT -> armsxPine
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
     }
@@ -345,6 +347,11 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         "PPSSPP's debugger is reachable from your network while a game runs."
     } else {
         "PSP games use OCR. Switching on opens PPSSPP's debugger to your network while a game runs."
+    }
+    SwitchKey.ARMSX2_TEXT -> if (state.armsxPine) {
+        "After OCR reads a line, Genkan follows it in memory. ARMSX2's PINE is on, for this device only, from its next game."
+    } else {
+        "PS2 games use OCR. Switching on turns on ARMSX2's PINE (it needs ARMSX2 2.9.6 or newer), reachable from this device only."
     }
     SwitchKey.AZAHAR_TEXT -> if (state.azaharRpc) {
         "After OCR reads a line, Genkan follows it in memory. Azahar's RPC server is reachable from your network while a game runs."

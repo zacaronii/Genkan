@@ -19,7 +19,7 @@ data class SettingsGroup(
 enum class SettingsInfo { ROMM_ACCOUNT, YOMIKATA_SAMPLES, SECOND_SCREEN, COMPANION }
 
 /** The on/off settings a switch row can show. */
-enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, FULL_BOX, PREFETCH_MANUALS, FACE_A_ON_RIGHT }
+enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, ARMSX2_TEXT, FULL_BOX, PREFETCH_MANUALS, FACE_A_ON_RIGHT }
 
 /** A row of a group, the only things the gamepad lands on. */
 sealed interface SettingsRow {
@@ -83,6 +83,7 @@ object SettingsGroups {
             rows = listOf(
                 SettingsRow.Switch("PSP text from PPSSPP", SwitchKey.PSP_TEXT, SetupAction.PSP_DEBUGGER),
                 SettingsRow.Switch("3DS text from Azahar", SwitchKey.AZAHAR_TEXT, SetupAction.AZAHAR_RPC),
+                SettingsRow.Switch("PS2 text from ARMSX2", SwitchKey.ARMSX2_TEXT, SetupAction.ARMSX2_PINE),
                 SettingsRow.Button("Yomikata", SetupAction.YOMIKATA),
             ),
         ),

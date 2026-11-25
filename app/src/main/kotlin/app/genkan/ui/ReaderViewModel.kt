@@ -13,6 +13,7 @@ import app.genkan.audio.GameAudioRecorder
 import app.genkan.capture.CaptureService
 import app.genkan.capture.ScreenCapture
 import app.genkan.stats.ReadingStats
+import app.genkan.armsx2.ArmsxText
 import app.genkan.azahar.AzaharText
 import app.genkan.core.GameOverlay
 import app.genkan.core.BuiltInText
@@ -87,6 +88,7 @@ class ReaderViewModel @Inject constructor(
     val ppsspp: PpssppText,
     val hookFinder: HookFinder,
     val azahar: AzaharText,
+    val armsx: ArmsxText,
     val builtIn: BuiltInText,
     private val words: WordStatuses,
     private val counts: LookupCounts,
