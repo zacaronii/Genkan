@@ -123,6 +123,7 @@ class PineTest {
     @Test
     fun `the game's facts and status`() {
         assertEquals(PineGame("SLPM-12345", "1a2b3c4d", "A made-up game", "1.01"), client.game())
+        assertEquals("SLPM-12345-1a2b3c4d", client.game()?.buildId)
         assertEquals(PineStatus.RUNNING, client.status())
         pine.game = false
         assertNull(client.game())

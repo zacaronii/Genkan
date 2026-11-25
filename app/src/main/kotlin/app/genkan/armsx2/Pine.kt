@@ -14,7 +14,10 @@ import java.nio.ByteOrder
 enum class PineStatus { RUNNING, PAUSED, SHUTDOWN }
 
 /** The game ARMSX2 is running, as PINE gives it: [serial] and [crc] name its build. */
-data class PineGame(val serial: String, val crc: String, val title: String, val version: String)
+data class PineGame(val serial: String, val crc: String, val title: String, val version: String) {
+    /** The build as Yomikata's PS2 scripts name it: the serial, then the disc's CRC (`SLPM-12345-1a2b3c4d`). */
+    val buildId: String get() = "$serial-${crc.lowercase()}"
+}
 
 /**
  * PINE, the IPC PCSX2 serves and ARMSX2 (2.9.6 on) serves on Android: TCP on 127.0.0.1, port
