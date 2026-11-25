@@ -5,6 +5,7 @@ import java.io.DataInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -12,6 +13,13 @@ import java.nio.ByteOrder
 
 /** What ARMSX2 says it's doing. */
 enum class PineStatus { RUNNING, PAUSED, SHUTDOWN }
+
+/**
+ * Why PINE gave no answer: nothing listens on its port (switched off in ARMSX2, or ARMSX2 isn't
+ * running), or it took the connection and stayed silent (it serves one client at a time, and
+ * another has it).
+ */
+enum class PineFailure { REFUSED, SILENT }
 
 /** The game ARMSX2 is running, as PINE gives it: [serial] and [crc] name its build. */
 data class PineGame(val serial: String, val crc: String, val title: String, val version: String) {
@@ -90,6 +98,10 @@ class PineClient(private val port: Int = Pine.PORT, private val timeoutMs: Int =
     private var input: DataInputStream? = null
     private var output: OutputStream? = null
 
+    /** Why the last message got no answer; null after one that did. */
+    @Volatile var lastFailure: PineFailure? = null
+        private set
+
     /** Round trips made, for the cost of following a game. */
     var roundTrips = 0L
         private set
@@ -148,8 +160,10 @@ class PineClient(private val port: Int = Pine.PORT, private val timeoutMs: Int =
                 output.flush()
                 val answer = readAnswer(input)
                 roundTrips++
+                lastFailure = null
                 return Pine.values(commands, answer)
             } catch (e: IOException) {
+                lastFailure = if (e is ConnectException) PineFailure.REFUSED else PineFailure.SILENT
                 // A connection ARMSX2 closed (it restarted, or the game did) gets one fresh try.
                 disconnect()
                 if (attempt == 1) return null

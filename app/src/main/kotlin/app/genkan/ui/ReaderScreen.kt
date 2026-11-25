@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.genkan.armsx2.ArmsxPine
 import app.genkan.manual.ManualFetch
 import app.genkan.words.WordMarkState
 import androidx.compose.ui.geometry.Offset
@@ -104,6 +105,7 @@ fun ReaderScreen(
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
     val armsx by viewModel.armsx.status.collectAsStateWithLifecycle()
     val armsxScript by viewModel.armsx.scriptActive.collectAsStateWithLifecycle()
+    val armsxPine by viewModel.armsx.pine.collectAsStateWithLifecycle()
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val notListed by viewModel.builtIn.notListed.collectAsStateWithLifecycle()
     val overlayOn by viewModel.overlay.enabled.collectAsStateWithLifecycle()
@@ -184,6 +186,8 @@ fun ReaderScreen(
                             azahar == MemoryTextStatus.Locked -> "Azahar text (following it in memory)"
                             azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
                             azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
+                            armsxPine == ArmsxPine.OFF -> "ARMSX2's PINE doesn't answer: turn it on in ARMSX2 ▸ Settings ▸ Global ▸ Advanced"
+                            armsxPine == ArmsxPine.BUSY -> "ARMSX2's PINE is busy: it serves one tool at a time, and another has it"
                             armsxScript -> "ARMSX2 text (Yomikata script)"
                             armsx == MemoryTextStatus.Locked -> "ARMSX2 text (following it in memory)"
                             armsx == MemoryTextStatus.Searching -> "ARMSX2: looking for this line in memory…"

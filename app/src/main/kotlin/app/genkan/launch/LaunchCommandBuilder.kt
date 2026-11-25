@@ -125,6 +125,13 @@ class LaunchCommandBuilder(
             return cues.firstOrNull() ?: files.maxByOrNull { it.length() }
         }
 
+        /** The first file [playlist] lists that is there, or null: disc 1, for an emulator that can't open a playlist. */
+        fun firstListed(playlist: File): File? = playlist.readLines().asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .map { File(it).takeIf(File::isAbsolute) ?: File(playlist.parentFile, it) }
+            .firstOrNull { it.isFile }
+
         /** "Disc 2", "Disk 2", "CD2": a disc's number in its file name. */
         private val DISC = Regex("""(?i)\b(?:disc|disk|cd)\s*(\d+)""")
 

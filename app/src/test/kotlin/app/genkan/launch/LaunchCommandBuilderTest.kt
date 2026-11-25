@@ -2,6 +2,7 @@ package app.genkan.launch
 
 import android.content.Intent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -121,6 +122,26 @@ class LaunchCommandBuilderTest {
         File(extras, "Aconcagua.chd").writeBytes(ByteArray(10))
         File(extras, "Aconcagua (Bonus).chd").writeBytes(ByteArray(20))
         assertEquals("Aconcagua (Bonus).chd", LaunchCommandBuilder.bootFileIn(extras)!!.name)
+    }
+
+    @Test
+    fun `an emulator that can't open a playlist gets the first disc it lists that is there`() {
+        val game = tmp.newFolder("Sample Game (Japan)")
+        File(game, "Sample Game (Japan) (Disc 1).chd").writeBytes(ByteArray(10))
+        File(game, "Sample Game (Japan) (Disc 2).chd").writeBytes(ByteArray(10))
+        val playlist = File(game, "Sample Game (Japan).m3u")
+        playlist.writeText("# discs\n\nMissing (Disc 0).chd\nSample Game (Japan) (Disc 1).chd\nSample Game (Japan) (Disc 2).chd\n")
+        assertEquals("Sample Game (Japan) (Disc 1).chd", LaunchCommandBuilder.firstListed(playlist)!!.name)
+
+        playlist.writeText("Missing (Disc 0).chd\n")
+        assertNull(LaunchCommandBuilder.firstListed(playlist))
+    }
+
+    @Test
+    fun `ARMSX2 is given discs, not playlists`() {
+        assertFalse(emulator("armsx2_refresh").opensPlaylists)
+        assertFalse(emulator("armsx2").opensPlaylists)
+        assertTrue(emulator("duckstation").opensPlaylists)
     }
 
     @Test

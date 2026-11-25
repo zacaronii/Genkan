@@ -53,6 +53,8 @@ data class EmulatorDef(
     val firmware: Map<String, String> = emptyMap(),
     /** The emulator's BIOS folder, relative to shared storage. */
     val firmwareDir: String? = null,
+    /** Opens an .m3u playlist; one that can't is given the playlist's first disc instead. */
+    val opensPlaylists: Boolean = true,
 )
 
 const val DUCKSTATION_PLAIN_PATH_MIN_BUILD = 10_000
@@ -105,12 +107,14 @@ object EmulatorCatalog {
             recipe = Recipe.Custom(activity = "com.armsx2.MainActivity"),
             method = LaunchMethod.SHELL,
             downloadUrl = "https://github.com/ARMSX2/ARMSX2/releases",
+            opensPlaylists = false,
         ),
         EmulatorDef(
             id = "armsx2", packageName = "come.nanodata.armsx2", displayName = "ARMSX2 (Play Store)",
             platforms = setOf("ps2"),
             recipe = Recipe.Custom(activity = "kr.co.iefriends.pcsx2.activities.MainActivity"),
             method = LaunchMethod.SHELL,
+            opensPlaylists = false,
         ),
         EmulatorDef(
             id = "dolphin", packageName = "org.dolphinemu.dolphinemu", displayName = "Dolphin",

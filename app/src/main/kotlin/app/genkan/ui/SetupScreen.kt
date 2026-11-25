@@ -349,9 +349,9 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         "PSP games use OCR. Switching on opens PPSSPP's debugger to your network while a game runs."
     }
     SwitchKey.ARMSX2_TEXT -> if (state.armsxPine) {
-        "After OCR reads a line, Genkan follows it in memory. ARMSX2's PINE is on, for this device only, from its next game."
+        "After OCR reads a line, Genkan follows it in memory. Turn on PINE once in ARMSX2 ▸ Settings ▸ Global ▸ Advanced; it listens on this device only."
     } else {
-        "PS2 games use OCR. Switching on turns on ARMSX2's PINE (it needs ARMSX2 2.9.6 or newer), reachable from this device only."
+        "PS2 games use OCR. Switching on reads ARMSX2's memory through its PINE (ARMSX2 2.9.6 or newer), which you turn on once in ARMSX2 ▸ Settings ▸ Global ▸ Advanced."
     }
     SwitchKey.AZAHAR_TEXT -> if (state.azaharRpc) {
         "After OCR reads a line, Genkan follows it in memory. Azahar's RPC server is reachable from your network while a game runs."
