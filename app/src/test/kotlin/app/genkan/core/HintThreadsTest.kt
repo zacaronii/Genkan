@@ -32,7 +32,7 @@ class HintThreadsTest {
 
     @Test
     fun `the tuning file turns parts off, and reads back what it wrote`() {
-        val off = TuningSwitches(hints = false, frameRate = true, gameState = false)
+        val off = TuningSwitches(hints = false, frameRate = true, gameState = false, priority = false)
         assertEquals(off, TuningSwitches.parse(off.toJson()))
         assertEquals(TuningSwitches(), TuningSwitches.parse("{}"))
     }

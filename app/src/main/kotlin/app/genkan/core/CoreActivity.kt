@@ -219,7 +219,10 @@ class CoreActivity : ComponentActivity() {
         }
         if (switches.gameState) gameState(loading = true)
         retroView.afterFrame = {
-            if (emulationTid == 0) emulationTid = Process.myTid()
+            if (emulationTid == 0) {
+                emulationTid = Process.myTid()
+                if (switches.priority) raisePriority()
+            }
             hints?.report(GenkanTap.lastStepNanos())
             capture?.let { if (it()) capture = null }
             // A Yomikata script reads the game between two frames (its events, logged for now).
@@ -868,6 +871,14 @@ class CoreActivity : ComponentActivity() {
             // The core can't be loaded again in this process: end it, and the reader sees the game go.
             if (isFinishing) Process.killProcess(Process.myPid())
         }
+    }
+
+    /** The emulation (GL) thread at urgent display priority, or display priority where that isn't allowed; on that thread. */
+    private fun raisePriority() {
+        val given = listOf(Process.THREAD_PRIORITY_URGENT_DISPLAY, Process.THREAD_PRIORITY_DISPLAY).firstOrNull {
+            runCatching { Process.setThreadPriority(it) }.isSuccess && Process.getThreadPriority(Process.myTid()) == it
+        }
+        Log.i(STATS_TAG, "Emulation thread ${Process.myTid()} priority ${given ?: "unchanged"}")
     }
 
     /** Asks the display to keep to the game's own rate (60 Hz, not the screen's 120), so frames are paced evenly. */

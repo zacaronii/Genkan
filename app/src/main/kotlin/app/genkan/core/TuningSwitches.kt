@@ -9,8 +9,15 @@ import java.io.File
  * (files/tuning-switches.json, written by the debug receiver) turns it off, so one can be
  * measured without the others.
  */
-data class TuningSwitches(val hints: Boolean = true, val frameRate: Boolean = true, val gameState: Boolean = true) {
-    fun toJson(): String = JSONObject().put("hints", hints).put("frame_rate", frameRate).put("game_state", gameState).toString()
+data class TuningSwitches(
+    val hints: Boolean = true,
+    val frameRate: Boolean = true,
+    val gameState: Boolean = true,
+    /** The emulation (GL) thread at display priority. */
+    val priority: Boolean = true,
+) {
+    fun toJson(): String =
+        JSONObject().put("hints", hints).put("frame_rate", frameRate).put("game_state", gameState).put("priority", priority).toString()
 
     companion object {
         const val FILE = "tuning-switches.json"
@@ -20,7 +27,9 @@ data class TuningSwitches(val hints: Boolean = true, val frameRate: Boolean = tr
 
         fun parse(json: String): TuningSwitches {
             val o = JSONObject(json)
-            return TuningSwitches(o.optBoolean("hints", true), o.optBoolean("frame_rate", true), o.optBoolean("game_state", true))
+            return TuningSwitches(
+                o.optBoolean("hints", true), o.optBoolean("frame_rate", true), o.optBoolean("game_state", true), o.optBoolean("priority", true),
+            )
         }
     }
 }
