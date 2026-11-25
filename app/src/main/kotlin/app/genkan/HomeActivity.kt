@@ -322,6 +322,9 @@ class HomeActivity : ComponentActivity() {
             SetupAction.AZAHAR_RPC -> lifecycleScope.launch {
                 viewModel.azaharText.setEnabled(!viewModel.azaharText.enabled.first())
             }
+            SetupAction.ARMSX2_PINE -> lifecycleScope.launch {
+                viewModel.armsxText.setEnabled(!viewModel.armsxText.enabled.first())
+            }
             SetupAction.FACE_A_ON_RIGHT -> lifecycleScope.launch {
                 viewModel.playerSettings.setAOnRight(!viewModel.playerSettings.aOnRight.first())
             }

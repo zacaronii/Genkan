@@ -102,6 +102,7 @@ fun ReaderScreen(
     val playing by viewModel.builtIn.playing.collectAsStateWithLifecycle()
     val sampling by viewModel.builtIn.sampling.collectAsStateWithLifecycle(false)
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
+    val armsx by viewModel.armsx.status.collectAsStateWithLifecycle()
     val builtIn by viewModel.builtIn.status.collectAsStateWithLifecycle()
     val notListed by viewModel.builtIn.notListed.collectAsStateWithLifecycle()
     val overlayOn by viewModel.overlay.enabled.collectAsStateWithLifecycle()
@@ -182,15 +183,20 @@ fun ReaderScreen(
                             azahar == MemoryTextStatus.Locked -> "Azahar text (following it in memory)"
                             azahar == MemoryTextStatus.Searching -> "Azahar: looking for this line in memory…"
                             azahar == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from Azahar's memory"
+                            armsx == MemoryTextStatus.Locked -> "ARMSX2 text (following it in memory)"
+                            armsx == MemoryTextStatus.Searching -> "ARMSX2: looking for this line in memory…"
+                            armsx == MemoryTextStatus.Script && ocrOn -> "OCR, with the exact text from ARMSX2's memory"
                             ppsspp is PpssppStatus.Hooked -> "PPSSPP text (${(ppsspp as PpssppStatus.Hooked).gameId})"
                             ppsspp is PpssppStatus.NoProfile -> "PPSSPP: no text hook for ${(ppsspp as PpssppStatus.NoProfile).gameId} yet; try OCR, or Find hook"
                             ppsspp == PpssppStatus.Waiting && !ocrOn -> "Waiting for PPSSPP's debugger"
                             ocrOn -> engine.name + (ocrMs?.let { "  ·  $it ms" } ?: "") + (if (recording) "  ·  audio" else "") +
                                 (if (azahar == MemoryTextStatus.NotFound) "  ·  not found in Azahar's memory" else "") +
+                                (if (armsx == MemoryTextStatus.NotFound) "  ·  not found in ARMSX2's memory" else "") +
                                 (if (builtIn == MemoryTextStatus.NotFound) "  ·  not found in the game's memory" else "") +
                                 (if (notListed) "  ·  no text reader for this game yet" else "")
                             notListed -> "No text reader for this game yet; OCR is available"
                             azahar == MemoryTextStatus.NeedsOcr -> "Azahar: turn OCR on once to find the text"
+                            armsx == MemoryTextStatus.NeedsOcr -> "ARMSX2: turn OCR on once to find the text"
                             builtIn == MemoryTextStatus.NeedsOcr -> "Built-in player: turn OCR on once to find the game's text"
                             else -> when (status) {
                                 is HookStatus.Connected -> "Texthooker connected"

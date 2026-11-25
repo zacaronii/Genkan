@@ -11,6 +11,7 @@ import app.genkan.words.HachidoriLink
 import app.genkan.words.WordMarks
 import app.genkan.stats.ReadingLogPusher
 import app.genkan.saves.SaveSync
+import app.genkan.armsx2.ArmsxText
 import app.genkan.azahar.AzaharText
 import app.genkan.core.BuiltInText
 import app.genkan.ppsspp.PpssppText
@@ -31,6 +32,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var saveSync: Lazy<SaveSync>
     @Inject lateinit var ppssppText: Lazy<PpssppText>
     @Inject lateinit var azaharText: Lazy<AzaharText>
+    @Inject lateinit var armsxText: Lazy<ArmsxText>
     @Inject lateinit var builtInText: Lazy<BuiltInText>
     @Inject lateinit var downloadQueue: Lazy<DownloadQueue>
     @Inject lateinit var wordMarks: Lazy<WordMarks>
@@ -52,6 +54,7 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         saveSync.get().start()
         ppssppText.get().start()
         azaharText.get().start()
+        armsxText.get().start()
         builtInText.get().start()
         // Which words Anki has, for the backlog's marks; asked again after each card reaches Anki.
         wordMarks.get().start(ankiMiner.get().deliveries)
