@@ -60,4 +60,6 @@ interface ICoreSession {
     String loadScript(String name, in byte[] source, in Bundle data, String gameId, String buildId) = 17;
     /** Stops running the script. */
     oneway void unloadScript() = 18;
+    /** The script feature level the player's reader runtime gives (yk_script_level). */
+    int scriptLevel() = 19;
 }

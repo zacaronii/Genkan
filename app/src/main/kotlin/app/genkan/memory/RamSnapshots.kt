@@ -149,9 +149,11 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         note: String,
         ocrUnavailable: Boolean = false,
         screenLine: (() -> String?)? = null,
+        /** The Yomikata script reading the game, when one is (its id, hash and last text's id). */
+        script: JSONObject? = null,
     ): Boolean {
         val ram = MainRam.of(game.platform) ?: return false
-        return write(memory, game, ram, id, line, emulator, extras, note, ocrUnavailable, screenLine)
+        return write(memory, game, ram, id, line, emulator, extras, note, ocrUnavailable, screenLine, script)
     }
 
     private fun write(
@@ -165,6 +167,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         note: String?,
         ocrUnavailable: Boolean = false,
         screenLine: (() -> String?)? = null,
+        script: JSONObject? = null,
     ): Boolean {
         dir.mkdirs()
         val name = "$id-${System.currentTimeMillis()}".replace(Regex("[^A-Za-z0-9_.-]"), "_")
@@ -196,6 +199,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("emulator", emulator)
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
+        script?.let { meta.put("script", it) }
         // Nothing read the screen: said so, rather than that no text was on it.
         if (text.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
         (if (moment != null) moment.vram else extras?.vram())?.let { video ->

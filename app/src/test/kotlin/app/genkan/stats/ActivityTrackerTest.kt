@@ -66,6 +66,16 @@ class ActivityTrackerTest {
         ActivityTracker(store, "GAME", dayOf)
 
     @Test
+    fun aScriptTextShownAgainIsNotCountedAgain() {
+        val tracker = tracker(FakeStore())
+        // A Yomikata script's id for the text (ScriptReader gives it as "script:<id>").
+        assertTrue(tracker.onLine(line("見張りの交代だ", "script:7f3a"), t0).counted)
+        val again = tracker.onLine(line("見張りの交代だ", "script:7f3a"), t0 + 30 * second)
+        assertTrue(again.reread)
+        assertFalse(again.counted)
+    }
+
+    @Test
     fun countsNarrativeAndTellsRereadingApart() {
         val store = FakeStore()
         val tracker = tracker(store)

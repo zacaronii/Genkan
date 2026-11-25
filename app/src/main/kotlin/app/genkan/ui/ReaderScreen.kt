@@ -97,6 +97,7 @@ fun ReaderScreen(
     val marks by viewModel.lineMarks.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val layoutActive by viewModel.builtIn.layoutActive.collectAsStateWithLifecycle()
+    val scriptActive by viewModel.builtIn.scriptActive.collectAsStateWithLifecycle()
     val playing by viewModel.builtIn.playing.collectAsStateWithLifecycle()
     val sampling by viewModel.builtIn.sampling.collectAsStateWithLifecycle(false)
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
@@ -172,6 +173,7 @@ fun ReaderScreen(
                             finder is HookFinderState.Found -> (finder as HookFinderState.Found).message
                             finder is HookFinderState.Failed -> (finder as HookFinderState.Failed).message
                             ocrOn && !capturing -> "OCR: waiting for capture"
+                            scriptActive -> "Text from the game's memory (Yomikata script)"
                             layoutActive -> "Text from the game's memory (Yomikata layout)"
                             builtIn == MemoryTextStatus.Locked -> "Text from the game's memory"
                             builtIn == MemoryTextStatus.Searching -> "Looking for this line in the game's memory…"

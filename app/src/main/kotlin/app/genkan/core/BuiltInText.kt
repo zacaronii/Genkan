@@ -71,6 +71,7 @@ class BuiltInText @Inject constructor(
                     // A game with its own codes: OCR's lines are put right from memory with its table.
                     ocr.corrector = ::tableLine
                     stopLayout()
+                    gameStartedMs = System.currentTimeMillis()
                     launch { watchLayout() }
                     text.follow(player::memory)
                 } else {
@@ -80,6 +81,16 @@ class BuiltInText @Inject constructor(
             }
         }
         scope.launch { player.layoutReads.collect(::onLayoutRead) }
+        scope.launch { player.scriptEvents.collect(::onScriptEvents) }
+        scope.launch {
+            player.scriptStateLoads.collect {
+                stateLoadedMs = System.currentTimeMillis()
+                scriptReader?.stateLoaded()
+                if (scriptReader != null) _choice.value = null
+                // A script that refused the game as it started may take it now (a PS1 past its BIOS).
+                refused?.let { (game, id) -> if (scriptReader == null) scope.launch { if (startScript(game, id)) stopJsonLayout() } }
+            }
+        }
     }
 
     /** A game is in the built-in player. */
@@ -132,23 +143,146 @@ class BuiltInText @Inject constructor(
             if (id != null) {
                 ids[game.key] = id
                 yomikataIds.learned(game.rommRomId, id)
-                val entry = entryOf(game.title, id) ?: return
-                // Genkan can't hash the executable: the release id's only listed version stands in.
-                // A version may have several layouts (one per chapter's program); the watch reads
-                // whichever's `when` is true.
-                val crc = cartridge?.headerCrc32?.takeIf { cartridge.id == id }
-                if (crc != null) {
-                    val version = Layouts.versionFor(entry, id, crc)
-                    Log.i(TAG, "${game.title} ($id): header CRC $crc, ${if (version != null) "its version" else "no version listed: the general layouts"}")
-                }
-                val layouts = Layouts.layoutsFor(entry, id, crc).ifEmpty { return }
-                val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
-                setLayoutActive(watching)
-                if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
+                // A Yomikata script first; the entry's layout when there's none, or it won't run.
+                fallback = Triple(game, id, cartridge)
+                if (startScript(game, id)) return
+                watchJsonLayout(game, id, cartridge)
                 return
             }
             delay(LAYOUT_RETRY_MS)
         }
+    }
+
+    /** The entry's JSON layout for [id], read by the player between frames, when the entry has one. */
+    private suspend fun watchJsonLayout(game: app.genkan.reader.NowPlaying.Game, id: String, cartridge: SnesCartridge.Id?) {
+        val entry = entryOf(game.title, id) ?: return
+        // Genkan can't hash the executable: the release id's only listed version stands in.
+        // A version may have several layouts (one per chapter's program); the watch reads
+        // whichever's `when` is true.
+        val crc = cartridge?.headerCrc32?.takeIf { cartridge.id == id }
+        if (crc != null) {
+            val version = Layouts.versionFor(entry, id, crc)
+            Log.i(TAG, "${game.title} ($id): header CRC $crc, ${if (version != null) "its version" else "no version listed: the general layouts"}")
+        }
+        val layouts = Layouts.layoutsFor(entry, id, crc).ifEmpty { return }
+        val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
+        setLayoutActive(watching)
+        if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
+    }
+
+    private val _scriptActive = MutableStateFlow(false)
+    /** The game's lines come from its Yomikata script. */
+    val scriptActive: StateFlow<Boolean> = _scriptActive.asStateFlow()
+
+    /** The running script's events, read into lines and the choice; null: no script runs. */
+    @Volatile private var scriptReader: ScriptReader? = null
+    /** The script running, for a snapshot's meta. */
+    @Volatile private var activeScript: app.genkan.yomikata.CatalogScript? = null
+    /** A game and id whose script refused it as another build: tried again after a savestate load. */
+    @Volatile private var refused: Pair<app.genkan.reader.NowPlaying.Game, String>? = null
+    @Volatile private var gameStartedMs = 0L
+    @Volatile private var stateLoadedMs: Long? = null
+    private var quietJob: kotlinx.coroutines.Job? = null
+    /** The game's id and cartridge, for falling back to its JSON layout when the script dies. */
+    private var fallback: Triple<app.genkan.reader.NowPlaying.Game, String, SnesCartridge.Id?>? = null
+
+    /**
+     * Runs the catalog's script for [id] in the player, when it has one Genkan can run; whether it
+     * runs. A script that refuses the game as another build is tried again (see [ScriptRetry]).
+     */
+    private suspend fun startScript(game: app.genkan.reader.NowPlaying.Game, id: String): Boolean {
+        val files = when (val found = withContext(Dispatchers.IO) { runCatching { catalog.script(id) }.getOrElse { app.genkan.yomikata.ScriptLookup.Failed(it.message ?: "") } }) {
+            is app.genkan.yomikata.ScriptLookup.Found -> found.files
+            app.genkan.yomikata.ScriptLookup.NotListed -> return false
+            is app.genkan.yomikata.ScriptLookup.Failed -> return false.also { Log.w(TAG, "${game.title} ($id): no script, ${found.reason}") }
+        }
+        val script = files.script
+        val ram = withContext(Dispatchers.IO) { player.memory()?.use { RamSnapshots.mainRamOf(it, game.platform) } }
+        val buildId = ram?.takeIf { game.platform == "ngc" }?.let { RamSnapshots.gcBuildId(it) }
+        val regions = if (withContext(Dispatchers.IO) { player.hasVideoRam() }) setOf("vram") else emptySet()
+        script.unusable(withContext(Dispatchers.IO) { player.scriptLevel() }, buildId, regions)?.let { why ->
+            Log.i(TAG, "${game.title} ($id): its script can't run here: $why")
+            return false
+        }
+        while (true) {
+            val error = withContext(Dispatchers.IO) { player.loadScript(script.path.substringAfterLast('/'), files.source, files.data, id, buildId) }
+            if (error == null) {
+                refused = null
+                beginScript(script)
+                Log.i(TAG, "${game.title} ($id): reading its Yomikata script")
+                return true
+            }
+            if (!ScriptRetry.again(error, System.currentTimeMillis(), gameStartedMs, stateLoadedMs)) {
+                if (ScriptRetry.anotherBuild(error)) refused = game to id
+                Log.i(TAG, "${game.title} ($id): its script didn't load: $error")
+                return false
+            }
+            delay(ScriptRetry.EVERY_MS)
+        }
+    }
+
+    private fun beginScript(script: app.genkan.yomikata.CatalogScript) {
+        val reader = ScriptReader()
+        scriptReader = reader
+        activeScript = script
+        _scriptActive.value = true
+        // OCR stays on for the screens the script doesn't read, out of the backlog while its windows are up.
+        quietJob?.cancel()
+        quietJob = scope.launch {
+            while (true) {
+                ocr.quiet = reader.windowOpen(System.currentTimeMillis())
+                delay(QUIET_CHECK_MS)
+            }
+        }
+    }
+
+    /** The script stopped (dead, or a new game): nothing of it carries over. */
+    private fun endScript() {
+        quietJob?.cancel()
+        quietJob = null
+        scriptReader = null
+        activeScript = null
+        _scriptActive.value = false
+        ocr.quiet = false
+    }
+
+    /** One frame's events from the script: its lines to the backlog, its choice on screen. */
+    private fun onScriptEvents(events: List<Pair<Int, String>>) {
+        val reader = scriptReader ?: return
+        val step = reader.read(events, System.currentTimeMillis())
+        step.lines.forEach(session::submit)
+        _choice.value = step.choice
+        if (step.dead) {
+            Log.w(TAG, "The script was switched off: the entry's layout, or OCR, from here")
+            player.unloadScript()
+            endScript()
+            _choice.value = null
+            fallback?.let { (game, id, cartridge) -> scope.launch { watchJsonLayout(game, id, cartridge) } }
+        }
+    }
+
+    /** The running script for a snapshot's meta: its id, hash, and the id of the last text it gave. */
+    private fun scriptMeta(): org.json.JSONObject? {
+        val script = activeScript ?: return null
+        return org.json.JSONObject().put("id", script.id).put("sha256", script.sha256)
+            .put("last_text_id", scriptReader?.lastTextId ?: org.json.JSONObject.NULL)
+    }
+
+    /** Debug builds: runs a script from a file as if the catalog had it for [gameId]; null when it runs, else why not. */
+    suspend fun debugScript(name: String, source: ByteArray, data: Map<String, ByteArray>, gameId: String, buildId: String?): String? {
+        val error = withContext(Dispatchers.IO) { player.loadScript(name, source, data, gameId, buildId) }
+        if (error == null) {
+            stopJsonLayout()
+            val sha = java.security.MessageDigest.getInstance("SHA-256").digest(source).joinToString("") { "%02x".format(it) }
+            beginScript(app.genkan.yomikata.CatalogScript(gameId, name, sha, "", listOfNotNull(buildId), emptyList(), 1, emptyMap()))
+        }
+        return error
+    }
+
+    /** A script took over from the entry's JSON layout. */
+    private fun stopJsonLayout() {
+        player.watchLayout(null, null)
+        _layoutActive.value = false
     }
 
     /**
@@ -192,8 +326,12 @@ class BuiltInText @Inject constructor(
         ocr.quiet = on
     }
 
-    /** A new game, or none: nothing of the last one's layout carries over. */
+    /** A new game, or none: nothing of the last one's layout or script carries over. */
     private fun stopLayout() {
+        endScript()
+        refused = null
+        fallback = null
+        stateLoadedMs = null
         setLayoutActive(false)
         lastRead = null
         _choice.value = null
@@ -236,7 +374,7 @@ class BuiltInText @Inject constructor(
             val screenLine: (() -> String?)? = if (unread) ({ kotlinx.coroutines.runBlocking { ocr.readNow() } }) else null
             val taken = snapshots.takeNow(
                 m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment",
-                ocrUnavailable = unread, screenLine = screenLine,
+                ocrUnavailable = unread, screenLine = screenLine, script = scriptMeta(),
             )
             if (taken) {
                 "Snapshot taken ($moment); it goes to Yomikata with the next sync"
@@ -354,6 +492,8 @@ class BuiltInText @Inject constructor(
         const val LAYOUT_TRIES = 20
         const val LAYOUT_RETRY_MS = 3_000L
         /** A message without a typed-out count or a waiting flag counts as done this long after it stops changing. */
+        /** How often OCR's quiet is set from the script's windows. */
+        const val QUIET_CHECK_MS = 250L
         const val LAYOUT_SETTLE_MS = 400L
         /** Codes either side of a found run that can still be its line. */
         const val MARGIN = 8

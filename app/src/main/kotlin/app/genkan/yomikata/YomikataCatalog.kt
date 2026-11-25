@@ -131,6 +131,40 @@ class YomikataCatalog @Inject constructor(
         EntryLookup.Found(entry)
     }
 
+    /**
+     * The script for a release [id], its source and data files fetched from the same repository as
+     * the entries (or the device's copy, while its hash matches the index's, and offline).
+     */
+    suspend fun script(id: String): ScriptLookup = lock.withLock {
+        index(force = false) ?: return@withLock if (_status.value == CatalogStatus.NotSet) ScriptLookup.NotListed
+            else ScriptLookup.Failed("the catalog's index can't be read")
+        val record = runCatching { JSONObject(File(dir, INDEX).readText()).optJSONObject("scripts")?.optJSONObject(id) }.getOrNull()
+            ?: return@withLock ScriptLookup.NotListed
+        val script = runCatching { CatalogScript.parse(id, record) }
+            .getOrElse { return@withLock ScriptLookup.Failed("its index record doesn't read: ${it.message}") }
+        try {
+            val source = file(script.path, script.sha256)
+            val data = script.data.mapValues { (_, file) -> file(file.first, file.second) }
+            ScriptLookup.Found(ScriptFiles(script, source, data))
+        } catch (e: IOException) {
+            ScriptLookup.Failed(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    /** A catalog file's bytes: the device's copy while it matches [sha256], else fetched again (and checked). */
+    private suspend fun file(path: String, sha256: String): ByteArray {
+        val cached = File(dir, path)
+        if (cached.isFile && sha256(cached.readBytes()) == sha256) return cached.readBytes()
+        val fetched = runCatching { fetchBytes(path) }.getOrElse {
+            Log.i(TAG, "Couldn't fetch $path: ${it.message}")
+            // Offline: the last copy, even one the index has moved past.
+            return cached.takeIf { f -> f.isFile }?.readBytes() ?: throw IOException("couldn't fetch $path: ${it.message}")
+        }
+        if (sha256(fetched) != sha256) throw IOException("$path doesn't match the index's hash")
+        saveBytes(path, fetched)
+        return fetched
+    }
+
     /** The catalog files at [paths] that are on the device, by path (a layout's table sets). */
     fun files(paths: Collection<String>): Map<String, String> =
         paths.mapNotNull { path -> File(dir, path).takeIf(File::isFile)?.let { path to it.readText() } }.toMap()
@@ -188,6 +222,28 @@ class YomikataCatalog @Inject constructor(
             else -> CatalogStatus.Ready(entries.length(), context.catalogStore.data.first()[FETCHED_AT] ?: 0L)
         }
         return entries
+    }
+
+    private suspend fun fetchBytes(path: String): ByteArray = withContext(Dispatchers.IO) {
+        val config = config.first()
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/${config.repo.trim()}/contents/$path")
+            .header("Accept", "application/vnd.github.raw+json")
+            .apply { if (config.token.isNotBlank()) header("Authorization", "Bearer ${config.token.trim()}") }
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code} for $path")
+            response.body.bytes()
+        }
+    }
+
+    private suspend fun saveBytes(path: String, bytes: ByteArray) = withContext(Dispatchers.IO) {
+        val file = File(dir, path)
+        if (!file.canonicalPath.startsWith(dir.canonicalPath + File.separator)) throw IOException("bad path $path")
+        file.parentFile?.mkdirs()
+        val tmp = File(file.path + ".tmp")
+        tmp.writeBytes(bytes)
+        tmp.renameTo(file)
     }
 
     private suspend fun fetch(path: String, given: CatalogConfig? = null): String = withContext(Dispatchers.IO) {

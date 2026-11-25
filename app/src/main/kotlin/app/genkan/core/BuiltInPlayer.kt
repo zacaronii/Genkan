@@ -67,6 +67,29 @@ class BuiltInPlayer @Inject constructor() {
         runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
     }
 
+    private val _scriptEvents = kotlinx.coroutines.flow.MutableSharedFlow<List<Pair<Int, String>>>(extraBufferCapacity = 64)
+    /** Each frame's events from the running Yomikata script (kind and JSON), in order. */
+    val scriptEvents: kotlinx.coroutines.flow.SharedFlow<List<Pair<Int, String>>> = _scriptEvents
+
+    fun scriptEvents(events: List<Pair<Int, String>>) {
+        _scriptEvents.tryEmit(events)
+    }
+
+    private val _scriptStateLoads = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    /** A savestate was loaded in the player, and its script told. */
+    val scriptStateLoads: kotlinx.coroutines.flow.SharedFlow<Unit> = _scriptStateLoads
+
+    fun scriptStateLoaded() {
+        _scriptStateLoads.tryEmit(Unit)
+    }
+
+    /** The script feature level the player's runtime gives; 0 without a game. */
+    fun scriptLevel(): Int = try {
+        _game.value?.session?.scriptLevel() ?: 0
+    } catch (e: RemoteException) {
+        0
+    }
+
     private val _overlayTaps = kotlinx.coroutines.flow.MutableSharedFlow<app.genkan.ocr.ScreenText.Hit>(extraBufferCapacity = 4)
     /** Taps on the overlay over the game: a line and the character in it, to look up. */
     val overlayTaps: kotlinx.coroutines.flow.SharedFlow<app.genkan.ocr.ScreenText.Hit> = _overlayTaps
@@ -235,6 +258,13 @@ class BuiltInPlayer @Inject constructor() {
      * The running game's video RAM (a PS1's 1024×512 16-bit frame buffer and texture pages,
      * where its font and the drawn text box are), or null when the core gives none.
      */
+    /** Whether the core gives out its video RAM (a script's `vram` region). */
+    fun hasVideoRam(): Boolean = try {
+        (_game.value?.session?.videoSize() ?: 0L) > 0L
+    } catch (e: RemoteException) {
+        false
+    }
+
     fun videoRam(): ByteArray? {
         val session = _game.value?.session ?: return null
         return try {

@@ -33,6 +33,14 @@ class CoreHostService : Service() {
             player.layoutRead(readJson)
         }
 
+        override fun scriptEvents(events: Array<String>) {
+            player.scriptEvents(events.map { line -> line.substringBefore('\t').toInt() to line.substringAfter('\t') })
+        }
+
+        override fun scriptStateLoaded() {
+            player.scriptStateLoaded()
+        }
+
         override fun overlayTap(text: String, offset: Int) {
             player.overlayTapped(text, offset)
         }

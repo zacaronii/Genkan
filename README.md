@@ -130,6 +130,10 @@ a Yomitan dictionary popup. See
   fine-grained read-only token under *Yomikata* in settings. Genkan fetches the index, then each
   entry when its game starts, and keeps a copy for offline use. PSP hooks come from the catalog
   first and from Genkan's own profiles otherwise.
+  Where the catalog has a script for a game in the built-in player (a Lua file that reads the game's
+  memory each frame), Genkan runs it beside the game: its lines go to the backlog with their speaker,
+  a choice shows its answers with the game's cursor, and text from menus never goes in. A game
+  without one uses its entry's layout, then OCR; OCR stays on for the screens a script doesn't read.
 - **Yomikata samples (opt-in):** some games (Moonlight Syndrome, Persona 2) keep their text in
   their own encoding, so memory search can't read it. With *Save samples while playing* on (under
   *Yomikata* in settings), each line OCR reads in the built-in player that isn't in memory as standard text is looked

@@ -38,6 +38,11 @@ data class HookMessage(
     val takesBack: String? = null,
     /** Who says the line, when the source knows (a Yomikata layout's speaker). */
     val speaker: String? = null,
+    /**
+     * What the line is in the game, the same each time it's shown (a Yomikata script's text id):
+     * reading stats count it once, and a repeat as reread. Null: the line's own text stands in.
+     */
+    val sourceId: String? = null,
 ) {
     companion object {
         fun parse(frame: String): HookMessage? {
