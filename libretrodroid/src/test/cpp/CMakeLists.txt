@@ -12,3 +12,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/yomikata/ru
 add_executable(script_host_test script_host_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/scripthost.cpp)
 target_include_directories(script_host_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
 target_link_libraries(script_host_test PRIVATE yomikata_reader)
+
+# The part of a hardware core's framebuffer its frame filled (src/main/cpp/renderers/framefill.h).
+add_executable(frame_fill_test frame_fill_test.cpp)
+target_include_directories(frame_fill_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/renderers)

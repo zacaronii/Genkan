@@ -16,6 +16,7 @@
  */
 
 #include "framebufferrenderer.h"
+#include "../framefill.h"
 #include "es3utils.h"
 #include "../../log.h"
 
@@ -78,6 +79,10 @@ void FramebufferRenderer::updateRenderedResolution(unsigned int width, unsigned 
         this->height = height;
         isDirty = true;
     }
+}
+
+std::pair<float, float> FramebufferRenderer::filledFraction() {
+    return libretrodroid::filledFraction(lastFrameSize.first, lastFrameSize.second, width, height);
 }
 
 bool FramebufferRenderer::rendersInVideoCallback() {

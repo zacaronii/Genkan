@@ -275,6 +275,15 @@ void Video::renderFrame() {
         glEnableVertexAttribArray(shader.gvPositionHandle);
 
         auto coordinates = videoLayout.getTextureCoordinates();
+        // Genkan: the first pass reads the core's frame, which may fill only part of its texture
+        // (from the origin): only that part is drawn, so the picture isn't squeezed to one side.
+        if (i == 0) {
+            auto filled = renderer->filledFraction();
+            for (size_t c = 0; c < coordinates.size(); c += 2) {
+                coordinates[c] *= filled.first;
+                coordinates[c + 1] *= filled.second;
+            }
+        }
         glVertexAttribPointer(shader.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
         glEnableVertexAttribArray(shader.gvCoordinateHandle);
 
