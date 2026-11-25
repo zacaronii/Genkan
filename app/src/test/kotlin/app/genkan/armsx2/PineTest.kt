@@ -144,7 +144,33 @@ class PineTest {
     fun `nothing listening is null, not an error`() {
         val port = pine.server.localPort
         pine.close()
-        assertNull(PineClient(port, timeoutMs = 300).use { it.status() })
+        PineClient(port, timeoutMs = 300).use {
+            assertNull(it.status())
+            assertEquals(PineFailure.REFUSED, it.lastFailure)
+        }
+    }
+
+    @Test
+    fun `a server that takes the connection and stays silent is told apart`() {
+        // PINE serves one client at a time: a second one is accepted by the system and never answered.
+        val silent = ServerSocket(0, 5, InetAddress.getByName("127.0.0.1"))
+        silent.use {
+            PineClient(it.localPort, timeoutMs = 300).use { client ->
+                assertNull(client.status())
+                assertEquals(PineFailure.SILENT, client.lastFailure)
+            }
+        }
+        assertNull(client.lastFailure)
+        assertEquals(PineStatus.RUNNING, client.status())
+        assertNull(client.lastFailure)
+    }
+
+    @Test
+    fun `PINE is only called off or busy after a few polls without an answer`() {
+        assertEquals(ArmsxPine.ANSWERS, ArmsxPine.of(ArmsxPine.UNKNOWN, answered = true, failure = null, misses = 0))
+        assertEquals(ArmsxPine.ANSWERS, ArmsxPine.of(ArmsxPine.ANSWERS, answered = false, failure = PineFailure.REFUSED, misses = 1))
+        assertEquals(ArmsxPine.OFF, ArmsxPine.of(ArmsxPine.ANSWERS, answered = false, failure = PineFailure.REFUSED, misses = ArmsxPine.GRACE))
+        assertEquals(ArmsxPine.BUSY, ArmsxPine.of(ArmsxPine.UNKNOWN, answered = false, failure = PineFailure.SILENT, misses = ArmsxPine.GRACE))
     }
 
     @Test

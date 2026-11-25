@@ -1,7 +1,6 @@
 package app.genkan.armsx2
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -14,7 +13,6 @@ import app.genkan.memory.MemorySource
 import app.genkan.memory.MemoryText
 import app.genkan.memory.MemoryTextStatus
 import app.genkan.ocr.OcrReader
-import app.genkan.privileged.Privileged
 import app.genkan.reader.NowPlaying
 import app.genkan.reader.ReaderSession
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,7 +28,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,9 +36,9 @@ private val Context.armsxStore: DataStore<Preferences> by preferencesDataStore(n
 /**
  * PS2 text from ARMSX2's memory, through PINE (PineClient). Like Azahar's RPC, PINE can only read
  * memory, so the text is found and followed by [MemoryText], with OCR alongside. PINE is off in
- * ARMSX2 by default (it listens on the device only), so Genkan turns it on in ARMSX2's settings
- * file when the player asks (setting), and puts ARMSX2's own value back after. ARMSX2 reads the
- * switch as a game starts. A game the Yomikata catalog has a script for is read by that script
+ * ARMSX2 by default (it listens on the device only) and is switched on in ARMSX2 itself, which
+ * keeps its settings to itself and rewrites its settings file as it starts: Genkan only says
+ * whether it answers ([pine]). A game the Yomikata catalog has a script for is read by that script
  * instead, run here (AppScriptHost) on a clock of its own ([PineTicks]).
  */
 @Singleton
@@ -50,7 +47,6 @@ class ArmsxText @Inject constructor(
     private val session: ReaderSession,
     private val nowPlaying: NowPlaying,
     private val ocr: OcrReader,
-    private val privileged: Privileged,
     private val catalog: app.genkan.yomikata.YomikataCatalog,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -67,31 +63,19 @@ class ArmsxText @Inject constructor(
     /** The game's text comes from its Yomikata script. */
     val scriptActive: StateFlow<Boolean> = _scriptActive
 
+    private val _pine = kotlinx.coroutines.flow.MutableStateFlow(ArmsxPine.UNKNOWN)
+    /** Whether ARMSX2's PINE answers while a PS2 game is followed. */
+    val pine: StateFlow<ArmsxPine> = _pine
+
     val enabled: Flow<Boolean> = context.armsxStore.data.map { it[ENABLED] == true }
 
-    /** Turns PINE on in ARMSX2's settings, remembering what was there; off puts it back. */
-    suspend fun setEnabled(on: Boolean) = withContext(Dispatchers.IO) {
-        val saved = context.armsxStore.data.first()[SAVED_PINE]
-        val edited = editSettings { text ->
-            if (on) {
-                val port = ArmsxIni.port(text)
-                context.armsxStore.edit {
-                    if (it[SAVED_PINE] == null) it[SAVED_PINE] = ArmsxIni.pineValue(text)
-                    it[PORT] = port
-                }
-                ArmsxIni.withPine(text)
-            } else {
-                ArmsxIni.restored(text, saved.orEmpty())
-            }
+    suspend fun setEnabled(on: Boolean) {
+        context.armsxStore.edit {
+            it[ENABLED] = on
+            // Left by builds that edited ARMSX2's settings file.
+            it.remove(OLD_SAVED_PINE)
+            it.remove(OLD_PORT)
         }
-        if (!edited) Log.w(TAG, "No ARMSX2 settings changed: start ARMSX2 once first (and Shizuku, for its own folder)")
-        else if (!on) context.armsxStore.edit { it.remove(SAVED_PINE) }
-        context.armsxStore.edit { it[ENABLED] = on }
-    }
-
-    /** Puts the setting back before a PS2 game starts, in case ARMSX2 rewrote its settings. */
-    suspend fun beforeLaunch() {
-        if (enabled.first()) setEnabled(true)
     }
 
     fun start() {
@@ -100,9 +84,10 @@ class ArmsxText @Inject constructor(
         scope.launch {
             combine(enabled, nowPlaying.game) { on, game -> on && game.platform == PS2 }.collectLatest { active ->
                 if (active) {
-                    follow(context.armsxStore.data.first()[PORT] ?: Pine.PORT)
+                    follow()
                 } else {
                     text.off()
+                    _pine.value = ArmsxPine.UNKNOWN
                     client?.close()
                     client = null
                 }
@@ -114,16 +99,23 @@ class ArmsxText @Inject constructor(
      * Waits for ARMSX2 to run a game, then reads it by its script while the catalog has one it can
      * run (again for each game that follows), else follows its text through [MemoryText].
      */
-    private suspend fun follow(port: Int) {
-        val client = client ?: PineClient(port).also { client = it }
+    private suspend fun follow() {
+        val client = client ?: PineClient().also { client = it }
+        var misses = 0
         while (true) {
-            val game = withContext(Dispatchers.IO) { client.takeIf { it.status() == PineStatus.RUNNING }?.game() }
+            val game = withContext(Dispatchers.IO) {
+                val status = client.status()
+                misses = if (status == null) misses + 1 else 0
+                _pine.value = ArmsxPine.of(_pine.value, status != null, client.lastFailure, misses)
+                // PINE serves one client at a time: with no game to read, the connection is let go.
+                if (status == PineStatus.RUNNING) client.game() else null.also { client.close() }
+            }
             if (game == null) {
                 kotlinx.coroutines.delay(WAIT_MS)
                 continue
             }
             if (runScript(client, game)) continue
-            text.follow { openGame(port) }
+            text.follow { openGame() }
             return
         }
     }
@@ -200,44 +192,13 @@ class ArmsxText @Inject constructor(
     }
 
     /** The game's memory through PINE, while ARMSX2 is running one; each open is a fresh tick. */
-    private fun openGame(port: Int): MemorySource? {
-        val client = client ?: PineClient(port).also { client = it }
-        if (client.status() != PineStatus.RUNNING) return null
+    private fun openGame(): MemorySource? {
+        val client = client ?: PineClient().also { client = it }
+        if (client.status() != PineStatus.RUNNING) {
+            client.close()
+            return null
+        }
         return PineMemory(client)
-    }
-
-    /**
-     * Rewrites ARMSX2's settings file with [change]: in a folder under shared storage it was set
-     * up with, else in its own Android/data folder through Shizuku. False when there is none yet
-     * (ARMSX2 writes it when it first starts) or it can't be reached.
-     */
-    private suspend fun editSettings(change: suspend (String) -> String): Boolean {
-        val storage = Environment.getExternalStorageDirectory()
-        sharedSettings(storage)?.let { file ->
-            file.writeText(change(file.readText()))
-            Log.i(TAG, "Changed ${file.path}")
-            return true
-        }
-        val helper = privileged.files() ?: return false
-        val own = "${storage.path}/${ArmsxIni.OWN_FOLDER}"
-        if (helper.list(own).none { it.substringBefore('\t') == ArmsxIni.FILE }) return false
-        val stage = File(storage, "Genkan/.staging/armsx2").apply { mkdirs() }
-        try {
-            val copy = File(stage, ArmsxIni.FILE)
-            if (!helper.copy("$own/${ArmsxIni.FILE}", copy.path)) return false
-            copy.writeText(change(copy.readText()))
-            return helper.copy(copy.path, "$own/${ArmsxIni.FILE}").also { if (it) Log.i(TAG, "Changed $own/${ArmsxIni.FILE}") }
-        } finally {
-            stage.deleteRecursively()
-        }
-    }
-
-    /** ARMSX2's settings in a folder under shared storage (its setup wizard's choice), at most two folders down. */
-    private fun sharedSettings(storage: File): File? {
-        fun at(dir: File) = File(dir, ArmsxIni.FILE).takeIf { it.isFile }
-        val top = storage.listFiles { f -> f.isDirectory && f.name != "Android" && !f.name.startsWith(".") }.orEmpty()
-        return top.firstNotNullOfOrNull(::at)
-            ?: top.asSequence().flatMap { it.listFiles { f -> f.isDirectory }.orEmpty().asSequence() }.firstNotNullOfOrNull(::at)
     }
 
     private companion object {
@@ -252,7 +213,28 @@ class ArmsxText @Inject constructor(
         /** How often to look for a game in ARMSX2 while it runs none. */
         const val WAIT_MS = 2_000L
         val ENABLED = booleanPreferencesKey("enabled")
-        val SAVED_PINE = stringPreferencesKey("saved_pine")
-        val PORT = intPreferencesKey("port")
+        val OLD_SAVED_PINE = stringPreferencesKey("saved_pine")
+        val OLD_PORT = intPreferencesKey("port")
+    }
+}
+
+/** Whether ARMSX2's PINE answers: not known yet, it does, it's switched off, or another client has it. */
+enum class ArmsxPine {
+    UNKNOWN, ANSWERS, OFF, BUSY;
+
+    companion object {
+        /** Polls without an answer before saying so: ARMSX2 takes a moment to start listening. */
+        const val GRACE = 2
+
+        /**
+         * The state after [current], from a poll that [answered] or not, the last [failure], and
+         * [misses] polls in a row without an answer.
+         */
+        fun of(current: ArmsxPine, answered: Boolean, failure: PineFailure?, misses: Int): ArmsxPine = when {
+            answered -> ANSWERS
+            misses < GRACE -> current
+            failure == PineFailure.SILENT -> BUSY
+            else -> OFF
+        }
     }
 }

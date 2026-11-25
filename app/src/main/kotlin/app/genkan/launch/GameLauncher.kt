@@ -107,11 +107,12 @@ class GameLauncher @Inject constructor(
             ?: return@withContext LaunchPlan.Unavailable(LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug)))
 
         withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(emulator, game.platformId) }
-        val command = builder.build(emulator, rom, game.platformSlug, version)
+        val boot = if (!emulator.opensPlaylists && rom.extension.equals("m3u", true)) LaunchCommandBuilder.firstListed(rom) ?: rom else rom
+        val command = builder.build(emulator, boot, game.platformSlug, version)
             ?: return@withContext LaunchPlan.Unavailable(LaunchResult.Failed("${emulator.displayName} has no core set for ${game.platformSlug}"))
         LaunchPlan.Ready(builtIn = false) {
             withContext(Dispatchers.IO) {
-                Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${rom.name}")
+                Log.i(TAG, "Launching ${game.name} in ${emulator.displayName} (${command.method}): ${boot.name}")
                 try {
                     command.grantReads(context)
                     if (command.method == LaunchMethod.INTENT || !launchViaShell(command)) {

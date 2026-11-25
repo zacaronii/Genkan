@@ -41,7 +41,6 @@ import app.genkan.library.MediaKind
 import kotlinx.coroutines.flow.first
 import app.genkan.library.FocusedGame
 import app.genkan.saves.SaveSync
-import app.genkan.armsx2.ArmsxText
 import app.genkan.azahar.AzaharText
 import app.genkan.ppsspp.PpssppText
 import kotlinx.coroutines.withTimeoutOrNull
@@ -102,7 +101,6 @@ class LibraryViewModel @Inject constructor(
     private val saveSync: SaveSync,
     private val ppssppText: PpssppText,
     private val azaharText: AzaharText,
-    private val armsxText: ArmsxText,
     private val artworkWarmer: ArtworkWarmer,
     private val viewSettings: LibraryViewSettings,
     private val launcherPresence: LauncherPresence,
@@ -512,7 +510,6 @@ class LibraryViewModel @Inject constructor(
                     saveSync.beforeLaunch(game.id, game.platformSlug)
                     if (game.platformSlug == "psp") ppssppText.beforeLaunch()
                     if (game.platformSlug == "3ds") azaharText.beforeLaunch()
-                    if (game.platformSlug == "ps2") armsxText.beforeLaunch()
                 }
                 val result = when (val plan = gameLauncher.prepare(game, download)) {
                     is LaunchPlan.Unavailable -> plan.result
