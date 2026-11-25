@@ -24,6 +24,13 @@ data class PspHook(
 object PspHooks {
     val SHIFT_JIS: Charset = Charset.forName("Shift_JIS")
 
+    /**
+     * Profiles from before the Yomikata catalog carried hooks, used only when it gives none for
+     * the game: no catalog set up, or no copy of it on the device. They cover NPJH50127,
+     * NPJH50515, NPJH50631, ULJM05338/05339, ULJM05603, ULJM06119 and ULJM06232/06233, all of which
+     * the catalog now lists with hooks (the second ids of a pair as aliases); they can go once
+     * Genkan always has a catalog.
+     */
     val byGameId: Map<String, List<PspHook>> = mapOf(
         // デュナミス15 (5pb./Kaleido): ruby as [reading]base, colour tags %0#rrggbbaa; ... %0#;
         "ULJM06119" to listOf(PspHook(0x0891D72CL, "a0", Charsets.UTF_8, ::dunamis15)),

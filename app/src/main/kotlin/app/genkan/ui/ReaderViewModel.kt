@@ -21,7 +21,6 @@ import app.genkan.core.BuiltInPlayer
 import app.genkan.core.ScreenLook
 import app.genkan.core.ScreenLooks
 import app.genkan.manual.PlayManual
-import app.genkan.ppsspp.HookFinder
 import app.genkan.ppsspp.PpssppText
 import app.genkan.dictionary.Dictionaries
 import app.genkan.ocr.OcrReader
@@ -86,7 +85,6 @@ class ReaderViewModel @Inject constructor(
     val audio: GameAudioRecorder,
     val stats: ReadingStats,
     val ppsspp: PpssppText,
-    val hookFinder: HookFinder,
     val azahar: AzaharText,
     val armsx: ArmsxText,
     val builtIn: BuiltInText,
