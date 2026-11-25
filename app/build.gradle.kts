@@ -423,14 +423,17 @@ val downloadCoreAssets = tasks.register<DownloadPinnedFiles>("downloadCoreAssets
 }
 
 /**
- * Host tests of the native lookup (src/test/cpp): hoshidicts and the test built for this machine
- * with the SDK's CMake (the version the app's native build uses), then run. The unit tests wait
- * for it, so CI and the local check run it.
+ * A native host test: [testSources]' CMake project built for this machine with the SDK's CMake
+ * (the version the app's native build uses), then its [target] run. The unit tests wait for it,
+ * so CI and the local check run it.
  */
-abstract class NativeLookupTest : DefaultTask() {
+abstract class NativeHostTest : DefaultTask() {
     @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val testSources: DirectoryProperty
-    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sorting: RegularFileProperty
-    @get:Input abstract val hoshidictsCommit: Property<String>
+    /** Further sources the test builds from (the code under test). */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
+    /** The commits of submodules it builds, so a new pin runs it again. */
+    @get:Input abstract val commits: ListProperty<String>
+    @get:Input abstract val target: Property<String>
     @get:Internal abstract val cmakeDir: DirectoryProperty
     @get:Internal abstract val buildDir: DirectoryProperty
     @get:OutputFile abstract val passed: RegularFileProperty
@@ -448,20 +451,37 @@ abstract class NativeLookupTest : DefaultTask() {
                 "-DCMAKE_MAKE_PROGRAM=${File(bin, "ninja").path}", "-DCMAKE_BUILD_TYPE=Release",
             )
         }
-        exec.exec { commandLine(cmake.path, "--build", build, "--target", "frequency_sorting_test") }
-        exec.exec { commandLine(File(build, "frequency_sorting_test").path) }
+        exec.exec { commandLine(cmake.path, "--build", build, "--target", target.get()) }
+        exec.exec { commandLine(File(build, target.get()).path) }
         passed.get().asFile.writeText("passed\n")
     }
 }
 
-val nativeLookupTest = tasks.register<NativeLookupTest>("nativeLookupTest") {
+fun submoduleCommit(path: String) =
+    providers.exec { commandLine("git", "-C", rootProject.file(path).path, "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() }
+
+/** The native lookup (src/test/cpp): hoshidicts' frequency sorting. */
+val nativeLookupTest = tasks.register<NativeHostTest>("nativeLookupTest") {
     testSources.set(layout.projectDirectory.dir("src/test/cpp"))
-    sorting.set(layout.projectDirectory.file("src/main/cpp/frequency_sorting.h"))
-    hoshidictsCommit.set(providers.exec { commandLine("git", "-C", rootProject.file("third_party/hoshidicts").path, "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+    sources.from(layout.projectDirectory.file("src/main/cpp/frequency_sorting.h"))
+    commits.add(submoduleCommit("third_party/hoshidicts"))
+    target.set("frequency_sorting_test")
     cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
     buildDir.set(layout.buildDirectory.dir("native-tests"))
     passed.set(layout.buildDirectory.file("native-tests/passed"))
     // After the app's native configure, which installs the SDK's CMake when it's missing.
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+/** The Yomikata script host (libretrodroid's scripthost.cpp, src/test/cpp there) with the runtime, on made-up memory. */
+val scriptHostTest = tasks.register<NativeHostTest>("scriptHostTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/scripthost.h", "libretrodroid/src/main/cpp/scripthost.cpp"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    target.set("script_host_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("script-host-test"))
+    passed.set(layout.buildDirectory.file("script-host-test/passed"))
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
@@ -491,7 +511,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->

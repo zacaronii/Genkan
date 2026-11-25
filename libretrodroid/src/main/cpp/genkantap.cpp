@@ -77,6 +77,18 @@ bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
     return false;
 }
 
+size_t GenkanTap::readClipped(const std::vector<Region> &among, uint64_t address, uint8_t *out, size_t size) {
+    for (const auto &r : among) {
+        if (address < r.start || address >= r.start + r.length) continue;
+        size_t n = static_cast<size_t>(std::min<uint64_t>(size, r.start + r.length - address));
+        struct iovec local { out, n };
+        struct iovec remote { r.host + (address - r.start), n };
+        ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
+        return got > 0 ? static_cast<size_t>(got) : 0;
+    }
+    return 0;
+}
+
 size_t GenkanTap::videoRamSize() {
     std::lock_guard<std::mutex> lock(memoryLock);
     if (systemRamData == nullptr || systemRamData(RETRO_MEMORY_VIDEO_RAM) == nullptr) return 0;

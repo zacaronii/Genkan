@@ -93,6 +93,10 @@ class CoreActivity : ComponentActivity() {
      * A capture waiting for its frame (see captureTo), run on the emulation thread after each
      * frame until it says it's done: the frame just drawn and the memory then are one moment.
      */
+    /** Frames the game has run, the count a Yomikata script is told. */
+    private var framesRun = 0L
+    /** A savestate was loaded: the script is told before its next frame. */
+    @Volatile private var scriptStateLoaded = false
     @Volatile private var capture: (() -> Boolean)? = null
     /** The frame the last capture took, beside its memory; what keptFrame() gives. */
     @Volatile private var captured: KeptFrame? = null
@@ -204,6 +208,12 @@ class CoreActivity : ComponentActivity() {
         retroView.afterFrame = {
             layoutWatch.afterFrame()
             capture?.let { if (it()) capture = null }
+            // A Yomikata script reads the game between two frames (its events, logged for now).
+            if (scriptStateLoaded) {
+                scriptStateLoaded = false
+                GenkanTap.scriptStateLoaded()
+            }
+            for ((kind, json) in GenkanTap.scriptFrame(framesRun++)) Log.i(TAG, "Script ${ScriptEvents.kindName(kind)}: $json")
         }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
@@ -355,6 +365,31 @@ class CoreActivity : ComponentActivity() {
 
     private val session = object : ICoreSession.Stub() {
         override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" }
+
+        override fun loadScript(name: String, source: ByteArray, data: Bundle, gameId: String, buildId: String?): String? {
+            if (!gameLoaded()) return "no game is running"
+            val files = data.keySet().associateWith { data.getByteArray(it) ?: ByteArray(0) }
+            val result = AtomicReference<String?>()
+            val done = CountDownLatch(1)
+            // On the emulation thread, between two frames: the script checks the game's memory as it loads.
+            retroView.queueEvent {
+                result.set(
+                    GenkanTap.scriptLoad(
+                        name, source, files, ScriptEvents.catalogPlatform(core.platforms.first()), gameId, buildId,
+                        core.pointerMask, core.ramBase,
+                    ),
+                )
+                done.countDown()
+            }
+            if (!done.await(SCRIPT_LOAD_WAIT_MS, TimeUnit.MILLISECONDS)) return "the game didn't run a frame to load it in"
+            val error = result.get()
+            Log.i(TAG, if (error == null) "Script $name loaded for $gameId" else "Script $name didn't load: $error")
+            return error
+        }
+
+        override fun unloadScript() {
+            retroView.queueEvent { GenkanTap.scriptUnload() }
+        }
 
         override fun regions(): LongArray =
             GenkanTap.regions().flatMap { listOf(it.start, it.length, if (it.mirror) 1L else 0L) }.toLongArray()
@@ -742,10 +777,12 @@ class CoreActivity : ComponentActivity() {
                 if (slot != SaveStates.BEFORE_LOAD && before.isNotEmpty()) runCatching { states.write(SaveStates.BEFORE_LOAD, before) }
                 if (retroView.unserializeState(read.bytes)) {
                     saver.stateLoaded()
+                    // The script forgets what it believed was on screen before its next frame.
+                    scriptStateLoaded = true
                     "Loaded $name · saved ${clock(read.savedAt)}"
                 } else {
                     // A core that refuses a state may have read part of it: the game goes back to where it was.
-                    if (before.isNotEmpty()) retroView.unserializeState(before)
+                    if (before.isNotEmpty() && retroView.unserializeState(before)) scriptStateLoaded = true
                     "Couldn't load $name: ${core.displayName} refused it"
                 }
             }
@@ -795,6 +832,8 @@ class CoreActivity : ComponentActivity() {
         private const val CAPTURE_CHUNK = 1 shl 20
         /** The most video RAM a capture copies (a PS1's is 1 MB). */
         private const val MAX_VRAM = 4L shl 20
+        /** A script's load, waiting for the emulation thread. */
+        private const val SCRIPT_LOAD_WAIT_MS = 5_000L
         private const val AUDIO_EVERY_MS = 100L
         /** How long a failed load's reason stays up before the player closes. */
         private const val FAIL_SHOW_MS = 5_000L

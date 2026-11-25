@@ -47,6 +47,16 @@ class RamSnapshotsTest {
     }
 
     @Test
+    fun `a GameCube build is its disc id and version`() {
+        val ram = ByteArray(0x40)
+        "GTST01".toByteArray().copyInto(ram)
+        ram[7] = 0x02
+        byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D).copyInto(ram, 0x1C)
+        assertEquals("GTST01-02", RamSnapshots.gcBuildId(ram))
+        assertNull(RamSnapshots.gcBuildId(ByteArray(0x40)))
+    }
+
+    @Test
     fun `video RAM is labelled by console, PS1's as its frame buffer`() {
         assertEquals("ps1-15bit", RamSnapshots.vramFormat("psx"))
         assertEquals("sfc-vram", RamSnapshots.vramFormat("snes"))
