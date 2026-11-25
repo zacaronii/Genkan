@@ -10,14 +10,23 @@
 #include <jni.h>
 
 #include "genkantap.h"
+#include "framestats.h"
 #include "input.h"
 #include "libretrodroid.h"
 
+using libretrodroid::FrameStats;
 using libretrodroid::GenkanTap;
 using libretrodroid::Input;
 using libretrodroid::LibretroDroid;
 
 extern "C" {
+
+JNIEXPORT jlongArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_frameStats(JNIEnv *env, jclass) {
+    auto values = FrameStats::getInstance().take();
+    jlongArray result = env->NewLongArray(static_cast<jsize>(values.size()));
+    env->SetLongArrayRegion(result, 0, static_cast<jsize>(values.size()), reinterpret_cast<const jlong *>(values.data()));
+    return result;
+}
 
 JNIEXPORT jlongArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_memoryRegions(JNIEnv *env, jclass) {
     auto regions = GenkanTap::getInstance().regions();

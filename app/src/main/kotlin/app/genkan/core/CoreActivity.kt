@@ -88,6 +88,11 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var scriptStateLoaded = false
     /** The last seconds of the game's picture (see [FrameRing]), for a card's animated Picture. */
     private val frameRing = FrameRing()
+    /** How fast the game runs, a second at a time (see [PlayerStats]). */
+    private val stats = PlayerStats()
+    /** The reader's own work between frames since the last second's stats: the script, the ring's shots. */
+    private val scriptNanos = java.util.concurrent.atomic.AtomicLong()
+    private val ringNanos = java.util.concurrent.atomic.AtomicLong()
     @Volatile private var capture: (() -> Boolean)? = null
     /** The frame the last capture took, beside its memory; what keptFrame() gives. */
     @Volatile private var captured: KeptFrame? = null
@@ -208,7 +213,9 @@ class CoreActivity : ComponentActivity() {
                     host = null
                 }
             }
+            val scriptStarted = System.nanoTime()
             val events = GenkanTap.scriptFrame(framesRun++)
+            scriptNanos.addAndGet(System.nanoTime() - scriptStarted)
             if (events.isNotEmpty()) {
                 // The script's own log lines go to logcat here; everything goes to the reader.
                 events.filter { it.first == ScriptEvents.LOG }.forEach { Log.i(TAG, "Script log: ${it.second}") }
@@ -223,8 +230,10 @@ class CoreActivity : ComponentActivity() {
             if (frameRing.due(now)) {
                 val started = System.nanoTime()
                 retroView.readShownFrameScaled(FrameRing.WIDTH)?.let { frameRing.add(it, now, System.nanoTime() - started) }
+                ringNanos.addAndGet(System.nanoTime() - started)
             }
         }
+        lifecycleScope.launch(Dispatchers.IO) { measure() }
         if (def.splitScreens) {
             lowerScreen = LowerScreen.displayFor(this)?.let { LowerScreen(this, it) }?.apply { show() }
         }
@@ -840,8 +849,31 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
+    /** Each second: how fast the game ran (logged in debug builds, with the CPU's clock and heat). */
+    private suspend fun measure() {
+        var last = System.nanoTime()
+        GenkanTap.frameStats()
+        while (true) {
+            delay(STATS_EVERY_MS)
+            val now = System.nanoTime()
+            val v = GenkanTap.frameStats()
+            val row = stats.add(
+                PlayerStats.Sample(
+                    runs = v[0], runNanos = v[1], longestNanos = v[2], p95Nanos = v[3], steps = v[4], contentFpsMilli = v[5],
+                    elapsedNanos = now - last, scriptNanos = scriptNanos.getAndSet(0), ringNanos = ringNanos.getAndSet(0),
+                ),
+            )
+            last = now
+            if (row != null && app.genkan.BuildConfig.DEBUG) {
+                Log.i(STATS_TAG, "${row.line()} | cpu ${DeviceHeat.fastestMhz() ?: "?"} MHz, ${DeviceHeat.hottestCpuC() ?: "?"} °C" + if (stats.behind) " | behind" else "")
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "CoreActivity"
+        private const val STATS_TAG = "PlayerStats"
+        private const val STATS_EVERY_MS = 1_000L
         const val EXTRA_ROM = "rom"
         const val EXTRA_ROM_ID = "rom_id"
         const val EXTRA_PLATFORM = "platform"

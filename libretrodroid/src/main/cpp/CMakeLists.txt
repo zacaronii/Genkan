@@ -81,6 +81,8 @@ add_library(libretrodroid SHARED
         genkantap.h
         genkantap.cpp
         genkantapjni.cpp
+        framestats.h
+        framestats.cpp
         scripthost.h
         scripthost.cpp
         scriptjni.cpp
