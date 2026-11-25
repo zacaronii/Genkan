@@ -83,6 +83,13 @@ class BuiltInPlayer @Inject constructor() {
         _scriptStateLoads.tryEmit(Unit)
     }
 
+    /** Where the game's picture sits on the player's view (left, top, right, bottom fractions), or null. */
+    fun pictureBounds(): FloatArray? = try {
+        _game.value?.session?.pictureBounds()
+    } catch (e: RemoteException) {
+        null
+    }
+
     /** The script feature level the player's runtime gives; 0 without a game. */
     fun scriptLevel(): Int = try {
         _game.value?.session?.scriptLevel() ?: 0

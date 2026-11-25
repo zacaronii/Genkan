@@ -131,6 +131,11 @@ public:
     void setAudioEnabled(bool enabled);
 
     void setShaderConfig(ShaderManager::Config shaderConfig);
+    /**
+     * Genkan: where the game's picture sits on the view, as fractions of it (left, top, right, bottom),
+     * without the bars around it; false before there is a picture.
+     */
+    bool pictureBounds(float out[4]);
 
     void setViewportAlignment(unsigned int viewportAlignment);
 

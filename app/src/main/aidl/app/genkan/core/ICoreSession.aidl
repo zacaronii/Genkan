@@ -62,4 +62,6 @@ interface ICoreSession {
     oneway void unloadScript() = 18;
     /** The script feature level the player's reader runtime gives (yk_script_level). */
     int scriptLevel() = 19;
+    /** Where the game's picture sits on the view: left, top, right, bottom as fractions; null before one is drawn. */
+    float[] pictureBounds() = 20;
 }

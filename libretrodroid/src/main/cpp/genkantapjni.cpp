@@ -42,6 +42,14 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_GenkanTap_readMemory
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jfloatArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_pictureBounds(JNIEnv *env, jclass) {
+    float bounds[4];
+    if (!LibretroDroid::getInstance().pictureBounds(bounds)) return nullptr;
+    jfloatArray out = env->NewFloatArray(4);
+    env->SetFloatArrayRegion(out, 0, 4, bounds);
+    return out;
+}
+
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_videoRamSize(JNIEnv *, jclass) {
     return static_cast<jlong>(GenkanTap::getInstance().videoRamSize());
 }

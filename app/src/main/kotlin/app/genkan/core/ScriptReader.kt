@@ -14,8 +14,34 @@ import org.json.JSONObject
  */
 class ScriptReader {
 
-    /** What one batch of events gives: lines for the backlog, the choice now, and whether the script died. */
-    data class Step(val lines: List<HookMessage>, val choice: BuiltInText.Choice?, val dead: Boolean)
+    /**
+     * What one batch of events gives: lines for the backlog, the choice now, whether the script
+     * died, and whether where its text is drawn ([layouts]) changed.
+     */
+    data class Step(val lines: List<HookMessage>, val choice: BuiltInText.Choice?, val dead: Boolean, val layoutsChanged: Boolean = false)
+
+    /**
+     * Where a window's text is drawn: the text (dialogue, a choice's answers or interface text),
+     * the layout's own [width] × [height] space, and a cell per code point of the text (null where
+     * nothing is drawn); [screen] 1 is a DS's lower one.
+     */
+    data class WindowLayout(
+        val window: String,
+        val text: String,
+        val channel: String,
+        val width: Float,
+        val height: Float,
+        val glyphs: List<FloatArray?>,
+        val screen: Int = 0,
+    )
+
+    /** The last text in each window, and its seq, to give a layout its text. */
+    private val windowTexts = HashMap<String, Triple<Long, String, String>>()
+    private val windowLayouts = LinkedHashMap<String, WindowLayout>()
+    private var layoutsChanged = false
+
+    /** Where the script's texts are drawn now, a window each, in the order they came up. */
+    val layouts: List<WindowLayout> get() = windowLayouts.values.toList()
 
     private var choiceWindow: String? = null
     private var answers: List<String> = emptyList()
@@ -36,6 +62,7 @@ class ScriptReader {
     /** [events] (kind and JSON, as GenkanTap.scriptFrame gives them) that arrived at [nowMs]. */
     fun read(events: List<Pair<Int, String>>, nowMs: Long): Step {
         val lines = mutableListOf<HookMessage>()
+        layoutsChanged = false
         for ((kind, json) in events) {
             val event = runCatching { JSONObject(json) }.getOrNull() ?: continue
             when (kind) {
@@ -45,13 +72,18 @@ class ScriptReader {
                 ScriptEvents.LOG -> log(event.optString("level"), event.optString("message"))
             }
         }
-        return Step(lines, choice, dead)
+        return Step(lines, choice, dead, layoutsChanged)
     }
 
     private fun text(event: JSONObject, nowMs: Long, lines: MutableList<HookMessage>) {
         val text = event.optString("text")
         val window = event.optString("window").takeIf { it.isNotEmpty() }
         lastTextId = event.optString("id").takeIf { it.isNotEmpty() } ?: lastTextId
+        // The window's new text takes the place of its last one, and of where that was drawn.
+        if (window != null) {
+            windowTexts[window] = Triple(event.optLong("seq"), text, event.optString("channel", DIALOGUE))
+            if (windowLayouts.remove(window) != null) layoutsChanged = true
+        }
         // A new text in the choice's window takes the choice's place.
         if (window != null && window == choiceWindow && event.optString("channel") != CHOICE) closeChoice(lines)
         when (event.optString("channel", DIALOGUE)) {
@@ -96,9 +128,21 @@ class ScriptReader {
         val window = event.optString("window").takeIf { it.isNotEmpty() } ?: return
         if (event.optBoolean("closed")) {
             openWindows.remove(window)
+            if (windowLayouts.remove(window) != null) layoutsChanged = true
             if (window == choiceWindow) closeChoice(lines)
         } else {
             openWindows.add(window)
+            // The layout is for the window's text of the same seq; one for an older text is dropped.
+            val (seq, text, channel) = windowTexts[window] ?: return
+            if (event.optLong("seq") != seq) return
+            val space = event.optJSONArray("space") ?: return
+            val glyphs = event.optJSONArray("glyphs") ?: return
+            windowLayouts[window] = WindowLayout(
+                window, text, channel, space.optDouble(0).toFloat(), space.optDouble(1).toFloat(),
+                (0 until glyphs.length()).map { i -> glyphs.optJSONArray(i)?.let { c -> FloatArray(4) { c.optDouble(it).toFloat() } } },
+                event.optInt("screen", 0),
+            )
+            layoutsChanged = true
         }
     }
 
@@ -129,6 +173,8 @@ class ScriptReader {
 
     /** After a savestate was loaded: the runtime closed every layout, and nothing is up. */
     fun stateLoaded() {
+        windowTexts.clear()
+        windowLayouts.clear()
         answers = emptyList()
         cursor = null
         choiceWindow = null

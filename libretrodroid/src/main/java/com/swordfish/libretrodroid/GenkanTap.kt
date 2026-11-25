@@ -34,6 +34,9 @@ object GenkanTap {
     /** Keeps the next frame the core draws at its own size ([frameSize], [copyFrame]). */
     @JvmStatic external fun requestFrame()
 
+    /** Where the game's picture sits on the view (left, top, right, bottom fractions), or null before there's one. */
+    @JvmStatic external fun pictureBounds(): FloatArray?
+
     /** The size of the core's video RAM, 0 when it gives none. */
     @JvmStatic external fun videoRamSize(): Long
 

@@ -86,7 +86,10 @@ class BuiltInText @Inject constructor(
             player.scriptStateLoads.collect {
                 stateLoadedMs = System.currentTimeMillis()
                 scriptReader?.stateLoaded()
-                if (scriptReader != null) _choice.value = null
+                if (scriptReader != null) {
+                    _choice.value = null
+                    _scriptScreen.value = app.genkan.ocr.ScreenText.EMPTY
+                }
                 // A script that refused the game as it started may take it now (a PS1 past its BIOS).
                 refused?.let { (game, id) -> if (scriptReader == null) scope.launch { if (startScript(game, id)) stopJsonLayout() } }
             }
@@ -170,6 +173,14 @@ class BuiltInText @Inject constructor(
         if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
     }
 
+    private val _scriptScreen = MutableStateFlow(app.genkan.ocr.ScreenText.EMPTY)
+    /**
+     * Where the script says its texts are drawn, as the overlay's boxes (empty: none up): dialogue,
+     * answers and interface text alike, each a tap away from a lookup. Interface text is offered
+     * only here, never in the backlog.
+     */
+    val scriptScreen: StateFlow<app.genkan.ocr.ScreenText> = _scriptScreen.asStateFlow()
+
     private val _scriptActive = MutableStateFlow(false)
     /** The game's lines come from its Yomikata script. */
     val scriptActive: StateFlow<Boolean> = _scriptActive.asStateFlow()
@@ -243,6 +254,7 @@ class BuiltInText @Inject constructor(
         scriptReader = null
         activeScript = null
         _scriptActive.value = false
+        _scriptScreen.value = app.genkan.ocr.ScreenText.EMPTY
         ocr.quiet = false
     }
 
@@ -252,6 +264,13 @@ class BuiltInText @Inject constructor(
         val step = reader.read(events, System.currentTimeMillis())
         step.lines.forEach(session::submit)
         _choice.value = step.choice
+        if (step.layoutsChanged) {
+            val layouts = reader.layouts
+            scope.launch(Dispatchers.IO) {
+                val bounds = if (layouts.isEmpty()) null else player.pictureBounds()
+                _scriptScreen.value = if (bounds == null || bounds.size < 4) app.genkan.ocr.ScreenText.EMPTY else ScriptScreen.of(layouts, bounds)
+            }
+        }
         if (step.dead) {
             Log.w(TAG, "The script was switched off: the entry's layout, or OCR, from here")
             player.unloadScript()

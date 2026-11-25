@@ -403,6 +403,8 @@ class CoreActivity : ComponentActivity() {
 
         override fun scriptLevel(): Int = GenkanTap.scriptLevel()
 
+        override fun pictureBounds(): FloatArray? = GenkanTap.pictureBounds()
+
         override fun unloadScript() {
             retroView.queueEvent { GenkanTap.scriptUnload() }
         }
