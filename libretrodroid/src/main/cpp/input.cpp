@@ -72,6 +72,14 @@ int16_t Input::getInputState(unsigned port, unsigned device, unsigned index, uns
                     );
                     return axis || buttons;
                 }
+                case RETRO_DEVICE_ID_JOYPAD_MASK: {
+                    // Genkan: every button at once, one bit each, as newer cores ask (a PS2 core asks only so).
+                    int16_t mask = 0;
+                    for (unsigned button = 0; button < 16; button++) {
+                        if (getInputState(port, RETRO_DEVICE_JOYPAD, 0, button)) mask |= (int16_t) (1 << button);
+                    }
+                    return mask;
+                }
                 default:
                     return anyPressed(port, id);
             }
@@ -97,6 +105,9 @@ int16_t Input::getInputState(unsigned port, unsigned device, unsigned index, uns
                         default:
                             return 0;
                     }
+                // Genkan: a button's pressure (DualShock 2 cores read buttons so): full while it's down.
+                case RETRO_DEVICE_INDEX_ANALOG_BUTTON:
+                    return getInputState(port, RETRO_DEVICE_JOYPAD, 0, id) ? MAX_RANGE_MOTION : 0;
                 default:
                     return 0;
             }
