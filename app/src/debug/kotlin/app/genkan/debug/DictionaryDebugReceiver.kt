@@ -59,8 +59,6 @@ import javax.inject.Inject
  * (looks for on-screen text in the running 3DS game's memory, through Azahar's RPC)
  *   adb shell am broadcast -a app.genkan.debug.SCAN -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
  *     logs the words a line's marks would cover.
- *   adb shell am broadcast -a app.genkan.debug.LAYOUT -n app.genkan/.debug.DictionaryDebugReceiver --es json '{...}'
- *     has the built-in player watch a layout given here (with the catalog entry's table), as if the entry had it.
  *   adb shell am broadcast -a app.genkan.debug.LINE -n app.genkan/.debug.DictionaryDebugReceiver --es text 一行
  *     puts a line in the reader's backlog, as a texthooker would ([--es speaker 名前] says who).
  *   adb shell am broadcast -a app.genkan.debug.AZAHAR_OFFER -n app.genkan/.debug.DictionaryDebugReceiver --es text 漢字
@@ -209,7 +207,6 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         val words = dictionaries.scan(text)
                         Log.i(TAG, "Scan in ${(System.nanoTime() - started) / 1_000_000} ms: " + words.joinToString(" ") { "${text.substring(it.start, it.end)}→${it.expression}【${it.reading}】" })
                     }
-                    "app.genkan.debug.LAYOUT" -> builtInText.debugWatch(intent.getStringExtra("json").orEmpty())
                     "app.genkan.debug.LINE" -> readerSession.submit(
                         // With a speaker it's a whole line, as a layout's: only those carry one.
                         HookMessage(intent.getStringExtra("text").orEmpty(), whole = intent.hasExtra("speaker"), speaker = intent.getStringExtra("speaker")),

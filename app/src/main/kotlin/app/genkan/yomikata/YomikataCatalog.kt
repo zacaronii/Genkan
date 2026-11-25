@@ -125,9 +125,8 @@ class YomikataCatalog @Inject constructor(
                 Log.w(TAG, "Bad entry $path: $it")
                 return@withLock EntryLookup.Failed("$path doesn't read as an entry: ${it.message}", retry = false)
             }
-        // Tables have no hash of their own: fetched again whenever their entry changed. A layout's
-        // own table sets come along too.
-        (entry.tables + Layouts.setTablePaths(entry.layouts)).forEach { table ->
+        // Tables have no hash of their own: fetched again whenever their entry changed.
+        entry.tables.forEach { table ->
             if (!fresh || !File(dir, table).isFile) runCatching { save(table, fetch(table)) }
         }
         EntryLookup.Found(entry)
@@ -201,6 +200,10 @@ class YomikataCatalog @Inject constructor(
         val path = entries.optJSONObject(id)?.getString("path") ?: return null
         CatalogEntry.parse(File(dir, path).takeIf(File::isFile)?.readText() ?: return null)
     }.getOrNull()
+
+    /** Whether the device's index lists a script for [id]: never the network, for the details screen. */
+    fun cachedHasScript(id: String): Boolean =
+        runCatching { JSONObject(File(dir, INDEX).readText()).optJSONObject("scripts")?.has(id) == true }.getOrDefault(false)
 
     /** An entry's table files as one text (later files win, as parsing them in order does), or null. */
     fun tableText(entry: CatalogEntry): String? {

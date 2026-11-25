@@ -273,7 +273,7 @@ class GameDetailsViewModel @Inject constructor(
             // The built-in player when it's on and has a core for the console, else the emulator app.
             combine(yomikataIds.idFor(game.id), playerSettings.enabled) { id, on -> id to (on && CoreCatalog.forPlatform(game.platformSlug) != null) }
                 .map { (id, builtIn) ->
-                    withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn) }
+                    withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn, catalog::cachedHasScript) }
                 }
         }
 

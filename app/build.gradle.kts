@@ -15,8 +15,6 @@ plugins {
 }
 
 android {
-    // The layout conformance vectors run on the device too, from the instrumented test's assets.
-    sourceSets.getByName("androidTest").assets.srcDir("src/test/resources")
     namespace = "app.genkan"
     compileSdk = 37
     ndkVersion = "29.0.14206865"

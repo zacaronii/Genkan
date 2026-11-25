@@ -237,13 +237,6 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         /** Dolphin's states are about 93 MB unpacked (17 MB gzipped, within the upload's 80 MB). */
         const val MAX_GC_STATE = 128L * 1024 * 1024
 
-        /**
-         * Whether an on-demand snapshot's empty [line] means nothing read the screen
-         * (`ocr_unavailable`) rather than that it had no text (`no_text`): only a layout being
-         * read ([layoutRead]) knows the screen is empty; OCR may be off, or reading elsewhere.
-         */
-        fun screenUnread(line: String, layoutRead: Boolean): Boolean = line.isBlank() && !layoutRead
-
         /** The largest savestate the inbox takes for [platform] (RomM's slug), unpacked. */
         fun maxState(platform: String?): Long = if (platform == "ngc" || platform == "gc") MAX_GC_STATE else MAX_STATE
         private const val PS1_VRAM = "ps1-15bit"

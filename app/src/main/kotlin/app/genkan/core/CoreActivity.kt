@@ -65,17 +65,6 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var failed = false
     private var deviceCallback: AudioDeviceCallback? = null
 
-    /** A Yomikata layout the reader asked for, read between frames. */
-    private val layoutWatch by lazy {
-        LayoutWatch(core) { json ->
-            try {
-                host?.layout(json)
-            } catch (e: RemoteException) {
-                host = null
-            }
-        }
-    }
-
     /** Select + a button: save states, fast-forward, quit ([PadChords]). */
     private val chords = PadChords()
     private lateinit var states: SaveStates
@@ -208,7 +197,6 @@ class CoreActivity : ComponentActivity() {
         logOutputs()
         watchSound()
         retroView.afterFrame = {
-            layoutWatch.afterFrame()
             capture?.let { if (it()) capture = null }
             // A Yomikata script reads the game between two frames (its events, logged for now).
             if (scriptStateLoaded) {
@@ -488,9 +476,6 @@ class CoreActivity : ComponentActivity() {
             }
             return null
         }
-
-        override fun watchLayout(layoutJson: String, tableText: String, entryJson: String): Boolean =
-            layoutWatch.set(layoutJson, tableText, entryJson)
 
         override fun videoSize(): Long = GenkanTap.videoRamSize()
 

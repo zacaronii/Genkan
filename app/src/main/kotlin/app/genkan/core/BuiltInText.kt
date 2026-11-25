@@ -25,9 +25,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import app.genkan.yomikata.LayoutRead
-import app.genkan.yomikata.Layouts
-import app.genkan.reader.HookMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,17 +68,16 @@ class BuiltInText @Inject constructor(
                     // A game with its own codes: OCR's lines are put right from memory with its table.
                     ocr.corrector = ::tableLine
                     text.rules = MemoryScan.NO_RULES
-                    stopLayout()
+                    resetGame()
                     gameStartedMs = System.currentTimeMillis()
-                    launch { watchLayout() }
+                    launch { findReader() }
                     text.follow(player::memory)
                 } else {
-                    stopLayout()
+                    resetGame()
                     text.off()
                 }
             }
         }
-        scope.launch { player.layoutReads.collect(::onLayoutRead) }
         scope.launch { player.scriptEvents.collect(::onScriptEvents) }
         scope.launch {
             player.scriptStateLoads.collect {
@@ -92,7 +88,7 @@ class BuiltInText @Inject constructor(
                     _scriptScreen.value = app.genkan.ocr.ScreenText.EMPTY
                 }
                 // A script that refused the game as it started may take it now (a PS1 past its BIOS).
-                refused?.let { (game, id) -> if (scriptReader == null) scope.launch { if (startScript(game, id)) stopJsonLayout() } }
+                refused?.let { (game, id) -> if (scriptReader == null) scope.launch { startScript(game, id) } }
             }
         }
     }
@@ -103,38 +99,30 @@ class BuiltInText @Inject constructor(
     /** Yomikata samples and snapshots are on. */
     val sampling: kotlinx.coroutines.flow.Flow<Boolean> get() = samples.enabledFlow
 
-    /** A choice a layout reads on screen now: its answers, and the row the cursor is on. */
-    data class Choice(val answers: List<String>, val cursor: Int?) {
-        companion object {
-            /** The choice [read] shows, or null: none up, or the read failed (its `when` false, or an error). */
-            fun of(read: LayoutRead?): Choice? = read?.takeIf { it.asking }?.let { Choice(it.choices.orEmpty(), it.choiceCursor?.toInt()) }
-        }
-    }
+    /** A choice the script reads on screen now: its answers, and the row the cursor is on. */
+    data class Choice(val answers: List<String>, val cursor: Int?)
 
     private val _choice = MutableStateFlow<Choice?>(null)
-    /** The choice up now (null: none), while a layout gives the game's text. */
+    /** The choice up now (null: none), while a script gives the game's text. */
     val choice: StateFlow<Choice?> = _choice.asStateFlow()
 
     private val _notListed = MutableStateFlow(false)
     /** The playing game's id isn't in the Yomikata catalog: no text reader for it yet (OCR still works). */
     val notListed: StateFlow<Boolean> = _notListed.asStateFlow()
 
-    private val _layoutActive = MutableStateFlow(false)
-    /** The game's lines come from its Yomikata layout: no OCR needed. */
-    val layoutActive: StateFlow<Boolean> = _layoutActive.asStateFlow()
-
     /**
-     * Once the game's id is known (read from its RAM, or [GameId.choose]'s stored one), its catalog
-     * entry's layout (if it has one) is read by the player between frames. Tries for a while: a
-     * game sets its memory up as it boots.
+     * Once the game's id is known (read from its RAM, or [GameId.choose]'s stored one), the
+     * catalog's script for it runs in the player, when it has one Genkan can run; otherwise the
+     * game's text is followed in memory, with OCR. Tries for a while: a game sets its memory up as
+     * it boots.
      */
-    private suspend fun watchLayout() {
+    private suspend fun findReader() {
         val game = session.game.value
         _notListed.value = false
         val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
         // A cartridge's id is in its header, read once; a disc's is looked for in RAM as it boots.
         val cartridge = withContext(Dispatchers.IO) { player.cartridgeId() }
-        repeat(LAYOUT_TRIES) { attempt ->
+        repeat(ID_TRIES) { attempt ->
             val id = withContext(Dispatchers.IO) {
                 // RAM first here too: the id found earlier in this run (another disc's, maybe)
                 // only stands in, as the stored one does.
@@ -147,33 +135,14 @@ class BuiltInText @Inject constructor(
             if (id != null) {
                 ids[game.key] = id
                 yomikataIds.learned(game.rommRomId, id)
+                gameCartridge = cartridge
+                startScript(game, id)
                 // The entry's cleanup, for the game's own codes in the lines memory gives.
-                text.rules = MemoryText.rulesOf(runCatching { catalog.entry(id) }.getOrNull())
-                // A Yomikata script first; the entry's layout when there's none, or it won't run.
-                fallback = Triple(game, id, cartridge)
-                if (startScript(game, id)) return
-                watchJsonLayout(game, id, cartridge)
+                text.rules = MemoryText.rulesOf(entryOf(game.title, id))
                 return
             }
-            delay(LAYOUT_RETRY_MS)
+            delay(ID_RETRY_MS)
         }
-    }
-
-    /** The entry's JSON layout for [id], read by the player between frames, when the entry has one. */
-    private suspend fun watchJsonLayout(game: app.genkan.reader.NowPlaying.Game, id: String, cartridge: SnesCartridge.Id?) {
-        val entry = entryOf(game.title, id) ?: return
-        // Genkan can't hash the executable: the release id's only listed version stands in.
-        // A version may have several layouts (one per chapter's program); the watch reads
-        // whichever's `when` is true.
-        val crc = cartridge?.headerCrc32?.takeIf { cartridge.id == id }
-        if (crc != null) {
-            val version = Layouts.versionFor(entry, id, crc)
-            Log.i(TAG, "${game.title} ($id): header CRC $crc, ${if (version != null) "its version" else "no version listed: the general layouts"}")
-        }
-        val layouts = Layouts.layoutsFor(entry, id, crc).ifEmpty { return }
-        val watching = player.watchLayout(layouts, entry, catalog.tableText(entry).orEmpty(), catalog.files(Layouts.setTablePaths(layouts)))
-        setLayoutActive(watching)
-        if (watching) Log.i(TAG, "${game.title} ($id): reading its Yomikata layout")
     }
 
     private val _scriptScreen = MutableStateFlow(app.genkan.ocr.ScreenText.EMPTY)
@@ -197,8 +166,8 @@ class BuiltInText @Inject constructor(
     @Volatile private var gameStartedMs = 0L
     @Volatile private var stateLoadedMs: Long? = null
     private var quietJob: kotlinx.coroutines.Job? = null
-    /** The game's id and cartridge, for falling back to its JSON layout when the script dies. */
-    private var fallback: Triple<app.genkan.reader.NowPlaying.Game, String, SnesCartridge.Id?>? = null
+    /** The cartridge read as the game started, for its script's build id. */
+    @Volatile private var gameCartridge: SnesCartridge.Id? = null
 
     /**
      * Runs the catalog's script for [id] in the player, when it has one Genkan can run; whether it
@@ -212,7 +181,7 @@ class BuiltInText @Inject constructor(
         }
         val script = files.script
         val ram = withContext(Dispatchers.IO) { player.memory()?.use { RamSnapshots.mainRamOf(it, game.platform) } }
-        val cartridge = fallback?.third?.takeIf { it.id == id }
+        val cartridge = gameCartridge?.takeIf { it.id == id }
         val buildId = ScriptEvents.buildId(game.platform, ram, cartridge?.headerCrc32)
         val regions = if (withContext(Dispatchers.IO) { player.hasVideoRam() }) setOf("vram") else emptySet()
         script.unusable(withContext(Dispatchers.IO) { player.scriptLevel() }, buildId, regions)?.let { why ->
@@ -276,11 +245,10 @@ class BuiltInText @Inject constructor(
             }
         }
         if (step.dead) {
-            Log.w(TAG, "The script was switched off: the entry's layout, or OCR, from here")
+            Log.w(TAG, "The script was switched off: memory text and OCR from here")
             player.unloadScript()
             endScript()
             _choice.value = null
-            fallback?.let { (game, id, cartridge) -> scope.launch { watchJsonLayout(game, id, cartridge) } }
         }
     }
 
@@ -295,17 +263,10 @@ class BuiltInText @Inject constructor(
     suspend fun debugScript(name: String, source: ByteArray, data: Map<String, ByteArray>, gameId: String, buildId: String?): String? {
         val error = withContext(Dispatchers.IO) { player.loadScript(name, source, data, gameId, buildId) }
         if (error == null) {
-            stopJsonLayout()
             val sha = java.security.MessageDigest.getInstance("SHA-256").digest(source).joinToString("") { "%02x".format(it) }
             beginScript(app.genkan.yomikata.CatalogScript(gameId, name, sha, "", listOfNotNull(buildId), emptyList(), 1, emptyMap()))
         }
         return error
-    }
-
-    /** A script took over from the entry's JSON layout. */
-    private fun stopJsonLayout() {
-        player.watchLayout(null, null)
-        _layoutActive.value = false
     }
 
     /**
@@ -324,49 +285,22 @@ class BuiltInText @Inject constructor(
                 Log.i(TAG, "$title ($id): not in the Yomikata catalog")
                 _notListed.value = true
             }
-            is EntryLookup.Failed -> null.also { Log.w(TAG, "$title ($id): no catalog entry, ${result.reason}; no layout this play") }
+            is EntryLookup.Failed -> null.also { Log.w(TAG, "$title ($id): no catalog entry, ${result.reason}; no cleanup this play") }
         }
     }
 
-    /**
-     * Debug builds: watch [layoutJson] (one layout, or a JSON array of a version's layouts) as if
-     * the game's entry had it (its table, if any, still applies).
-     */
-    suspend fun debugWatch(layoutJson: String) {
-        val game = session.game.value
-        val entry = ids[game.key]?.let { runCatching { catalog.entry(it) }.getOrNull() }
-        val layouts = Layouts.parseLayouts(layoutJson)
-        setLayoutActive(player.watchLayout(layouts, entry, entry?.let(catalog::tableText).orEmpty(), catalog.files(Layouts.setTablePaths(layouts))))
-    }
-
-    /**
-     * While a layout gives the game's lines, OCR and the memory search keep reading (a snapshot
-     * and the table reader use them) but put nothing in the backlog: two copies of each line,
-     * one perhaps misread, would only crowd it.
-     */
-    private fun setLayoutActive(on: Boolean) {
-        _layoutActive.value = on
-        ocr.quiet = on
-    }
-
-    /** A new game, or none: nothing of the last one's layout or script carries over. */
-    private fun stopLayout() {
+    /** A new game, or none: nothing of the last one's script carries over. */
+    private fun resetGame() {
         endScript()
         refused = null
-        fallback = null
+        gameCartridge = null
         stateLoadedMs = null
-        setLayoutActive(false)
-        lastRead = null
         _choice.value = null
-        settleJob?.cancel()
-        layoutLines.reset()
     }
-
-    private var lastRead: LayoutRead? = null
 
     /**
      * A snapshot now, at whatever moment the game is in (a line typing out, waiting for a
-     * press), for Yomikata's server to pin a layout's fields down; what happened, for the bar.
+     * press), for Yomikata to read the game's memory against; what happened, for the bar.
      */
     suspend fun snapshotNow(): String = withContext(Dispatchers.IO) {
         val game = session.game.value
@@ -377,27 +311,13 @@ class BuiltInText @Inject constructor(
                 ?: return@withContext "This game's id isn't known yet"
             ids[game.key] = id
             yomikataIds.learned(game.rommRomId, id)
-            // The layout's line, as the game holds it. Without a layout, OCR reads the screen once the
-            // moment is taken (OCR's last line may be an earlier screen's). None from a layout is a
-            // snapshot of its own: the same game with no text on screen.
-            val read = lastRead
-            val line = read?.onScreen?.takeIf { it.isNotBlank() } ?: read?.message?.replace("\n", "")?.takeIf { it.isNotBlank() } ?: ""
-            // Only a layout being read knows the screen has no text; OCR reading nothing means
-            // nothing was read (or it read another part of the screen), not that it was blank.
-            val unread = RamSnapshots.screenUnread(line, layoutRead = read != null)
-            val moment = when {
-                unread -> "the screen read by OCR"
-                line.isEmpty() -> "no text on screen"
-                read?.asking == true -> "a question on screen"
-                read?.waitingOnLine == true -> "waiting for a press"
-                read?.shown != null && read.onScreen != read.message?.replace("\n", "") -> "typing out"
-                else -> "line on screen"
-            }
+            // OCR reads the screen once the moment is taken (its last line may be an earlier screen's).
+            // Reading nothing means nothing was read, or another part of the screen, not that it was blank.
+            val moment = "the screen read by OCR"
             val core = player.game.value?.core?.displayName ?: "built-in player"
-            val screenLine: (() -> String?)? = if (unread) ({ kotlinx.coroutines.runBlocking { ocr.readNow() } }) else null
             val taken = snapshots.takeNow(
-                m, game, id, line, "Genkan built-in player ($core)", extras, "taken on demand: $moment",
-                ocrUnavailable = unread, screenLine = screenLine, script = scriptMeta(),
+                m, game, id, "", "Genkan built-in player ($core)", extras, "taken on demand: $moment",
+                ocrUnavailable = true, screenLine = { kotlinx.coroutines.runBlocking { ocr.readNow() } }, script = scriptMeta(),
             )
             if (taken) {
                 "Snapshot taken ($moment); it goes to Yomikata with the next sync"
@@ -405,36 +325,6 @@ class BuiltInText @Inject constructor(
                 "Couldn't take a snapshot of this system's memory"
             }
         }
-    }
-
-    /** A layout's lines, and the answer taken at a choice once it closes, after its question. */
-    private val layoutLines = LayoutBacklog()
-    private var settleJob: kotlinx.coroutines.Job? = null
-
-    /** A layout read: the lines [LayoutLines] says are complete go to the backlog; null: the player stopped reading it. */
-    private fun onLayoutRead(read: LayoutRead?) {
-        if (read == null) {
-            // The player gave up on the layout (an error it couldn't read past): OCR again.
-            Log.i(TAG, "The player stopped reading the layout")
-            stopLayout()
-            return
-        }
-        lastRead = read
-        _choice.value = Choice.of(read)
-        settleJob?.cancel()
-        val step = layoutLines.read(read)
-        step.lines.forEach(::submitLayoutLine)
-        if (step.settle) {
-            settleJob = scope.launch {
-                delay(LAYOUT_SETTLE_MS)
-                layoutLines.settled()?.let(::submitLayoutLine)
-            }
-        }
-    }
-
-    /** A whole line, as the game holds it: the backlog's carry rules for pieces don't apply. */
-    private fun submitLayoutLine(line: LayoutLines.Line) {
-        session.submit(HookMessage(line.text, whole = true, takesBack = line.takesBack, speaker = line.speaker))
     }
 
     /** Everything the built-in player can add to a snapshot. */
@@ -512,12 +402,10 @@ class BuiltInText @Inject constructor(
     private companion object {
         const val TAG = "BuiltInText"
         val STANDARD = setOf("shift_jis", "utf16le", "utf8")
-        const val LAYOUT_TRIES = 20
-        const val LAYOUT_RETRY_MS = 3_000L
-        /** A message without a typed-out count or a waiting flag counts as done this long after it stops changing. */
+        const val ID_TRIES = 20
+        const val ID_RETRY_MS = 3_000L
         /** How often OCR's quiet is set from the script's windows. */
         const val QUIET_CHECK_MS = 250L
-        const val LAYOUT_SETTLE_MS = 400L
         /** Codes either side of a found run that can still be its line. */
         const val MARGIN = 8
         /** A run found in more places than this says nothing about where the line is. */

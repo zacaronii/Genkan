@@ -5,9 +5,6 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
-import app.genkan.yomikata.CatalogEntry
-import app.genkan.yomikata.LayoutRead
-import app.genkan.yomikata.Layouts
 import androidx.core.graphics.createBitmap
 import app.genkan.memory.MemorySource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,19 +51,6 @@ class BuiltInPlayer @Inject constructor() {
         _game.value = game
     }
 
-    private val _layoutReads = kotlinx.coroutines.flow.MutableSharedFlow<LayoutRead?>(extraBufferCapacity = 16)
-    /** What the watched layout reads, each time it changes (see [watchLayout]); null: the player stopped reading it. */
-    val layoutReads: kotlinx.coroutines.flow.SharedFlow<LayoutRead?> = _layoutReads
-
-    /** The player read the watched layout: something changed; a blank report: it stopped. */
-    fun layoutRead(json: String) {
-        if (json.isBlank()) {
-            _layoutReads.tryEmit(null)
-            return
-        }
-        runCatching { Layouts.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { _layoutReads.tryEmit(it) }
-    }
-
     private val _scriptEvents = kotlinx.coroutines.flow.MutableSharedFlow<List<Pair<Int, String>>>(extraBufferCapacity = 64)
     /** Each frame's events from the running Yomikata script (kind and JSON), in order. */
     val scriptEvents: kotlinx.coroutines.flow.SharedFlow<List<Pair<Int, String>>> = _scriptEvents
@@ -103,29 +87,6 @@ class BuiltInPlayer @Inject constructor() {
 
     fun overlayTapped(text: String, offset: Int) {
         _overlayTaps.tryEmit(app.genkan.ocr.ScreenText.Hit(text, offset))
-    }
-
-    /**
-     * Asks the player to read [layout] between frames (null: stop), with [entry]'s table, unit,
-     * controls and cleanup; whether the player took it.
-     */
-    fun watchLayout(
-        /** A version's layouts (usually one), in the entry's order; null or empty: stop. */
-        layouts: List<org.json.JSONObject>?,
-        entry: CatalogEntry?,
-        tableText: String = "",
-        /** The files of the layout's own table sets, by path. */
-        setTables: Map<String, String> = emptyMap(),
-    ): Boolean = try {
-        val entryJson = org.json.JSONObject()
-            .put("unit", entry?.unit ?: 2)
-            .put("controls", org.json.JSONObject((entry?.controls ?: emptyMap()) as Map<*, *>))
-            .put("cleanup", entry?.cleanupJson ?: org.json.JSONArray())
-            .put("set_tables", org.json.JSONObject(setTables as Map<*, *>))
-        val layoutJson = layouts?.takeIf { it.isNotEmpty() }?.let { org.json.JSONArray(it).toString() }.orEmpty()
-        _game.value?.session?.watchLayout(layoutJson, tableText, entryJson.toString()) == true
-    } catch (e: RemoteException) {
-        false
     }
 
     /** Draws the running game with [look] for the rest of this play; nothing is saved. */
