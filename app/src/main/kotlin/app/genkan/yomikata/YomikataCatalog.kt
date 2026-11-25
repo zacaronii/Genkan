@@ -138,9 +138,7 @@ class YomikataCatalog @Inject constructor(
      */
     suspend fun script(id: String): ScriptLookup = lock.withLock {
         val first = scriptNow(id)
-        // Not listed, or a file changed since: the index may be behind the catalog.
-        val behind = (first == ScriptLookup.NotListed && _status.value != CatalogStatus.NotSet) ||
-            (first is ScriptLookup.Failed && first.indexBehind)
+        val behind = IndexAge.mayBeBehind(first, catalogSet = _status.value != CatalogStatus.NotSet, listed = hasEntry(id))
         if (behind && fetchAgainIfStale()) scriptNow(id) else first
     }
 
@@ -157,6 +155,10 @@ class YomikataCatalog @Inject constructor(
         index(force = true)
         return (context.catalogStore.data.first()[FETCHED_AT] ?: 0L) != fetchedAt
     }
+
+    /** Whether the device's index has an entry for [id] (a main id or an alias). */
+    private fun hasEntry(id: String): Boolean =
+        runCatching { JSONObject(File(dir, INDEX).readText()).getJSONObject("entries").has(id) }.getOrDefault(false)
 
     /** When [fetchAgainIfStale] last tried. */
     private var staleTriedAt = 0L

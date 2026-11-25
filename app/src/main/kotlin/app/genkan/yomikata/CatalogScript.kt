@@ -92,4 +92,15 @@ object IndexAge {
 
     fun fetchAgain(nowMs: Long, fetchedAtMs: Long, lastTriedMs: Long): Boolean =
         nowMs - fetchedAtMs > STALE_MS && nowMs - lastTriedMs > STALE_MS
+
+    /**
+     * Whether [lookup] says the device's index may be behind the catalog: the id is in none of its
+     * lists ([listed]: it has an entry), or a file it lists changed. An entry without a script is
+     * a game nobody has written one for yet, not a sign of an old index.
+     */
+    fun mayBeBehind(lookup: ScriptLookup, catalogSet: Boolean, listed: Boolean): Boolean = when (lookup) {
+        ScriptLookup.NotListed -> catalogSet && !listed
+        is ScriptLookup.Failed -> lookup.indexBehind
+        is ScriptLookup.Found -> false
+    }
 }

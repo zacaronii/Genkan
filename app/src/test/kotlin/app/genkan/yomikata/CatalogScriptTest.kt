@@ -67,4 +67,15 @@ class CatalogScriptTest {
         assertTrue(!IndexAge.fetchAgain(now, fetchedAtMs = now - 60 * minute, lastTriedMs = now - 3 * minute))
         assertTrue(IndexAge.fetchAgain(now, fetchedAtMs = now - 60 * minute, lastTriedMs = now - 11 * minute))
     }
+
+    @Test
+    fun `only an id the index doesn't know, or a changed file, means the index may be behind`() {
+        // Listed with an entry but no script yet: a normal state, not an old index.
+        assertTrue(!IndexAge.mayBeBehind(ScriptLookup.NotListed, catalogSet = true, listed = true))
+        assertTrue(IndexAge.mayBeBehind(ScriptLookup.NotListed, catalogSet = true, listed = false))
+        // No catalog set up: nothing to fetch.
+        assertTrue(!IndexAge.mayBeBehind(ScriptLookup.NotListed, catalogSet = false, listed = false))
+        assertTrue(IndexAge.mayBeBehind(ScriptLookup.Failed("a file changed", indexBehind = true), catalogSet = true, listed = true))
+        assertTrue(!IndexAge.mayBeBehind(ScriptLookup.Failed("offline"), catalogSet = true, listed = false))
+    }
 }
