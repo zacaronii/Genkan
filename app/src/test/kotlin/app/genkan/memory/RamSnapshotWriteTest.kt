@@ -136,9 +136,32 @@ class RamSnapshotWriteTest {
     }
 
     @Test
-    fun `only a Saturn has a region, and a snapshot without one sends no region part`() {
+    fun `a region read across the source's own regions is read a part at a time`() {
+        // mGBA's map: I/O at 0xFF00-0xFF7F, high RAM to 0xFFFE, the interrupt register at 0xFFFF; a
+        // read can't cross from one into the next.
+        val io = ByteArray(256) { (it + 1).toByte() }
+        val parts = listOf(0xFF00L..0xFF7FL, 0xFF80L..0xFFFEL, 0xFFFFL..0xFFFFL)
+        val gb = object : MemorySource {
+            override val regions: List<LongRange> = parts
+            override val maxRead = 4096
+            override fun target(value: Long): Long? = null
+            override fun read(address: Long, size: Int): ByteArray? =
+                parts.firstOrNull { address in it && address + size - 1 in it }?.let { io.copyOfRange((address - 0xFF00).toInt(), (address - 0xFF00).toInt() + size) }
+            override fun close() {}
+        }
+        assertArrayEquals(io, RamSnapshots.readRam(gb, MainRam(0xFF00L until 0x10000L, 0xFF00L)))
+    }
+
+    @Test
+    fun `regions as Yomikata's inbox takes them, and a snapshot without one sends no region part`() {
         assertEquals(listOf("lwram"), SnapshotRegion.of("saturn").map { it.name })
-        listOf("psx", "psp", "snes", "gba", "gb", "nds", "ngc", "wii", "dc", "turbografx-cd", "ps2").forEach { assertEquals(it, emptyList<SnapshotRegion>(), SnapshotRegion.of(it)) }
+        // A Game Boy's I/O and high RAM, 256 bytes from 0xFF00; a PC Engine CD's own 8 KB at 0x1F0000.
+        listOf("gb", "gbc").forEach { assertEquals(listOf(SnapshotRegion("io", 0xFF00L until 0x10000L, 0xFF00L)), SnapshotRegion.of(it)) }
+        assertEquals(listOf(SnapshotRegion("wram", 0x1F0000L until 0x1F2000L, 0x1F0000L)), SnapshotRegion.of("turbografx-cd"))
+        assertEquals(256, SnapshotRegion.of("gb").single().range.count())
+        assertEquals(8 * 1024, SnapshotRegion.of("turbografx-cd").single().range.count())
+        assertEquals(listOf("lwram", "io", "wram"), SnapshotRegion.NAMES)
+        listOf("psx", "psp", "snes", "gba", "nds", "ngc", "wii", "dc", "tg16", "ps2").forEach { assertEquals(it, emptyList<SnapshotRegion>(), SnapshotRegion.of(it)) }
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "あいうえお", "test", extras(ByteArray(128 * 1024), ByteArray(64 * 1024)), "taken on demand"))
         val meta = snapshots.pending().single()
         assertFalse(JSONObject(meta.readText()).has("regions"))
