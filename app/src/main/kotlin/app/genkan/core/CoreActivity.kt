@@ -57,7 +57,7 @@ class CoreActivity : ComponentActivity() {
     private var look = ScreenLook.DEFAULT
     private var host: ICoreHost? = null
     private lateinit var saver: SramSaver
-    /** The line of text over the game: unpacking, a failed load, a muted volume. */
+    /** The line of text over the game: unpacking, a failed load, no sound. */
     private lateinit var notice: TextView
     private lateinit var root: FrameLayout
     @Volatile private var quitting = false
@@ -300,24 +300,11 @@ class CoreActivity : ComponentActivity() {
     /** Whether the core has a game in it: until then (and for good, when the load failed) it isn't asked for its memory. */
     private fun gameLoaded(): Boolean = ::retroView.isInitialized && retroView.gameLoaded
 
-    /**
-     * Says "Media volume is off" for a few seconds at the start when it is, and again each time it
-     * goes to zero or mute while the game runs (another app on the device may set it as the player
-     * starts); a volume muted on purpose isn't kept on screen. Says, too, when the sound stream
-     * wouldn't open or stopped ([GenkanTap.audioProblem]).
-     */
+    /** Says when the sound stream wouldn't open or stopped ([GenkanTap.audioProblem]). */
     private fun watchSound() {
-        val audio = getSystemService(AudioManager::class.java)
         lifecycleScope.launch {
-            var off = false
             var problem: String? = null
             while (isActive) {
-                val now = PlayerMessages.volumeOff(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.isStreamMute(AudioManager.STREAM_MUSIC))
-                if (now != off && !quitting) {
-                    off = now
-                    Log.i(TAG, if (now) "Media volume is off" else "Media volume is back")
-                    if (now) say(PlayerMessages.MEDIA_VOLUME_OFF, NOTE_MS) else if (notice.text == PlayerMessages.MEDIA_VOLUME_OFF) say(null)
-                }
                 val nowProblem = GenkanTap.audioProblem()
                 if (nowProblem != problem && !quitting) {
                     problem = nowProblem
@@ -326,7 +313,7 @@ class CoreActivity : ComponentActivity() {
                         say(PlayerMessages.noSound(it), NOTE_MS)
                     }
                 }
-                delay(VOLUME_EVERY_MS)
+                delay(SOUND_EVERY_MS)
             }
         }
     }
@@ -1055,8 +1042,8 @@ class CoreActivity : ComponentActivity() {
         private const val FAIL_SHOW_MS = 5_000L
         /** How long a note (which file of a zip is played) stays up. */
         private const val NOTE_MS = 4_000L
-        /** How often the media volume is looked at, for the note while it's off. */
-        private const val VOLUME_EVERY_MS = 1_000L
+        /** How often the sound stream is looked at, for the note when it can't play. */
+        private const val SOUND_EVERY_MS = 1_000L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L
         /** How long a lone Select press is held for the game: a few frames, so a core polling once a frame sees it. */
