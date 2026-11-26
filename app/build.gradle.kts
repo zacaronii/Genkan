@@ -262,6 +262,8 @@ abstract class BuildCmakeCore : DefaultTask() {
     @get:Input abstract val skipExternals: ListProperty<String>
     @get:Input abstract val sysEntries: ListProperty<String>
     @get:Input abstract val sysZipName: Property<String>
+    /** Genkan's own patches to the source (the .patch files in patches/<core>), applied in name order to a copy of it. */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val patches: ConfigurableFileCollection
     @get:Internal abstract val ndkDir: DirectoryProperty
     @get:Internal abstract val cmakeDir: DirectoryProperty
     @get:Internal abstract val cacheDir: DirectoryProperty
@@ -282,7 +284,11 @@ abstract class BuildCmakeCore : DefaultTask() {
         val pinned = git(root, "ls-files", "-s", "--", path).split(Regex("\\s+")).getOrNull(1)
         check(pinned == commit.get()) { "$path is pinned at $pinned, not ${commit.get()}: update the commit here too" }
         val stem = libraryName.get().removeSuffix(".so")
-        val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}")
+        val patchFiles = patches.files.filter { it.isFile }.sortedBy { it.name }
+        // A patched build is its own: the patches' hash is part of the cached library's name.
+        val patchKey = if (patchFiles.isEmpty()) "" else "-p" + MessageDigest.getInstance("SHA-256")
+            .digest(patchFiles.joinToString("") { it.name + "\n" + it.readText() }.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
+        val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}$patchKey")
         val library = cached.resolve("${abi.get()}/${libraryName.get()}")
         val entriesKey = MessageDigest.getInstance("SHA-256").digest(sysEntries.get().joinToString("\n").toByteArray())
             .joinToString("") { "%02x".format(it) }.take(12)
@@ -290,7 +296,9 @@ abstract class BuildCmakeCore : DefaultTask() {
         if (!library.isFile) {
             fetch(root, source, path)
             logger.lifecycle("Building ${libraryName.get()} at ${commit.get().take(7)}")
-            val work = temporaryDir.apply { deleteRecursively(); mkdirs() }
+            val temp = temporaryDir.apply { deleteRecursively(); mkdirs() }
+            val work = temp.resolve("build").apply { mkdirs() }
+            val buildSource = patched(source, temp, patchFiles)
             val cmakeBin = cmakeDir.get().asFile
             val ndk = ndkDir.get().asFile
             exec.exec {
@@ -299,7 +307,7 @@ abstract class BuildCmakeCore : DefaultTask() {
                         cmakeBin.resolve("cmake").path, "-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=${cmakeBin.resolve("ninja").path}",
                         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_TOOLCHAIN_FILE=${ndk.resolve("build/cmake/android.toolchain.cmake").path}",
                         "-DANDROID_ABI=${abi.get()}", "-DANDROID_STL=c++_static",
-                    ) + cmakeArgs.get() + listOf("-S", source.path, "-B", work.path),
+                    ) + cmakeArgs.get() + listOf("-S", buildSource.path, "-B", work.path),
                 )
             }
             exec.exec { commandLine(cmakeBin.resolve("cmake").path, "--build", work.path, "--target", target.get()) }
@@ -318,6 +326,36 @@ abstract class BuildCmakeCore : DefaultTask() {
         library.copyTo(libs.resolve(libraryName.get()), overwrite = true)
         val assets = assetsDir.get().asFile.resolve("cores").apply { deleteRecursively(); mkdirs() }
         sysZip.copyTo(assets.resolve(sysZipName.get()), overwrite = true)
+    }
+
+    /**
+     * The source to build: [source] itself without patches, else a copy of it in [temp] with each
+     * patch applied. A patch that no longer applies fails the build: never built unpatched.
+     */
+    private fun patched(source: File, temp: File, patchFiles: List<File>): File {
+        if (patchFiles.isEmpty()) return source
+        val copy = temp.resolve("source")
+        logger.lifecycle("Copying ${source.name} to apply ${patchFiles.size} patch(es)")
+        exec.exec { commandLine("cp", "-R", source.path, copy.path) }
+        // A submodule's .git names its git directory relative to itself: the copy needs it whole
+        // (the build asks git for its version).
+        val gitFile = source.resolve(".git")
+        if (gitFile.isFile) {
+            val gitDir = gitFile.readText().trim().removePrefix("gitdir:").trim()
+            copy.resolve(".git").writeText("gitdir: ${source.resolve(gitDir).canonicalPath}\n")
+        }
+        for (patch in patchFiles) {
+            // patch(1), not git apply: the copy sits inside Genkan's own repository. No fuzz: a
+            // patch whose context moved doesn't apply, rather than landing near it.
+            val applies = exec.exec {
+                commandLine("patch", "-p1", "-F", "0", "--forward", "--dry-run", "-d", copy.path, "-i", patch.path)
+                isIgnoreExitValue = true
+            }
+            check(applies.exitValue == 0) { "${patch.name} no longer applies to ${source.name} at ${commit.get().take(7)}: update or drop it (see its README)" }
+            exec.exec { commandLine("patch", "-p1", "-F", "0", "--forward", "-d", copy.path, "-i", patch.path) }
+            logger.lifecycle("Applied ${patch.name}")
+        }
+        return copy
     }
 
     /** The source at the pinned commit, with the externals the build uses, each one commit deep. */
@@ -354,6 +392,7 @@ val dolphinCommit = "e0f0bfec5003270c6252a51d1eae6e6bbec6c3ed"
 val buildDolphin = tasks.register<BuildCmakeCore>("buildDolphin") {
     commit.set(dolphinCommit)
     submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/dolphin"))
+    patches.from(rootProject.fileTree("patches/dolphin") { include("*.patch") })
     libraryName.set("libdolphin_libretro_android.so")
     abi.set("arm64-v8a")
     cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DENABLE_LTO=ON", "-DANDROID_PLATFORM=android-21"))

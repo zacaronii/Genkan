@@ -1,0 +1,66 @@
+diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
+index 97ba667..303b28a 100644
+--- a/Source/Core/DolphinLibretro/Main.cpp
++++ b/Source/Core/DolphinLibretro/Main.cpp
+@@ -269,8 +269,10 @@ void retro_run(void)
+ 
+   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_settings::WIDESCREEN_HACK))
+   {
+-    g_Config.bWidescreenHack = Libretro::Options::GetCached<bool>(
+-      Libretro::Options::gfx_settings::WIDESCREEN_HACK);
++    // Through the config system, as the other options are: a change to any of them refreshes
++    // g_Config from it, which would undo a value written to g_Config alone.
++    Config::SetBase(Config::GFX_WIDESCREEN_HACK, Libretro::Options::GetCached<bool>(
++      Libretro::Options::gfx_settings::WIDESCREEN_HACK));
+   }
+ 
+   // Crop to 4:3 when advertising 480-line geometry (NTSC / PAL60), tracked per frame.
+@@ -369,8 +371,13 @@ void retro_run(void)
+ 
+   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_settings::EFB_SCALE) || vr_resized)
+   {
+-    g_Config.iEFBScale = Libretro::Options::GetCached<int>(
+-      Libretro::Options::gfx_settings::EFB_SCALE);
++    // Through the config system (see WIDESCREEN_HACK above): set on g_Config alone, a change
++    // made as the game runs was undone by the next refresh.
++    Config::SetBase(Config::GFX_EFB_SCALE, Libretro::Options::GetCached<int>(
++      Libretro::Options::gfx_settings::EFB_SCALE));
++    // And the output's size with it (GLContextLR::Update), at the next frame.
++    if (g_presenter)
++      g_presenter->ResizeSurface();
+ 
+     unsigned cmd = RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO;
+     if (Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_D3D11 ||
+diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
+index a3f108e..1db9f55 100644
+--- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
++++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
+@@ -345,6 +345,16 @@ bool GLContextLR::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core
+   return true;
+ }
+ 
++void GLContextLR::Update()
++{
++  // The output is sized by the EFB scale, which can change as the game runs (retro_run asks the
++  // presenter for a resize then, which comes here): set only at start, a smaller scale drew the
++  // old size into the frontend's smaller framebuffer.
++  const int efbScale = Libretro::Options::GetCached<int>(Libretro::Options::gfx_settings::EFB_SCALE, 1);
++  m_backbuffer_width = Libretro::Video::GetAdjustedBaseWidth() * efbScale;
++  m_backbuffer_height = Libretro::Video::GetAdjustedBaseHeight() * efbScale;
++}
++
+ void GLContextLR::Swap()
+ {
+   Libretro::Video::video_cb(VideoCommon::g_is_duplicate_frame ? nullptr : RETRO_HW_FRAME_BUFFER_VALID,
+diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
+index 1bf7a79..57cafa3 100644
+--- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
++++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
+@@ -12,6 +12,7 @@ public:
+ 
+   bool IsHeadless() const override { return false; }
+   void Swap() override;
++  void Update() override;
+   void* GetFuncAddress(const std::string& name) override;
+   bool Initialize(const WindowSystemInfo& wsi, bool stereo, bool core) override;
+   bool IsInitialized() const { return m_initialized; }
