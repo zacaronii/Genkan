@@ -28,6 +28,7 @@
 #include "../../libretro-common/include/libretro.h"
 #include "log.h"
 #include "environment.h"
+#include "gameid.h"
 #include "genkantap.h"
 #include "vfs/vfsinterfacenegotiation.h"
 #include "vfs/vfs.h"
@@ -259,6 +260,14 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: {
             LOGD("Called RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER");
             *((unsigned*) data) = retro_hw_context_type::RETRO_HW_CONTEXT_OPENGLES3;
+            return true;
+        }
+
+        case libretrodroid::GENKAN_ENVIRONMENT_SET_GAME_ID: {
+            // Genkan: the game the core names (LRPS2's serial and ELF CRC); not one a disc's: ignored.
+            auto *game = static_cast<const libretrodroid::GenkanGameId*>(data);
+            auto id = game ? libretrodroid::formatGameId(game->serial, game->crc) : std::string();
+            if (!id.empty()) libretrodroid::GenkanTap::getInstance().setGameId(id);
             return true;
         }
 

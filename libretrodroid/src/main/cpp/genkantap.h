@@ -82,6 +82,9 @@ public:
     /** A lifted finger leaves the core's pointer where it was (a Wii's): see PointerState::touch. */
     void setKeepPointer(bool keep);
     bool isKeepPointer();
+    /** The game the core named ("SLPM-12345 1a2b3c4d", see gameid.h); empty until it does. */
+    void setGameId(const std::string &id);
+    std::string gameId();
     void keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format);
     /** Rows [firstRow, firstRow + rows) of the last kept frame into [out]; false when it has none that big. */
     bool copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsigned rows);
@@ -108,6 +111,8 @@ private:
 
     std::atomic<bool> splitScreens { false };
     std::atomic<bool> keepPointer { false };
+    std::mutex gameIdLock;
+    std::string gameIdValue;
     std::mutex frameLock;
     std::vector<uint8_t> frame;
     unsigned frameWidth = 0;

@@ -20,12 +20,15 @@ class ScriptEventsTest {
     }
 
     @Test
-    fun `a build is a GameCube disc's id and version, or a cartridge's header CRC`() {
+    fun `a build is a GameCube disc's id and version, a PS2 disc's serial and CRC, or a cartridge's header CRC`() {
         val ram = ByteArray(0x40)
         "GTST01".toByteArray().copyInto(ram)
         byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D).copyInto(ram, 0x1C)
         assertEquals("GTST01-00", ScriptEvents.buildId("ngc", ram, null))
-        assertEquals("1a2b3c4d", ScriptEvents.buildId("snes", null, "1A2B3C4D"))
+        assertEquals("1a2b3c4d", ScriptEvents.buildId("snes", null, CartridgeId("SHVC-ZQ", "1A2B3C4D")))
+        // A PS2 disc's serial and ELF CRC as its core names them: the build PINE gives ARMSX2's.
+        assertEquals("SLPM-12345-1a2b3c4d", ScriptEvents.buildId("ps2", null, CartridgeId("SLPM-12345", "1A2B3C4D")))
+        assertEquals(null, ScriptEvents.buildId("ps2", ByteArray(16), null))
         assertEquals(null, ScriptEvents.buildId("psx", ByteArray(16), null))
     }
 }

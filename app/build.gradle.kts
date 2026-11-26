@@ -671,6 +671,18 @@ val pointerTest = tasks.register<NativeHostTest>("pointerTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/** The game a core names through Genkan's private call (a PS2 core's serial and CRC), as PINE reports it. */
+val gameIdTest = tasks.register<NativeHostTest>("gameIdTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/gameid.h"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    target.set("game_id_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("game-id-test"))
+    passed.set(layout.buildDirectory.file("game-id-test/passed"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 /**
  * The popup page's script tests (src/test/js), with Node's own test runner: no packages. The unit
  * tests wait for it, so CI and the local check run it.
@@ -697,7 +709,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->

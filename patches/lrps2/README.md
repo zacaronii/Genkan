@@ -19,3 +19,16 @@ model"). The patch leaves the macro empty on Android, as it already is on MSVC, 
 take the default model there.
 
 Drop it once LRPS2 leaves the model out on Android itself.
+
+## 0002-hand-the-game-id-to-the-frontend.patch
+
+Genkan names a PS2 game and its build the way PINE does for ARMSX2: the disc's serial and the ELF's
+CRC (`SLPM-12345-1a2b3c4d`), so Yomikata's scripts and catalog entries fit both. libretro gives a
+frontend neither. The core has both when a game starts (`host_on_game_changed` in
+`libretro/main.c`, which also runs for the BIOS with the BIOS's own "serial"); the patch hands them
+over there through a private environment call, `RETRO_ENVIRONMENT_PRIVATE | 0x4701` with a
+`{ const char *serial; unsigned crc; }`. Genkan's libretrodroid keeps a disc's and ignores the
+BIOS's (`libretrodroid/src/main/cpp/gameid.h`, tested by `gameIdTest`). A frontend that doesn't
+know the call refuses it, and the core goes on as before.
+
+Drop it if LRPS2 or libretro gains a way to tell the frontend which game it runs.
