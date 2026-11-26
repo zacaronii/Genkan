@@ -65,4 +65,6 @@ interface ICoreSession {
     float[] pictureBounds() = 20;
     /** Moves the game to its core's ladder step [step] while it runs; false when that needs a restart (or no such step). */
     boolean setTuningStep(String step) = 21;
+    /** Plugs Wii controller [choice] (WiiController: nunchuk, classic, sideways) into the running Wii game; false for another console. */
+    boolean setWiiController(String choice) = 22;
 }

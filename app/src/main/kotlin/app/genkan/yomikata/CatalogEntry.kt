@@ -23,6 +23,8 @@ data class CatalogEntry(
     val cleanup: List<CleanupStep> = emptyList(),
     val hooks: List<Hook> = emptyList(),
     val tuning: Map<String, app.genkan.core.BundledTuning> = emptyMap(),
+    /** A Wii game's controller (app.genkan.core.WiiController's choices); null: not said, the Nunchuk. */
+    val wiiController: String? = null,
 ) {
     /** A printing the entry is known to fit: a boot executable's hash (discs) or a header CRC (cartridges). */
     data class Version(val id: String?, val exeSha1: String?, val headerCrc32: String?)
@@ -63,6 +65,7 @@ data class CatalogEntry(
                         core to app.genkan.core.BundledTuning(id, step.optStringOrNull("measured_on"))
                     }.toMap()
                 }.orEmpty(),
+                wiiController = app.genkan.core.WiiController.of(o.optStringOrNull("wii_controller")),
             )
         }
 

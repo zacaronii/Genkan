@@ -108,6 +108,8 @@ class CoreActivity : ComponentActivity() {
     private var overlay: OverlayView? = null
     /** The core's ladder step the game runs at (see [TuningLadders]); null for a core with no ladder. */
     @Volatile private var tuningStep: String? = null
+    /** The Wii controller plugged in (WiiController); null for another console. */
+    @Volatile private var wiiController: String? = null
     /** Learns the game's step as it's played (null: off, or no ladder); its kept steps go to [tuningStore]. */
     @Volatile private var learner: TuningLearner? = null
     private val tuningStore by lazy { TuningStore(File(filesDir, "tuning")) }
@@ -167,6 +169,13 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
+    /** The Wii controller the launch chose for the game ([EXTRA_WII_CONTROLLER]), for a core that takes one. */
+    private fun wiiControllerOf(def: CoreDef): Map<String, String> =
+        WiiController.of(intent.getStringExtra(EXTRA_WII_CONTROLLER))
+            ?.takeIf { WiiController.OPTION in def.variables }
+            ?.let { mapOf(WiiController.OPTION to it) }
+            .orEmpty()
+
     /** Starts [def] on [game], the file it plays (unpacked from [rom] when that is a zip). */
     private fun play(def: CoreDef, rom: File, game: File) {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
@@ -184,7 +193,9 @@ class CoreActivity : ComponentActivity() {
             gameFilePath = game.absolutePath
             systemDirectory = system.absolutePath
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
-            variables = (def.variables + (tuningStep?.let { TuningLadders.of(def.tuning)?.assignment(it) } ?: emptyMap()))
+            val controller = wiiControllerOf(def)
+            wiiController = controller[WiiController.OPTION] ?: def.variables[WiiController.OPTION]
+            variables = (def.variables + controller + (tuningStep?.let { TuningLadders.of(def.tuning)?.assignment(it) } ?: emptyMap()))
                 .map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
             sticksOnly = def.sticksOnly
@@ -447,6 +458,18 @@ class CoreActivity : ComponentActivity() {
             // Set from outside (the catalog's step, a debug build): learning starts again from it.
             if (moved && learner != null) TuningLadders.of(core.tuning)?.let { learner = TuningLearner(it, tuningStep!!) }
             return moved
+        }
+
+        override fun setWiiController(choice: String): Boolean {
+            val controller = WiiController.of(choice) ?: return false
+            if (WiiController.OPTION !in core.variables || !::retroView.isInitialized) return false
+            // Plugged in again, the same controller would only drop the game's input for a moment.
+            if (controller == wiiController) return true
+            wiiController = controller
+            // Dolphin plugs the new controller into its ports as the game runs.
+            retroView.updateVariables(Variable(WiiController.OPTION, controller))
+            Log.i(TAG, "Wii controller: $controller")
+            return true
         }
 
         override fun unloadScript() {
@@ -988,6 +1011,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_LEARN = "learn"
         /** The core's ladder step to start at (see [GameTuning]); absent, its default. */
         const val EXTRA_TUNING_STEP = "tuning_step"
+        /** A Wii game's controller (WiiController, see [GameWiiController]); absent, the core's default. */
+        const val EXTRA_WII_CONTROLLER = "wii_controller"
         const val EXTRA_PLATFORM = "platform"
         /** The [ScreenLook] to draw the game with, by name. */
         const val EXTRA_LOOK = "look"

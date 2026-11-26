@@ -48,6 +48,7 @@ class BuiltInText @Inject constructor(
     private val catalog: YomikataCatalog,
     private val yomikataIds: YomikataIds,
     private val tuning: GameTuning,
+    private val wiiController: GameWiiController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val text = MemoryText(session, ocr, TAG, ::missing)
@@ -141,6 +142,7 @@ class BuiltInText @Inject constructor(
                 // The entry's cleanup, for the game's own codes in the lines memory gives.
                 text.rules = MemoryText.rulesOf(entryOf(game.title, id))
                 tuneFor(game, id)
+                controllerFor(game, id)
                 return
             }
             delay(ID_RETRY_MS)
@@ -157,6 +159,17 @@ class BuiltInText @Inject constructor(
         val resolved = tuning.resolve(romId, core.tuning, id) ?: return
         val live = withContext(Dispatchers.IO) { player.setTuningStep(resolved.step.id) }
         Log.i(TAG, "Tuning step ${resolved.step.id} (${resolved.source.name.lowercase()})" + if (live) "" else ", from the next start")
+    }
+
+    /**
+     * A Wii game's controller from the catalog entry of the release now known as [id] (on a first
+     * play the launch didn't know it), plugged in as the game runs. The same one again is left plugged in.
+     */
+    private suspend fun controllerFor(game: app.genkan.reader.NowPlaying.Game, id: String) {
+        val core = player.game.value?.core ?: return
+        if (WiiController.OPTION !in core.variables) return
+        val choice = wiiController.resolve(game.rommRomId ?: 0, id) ?: return
+        withContext(Dispatchers.IO) { player.setWiiController(choice) }
     }
 
     private val _scriptScreen = MutableStateFlow(app.genkan.ocr.ScreenText.EMPTY)

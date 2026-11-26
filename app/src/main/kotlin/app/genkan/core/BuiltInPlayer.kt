@@ -81,6 +81,13 @@ class BuiltInPlayer @Inject constructor() {
         false
     }
 
+    /** Plugs Wii controller [choice] (WiiController) into the running game; false when no Wii game runs. */
+    fun setWiiController(choice: String): Boolean = try {
+        _game.value?.session?.setWiiController(choice) ?: false
+    } catch (e: RemoteException) {
+        false
+    }
+
     /** The script feature level the player's runtime gives; 0 without a game. */
     fun scriptLevel(): Int = try {
         _game.value?.session?.scriptLevel() ?: 0
