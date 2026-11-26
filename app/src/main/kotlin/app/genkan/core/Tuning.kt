@@ -1,0 +1,101 @@
+package app.genkan.core
+
+/**
+ * One step of a core's ladder: the core options that set it, over the core's own (see
+ * [TuningLadder.assignment]). A [risky] step may break how a game looks or runs, so it is never
+ * taken on its own: only from a catalog profile measured on this device. A [live] step the core
+ * applies while the game runs; another waits for the next start.
+ */
+data class TuningStep(val id: String, val options: Map<String, String>, val risky: Boolean = false, val live: Boolean = true)
+
+/**
+ * A core's steps, from the best-looking to the lightest, with the core's own [defaultId] among
+ * them. [defaults] are the values every key the ladder touches has without a step, so going back
+ * to a step sets them again.
+ */
+data class TuningLadder(val steps: List<TuningStep>, val defaultId: String, val defaults: Map<String, String>) {
+    init {
+        require(steps.any { it.id == defaultId }) { "No default step $defaultId" }
+        require(steps.all { defaults.keys.containsAll(it.options.keys) }) { "A step sets a key with no default" }
+    }
+
+    fun step(id: String?): TuningStep? = steps.firstOrNull { it.id == id }
+
+    val default: TuningStep get() = step(defaultId)!!
+
+    /** Every key the ladder touches, as [id] sets it (the defaults for those it leaves). */
+    fun assignment(id: String): Map<String, String> = defaults + (step(id)?.options ?: emptyMap())
+
+    /**
+     * The safe step nearest [id] on the way to the default, [id] itself when it's safe: what a
+     * risky step falls back to where it wasn't measured.
+     */
+    fun safeToward(id: String): TuningStep {
+        val from = steps.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return default
+        val home = steps.indexOf(default)
+        val path = if (from <= home) (from..home) else (from downTo home)
+        return path.map { steps[it] }.first { !it.risky }
+    }
+}
+
+/** A catalog entry's step for a core, and the device it was measured on (a risky step needs one). */
+data class BundledTuning(val step: String, val measuredOn: String?)
+
+/** Which step a game gets, and where it came from. */
+data class ResolvedTuning(val step: TuningStep, val source: Source) {
+    enum class Source { OVERRIDE, CATALOG, DEFAULT }
+}
+
+object TuningLadders {
+    // Dolphin's libretro code re-reads these as the game runs (DolphinLibretro/Main.cpp's IsUpdated
+    // checks), but on the Thor 2x EFB set that way left the picture unchanged, while set at the
+    // start it took: its live path writes g_Config directly, which the config system's own refresh
+    // undoes. They wait for a restart until that's fixed in the core.
+    private val dolphin = TuningLadder(
+        steps = listOf(
+            TuningStep("efb-2x", mapOf("dolphin_efb_scale" to "2"), live = false),
+            TuningStep("default", emptyMap(), live = false),
+            TuningStep("vi-skip", mapOf("dolphin_vi_skip" to "enabled"), risky = true, live = false),
+            TuningStep("vi-skip-cpu-80", mapOf("dolphin_vi_skip" to "enabled", "dolphin_cpu_clock_rate" to "0.80"), risky = true, live = false),
+        ),
+        defaultId = "default",
+        defaults = mapOf("dolphin_efb_scale" to "1", "dolphin_vi_skip" to "disabled", "dolphin_cpu_clock_rate" to "1.00"),
+    )
+
+    // PPSSPP is prebuilt: whether it changes resolution as the game runs isn't known yet, so its
+    // steps wait for a restart until a round on the device shows they apply live.
+    private val ppsspp = TuningLadder(
+        steps = listOf(
+            TuningStep("1920x1088", mapOf("ppsspp_internal_resolution" to "1920x1088"), live = false),
+            TuningStep("default", emptyMap(), live = false),
+            TuningStep("960x544", mapOf("ppsspp_internal_resolution" to "960x544"), live = false),
+            TuningStep("480x272", mapOf("ppsspp_internal_resolution" to "480x272"), live = false),
+        ),
+        defaultId = "default",
+        defaults = mapOf("ppsspp_internal_resolution" to "1440x816"),
+    )
+
+    /** The ladder for a core; null for one light enough to need none. */
+    fun of(coreId: String): TuningLadder? = when (coreId) {
+        "dolphin" -> dolphin
+        "ppsspp" -> ppsspp
+        else -> null
+    }
+
+    /**
+     * The step for a game: the device's own choice for the game ([override], never a risky step),
+     * then the catalog's for its release ([bundled]: a risky step only where it was measured on
+     * this [device], else the safe step nearest it), then the core's default. A step the ladder
+     * doesn't have counts as none.
+     */
+    fun resolve(ladder: TuningLadder, override: String?, bundled: BundledTuning?, device: String): ResolvedTuning {
+        ladder.step(override)?.takeIf { !it.risky }?.let { return ResolvedTuning(it, ResolvedTuning.Source.OVERRIDE) }
+        val fromCatalog = bundled?.let { ladder.step(it.step) }
+        if (fromCatalog != null) {
+            val measuredHere = !bundled.measuredOn.isNullOrBlank() && bundled.measuredOn == device
+            val step = if (!fromCatalog.risky || measuredHere) fromCatalog else ladder.safeToward(fromCatalog.id)
+            return ResolvedTuning(step, ResolvedTuning.Source.CATALOG)
+        }
+        return ResolvedTuning(ladder.default, ResolvedTuning.Source.DEFAULT)
+    }
+}

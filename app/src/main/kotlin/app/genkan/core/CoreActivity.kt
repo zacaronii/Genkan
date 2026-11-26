@@ -106,6 +106,8 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var captured: KeptFrame? = null
     /** The overlay over the game, for a core with one picture (not yet a DS's two screens). */
     private var overlay: OverlayView? = null
+    /** The core's ladder step the game runs at (see [TuningLadders]); null for a core with no ladder. */
+    @Volatile private var tuningStep: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +122,8 @@ class CoreActivity : ComponentActivity() {
         }
         core = def
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
+        val ladder = TuningLadders.of(def.id)
+        tuningStep = ladder?.let { it.step(intent.getStringExtra(EXTRA_TUNING_STEP))?.id ?: it.defaultId }
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
         states = SaveStates(SaveStates.dirFor(File(filesDir, SaveStates.FOLDER), def.id, GameFile.keyFor(romId, rom)), def.id)
@@ -175,7 +179,8 @@ class CoreActivity : ComponentActivity() {
             gameFilePath = game.absolutePath
             systemDirectory = system.absolutePath
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
-            variables = def.variables.map { (key, value) -> Variable(key, value) }.toTypedArray()
+            variables = (def.variables + (tuningStep?.let { TuningLadders.of(def.id)?.assignment(it) } ?: emptyMap()))
+                .map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
             sticksOnly = def.sticksOnly
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
@@ -431,6 +436,18 @@ class CoreActivity : ComponentActivity() {
         override fun scriptLevel(): Int = GenkanTap.scriptLevel()
 
         override fun pictureBounds(): FloatArray? = GenkanTap.pictureBounds()
+
+        override fun setTuningStep(step: String): Boolean {
+            val ladder = TuningLadders.of(core.id) ?: return false
+            val next = ladder.step(step) ?: return false
+            if (next.id == tuningStep) return true
+            // Leaving a step the core reads only at start needs a start too.
+            if (!next.live || ladder.step(tuningStep)?.live == false || !::retroView.isInitialized) return false
+            retroView.updateVariables(*ladder.assignment(next.id).map { (key, value) -> Variable(key, value) }.toTypedArray())
+            Log.i(TAG, "Tuning step ${tuningStep} -> ${next.id}, as the game runs")
+            tuningStep = next.id
+            return true
+        }
 
         override fun unloadScript() {
             retroView.queueEvent { GenkanTap.scriptUnload() }
@@ -942,6 +959,8 @@ class CoreActivity : ComponentActivity() {
         private const val DEFAULT_RATE = 60f
         const val EXTRA_ROM = "rom"
         const val EXTRA_ROM_ID = "rom_id"
+        /** The core's ladder step to start at (see [GameTuning]); absent, its default. */
+        const val EXTRA_TUNING_STEP = "tuning_step"
         const val EXTRA_PLATFORM = "platform"
         /** The [ScreenLook] to draw the game with, by name. */
         const val EXTRA_LOOK = "look"

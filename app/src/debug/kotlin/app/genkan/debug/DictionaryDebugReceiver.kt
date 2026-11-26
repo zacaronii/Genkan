@@ -108,6 +108,9 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING -n app.genkan/.debug.DictionaryDebugReceiver --ez hints false --ez frame_rate true --ez game_state true --ez priority true
  * (which of the player's speed aids are on from the next game started, to measure one without the others; any
  *  left out are on; --ez reset true deletes the file, so all are on)
+ *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
+ * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
+ *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -138,6 +141,8 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var readingLog: ReadingLogSettings
     @Inject lateinit var readerSession: ReaderSession
     @Inject lateinit var headphones: app.genkan.bluetooth.Headphones
+    @Inject lateinit var tuningStore: app.genkan.core.TuningStore
+    @Inject lateinit var gameTuning: app.genkan.core.GameTuning
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -341,6 +346,17 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         val ram = player.game.value?.core?.platforms?.firstNotNullOfOrNull { app.genkan.memory.MainRam.of(it) }
                         val scratch = File(context.filesDir, "yomikata-snapshots/frames.capture").apply { parentFile?.mkdirs() }
                         save("moment", ram?.let { player.moment(it.range, scratch)?.frame })
+                    }
+                    "app.genkan.debug.TUNING_STEP" -> {
+                        val rom = intent.getLongExtra("rom", 0)
+                        if (intent.getBooleanExtra("clear", false)) tuningStore.clearOverride(rom)
+                        else intent.getStringExtra("step")?.let { tuningStore.setOverride(rom, it, "debug broadcast") }
+                        val running = player.game.value?.takeIf { it.romId == rom }
+                        val core = running?.core ?: database.library().game(rom)?.let { app.genkan.core.CoreCatalog.forPlatform(it.platformSlug) }
+                        val resolved = core?.let { gameTuning.resolve(rom, it.id) }
+                        val live = resolved != null && running != null && player.setTuningStep(resolved.step.id)
+                        Log.i(TAG, "Tuning step for rom $rom: ${resolved?.step?.id ?: "no ladder"} (${resolved?.source?.name?.lowercase() ?: "-"})" +
+                            if (running == null) "" else if (live) ", applied as the game runs" else ", from the next start")
                     }
                     "app.genkan.debug.TUNING" -> {
                         val file = File(context.filesDir, app.genkan.core.TuningSwitches.FILE)

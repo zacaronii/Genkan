@@ -59,6 +59,7 @@ class GameLauncher @Inject constructor(
     private val player: BuiltInPlayer,
     private val firmware: CoreFirmware,
     private val screenLooks: ScreenLooks,
+    private val tuning: app.genkan.core.GameTuning,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -147,6 +148,10 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_LOOK, screenLooks.forLaunch(game.id, game.platformSlug).name)
             .putExtra(CoreActivity.EXTRA_LOW_LATENCY, playerSettings.lowLatency(game.platformSlug))
             .putExtra(CoreActivity.EXTRA_A_ON_RIGHT, playerSettings.aOnRight(game.platformSlug))
+        tuning.resolve(game.id, core.id)?.let {
+            Log.i(TAG, "Tuning step ${it.step.id} (${it.source.name.lowercase()})")
+            intent.putExtra(CoreActivity.EXTRA_TUNING_STEP, it.step.id)
+        }
         return LaunchPlan.Ready(builtIn = true) {
             Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")
             try {

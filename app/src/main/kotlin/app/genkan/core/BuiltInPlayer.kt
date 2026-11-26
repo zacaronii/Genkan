@@ -74,6 +74,13 @@ class BuiltInPlayer @Inject constructor() {
         null
     }
 
+    /** Moves the running game to ladder step [step]; false when that waits for its next start, or no game runs. */
+    fun setTuningStep(step: String): Boolean = try {
+        _game.value?.session?.setTuningStep(step) ?: false
+    } catch (e: RemoteException) {
+        false
+    }
+
     /** The script feature level the player's runtime gives; 0 without a game. */
     fun scriptLevel(): Int = try {
         _game.value?.session?.scriptLevel() ?: 0
