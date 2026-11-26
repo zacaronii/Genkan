@@ -107,12 +107,13 @@ a Yomitan dictionary popup. See
   page's exact text from memory. Azahar's RPC listens on the whole network while a game runs.
 - **Built-in player (opt-in):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
   DS games (melonDS DS), PS1 games (PCSX ReARMed), PSP games (PPSSPP), Super Famicom games
-  (bsnes-mercury) and GameCube games (Dolphin) inside Genkan instead of their installed
+  (bsnes-mercury), GameCube and Wii games (Dolphin) and PC Engine HuCard and CD-ROM² games
+  (Beetle PCE Fast, with RomM's System Card 3 for CDs) inside Genkan instead of their installed
   emulator, in a process of its own. Genkan then reads the game's frames, sound and memory
   itself: OCR and card audio need no screen-capture prompt, and text is found in memory as for
   Azahar (a PSP scan takes a third of a second), with no hook profile or network debugger.
   GBA saves are RetroArch's mGBA `.srm` files and PSP saves go on PPSSPP's memory stick, so
-  each is shared with the standalone emulator and synced; PS1 and DS saves are kept in
+  each is shared with the standalone emulator and synced; PS1, DS and PC Engine saves are kept in
   `Genkan/saves/<core>` and synced to RomM under the core's name. Dolphin keeps its whole User
   folder in `Genkan/saves/dolphin` (memory cards, config and shader cache); only its GameCube
   memory cards (`User/GC`) sync, as standalone Dolphin's, so the two share saves through RomM.

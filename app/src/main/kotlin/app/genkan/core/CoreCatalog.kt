@@ -123,6 +123,16 @@ object CoreCatalog {
             extensions = setOf("sfc", "smc", "bml"),
         ),
         CoreDef(
+            id = "beetle_pce_fast", displayName = "Beetle PCE Fast", library = "libmednafen_pce_fast_libretro_android.so",
+            // HuCards, and CD-ROM² discs, which boot through a System Card.
+            platforms = setOf("tg16", "turbografx-cd"),
+            // System Card 3, which CD-ROM² and Super CD-ROM² discs both boot with. RomM keeps it
+            // in the CD platform's firmware; HuCards need none.
+            variables = mapOf("pce_fast_cdbios" to "System Card 3"),
+            firmware = mapOf("syscard3.pce" to "syscard3.pce"),
+            extensions = setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
+        ),
+        CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
             platforms = setOf("ngc"),
             // Measured on the Thor: a steady 60 fps at the native resolution with the GL renderer

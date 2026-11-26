@@ -429,7 +429,8 @@ val downloadMeikiModels = tasks.register<DownloadPinnedFiles>("downloadMeikiMode
 
 /**
  * Libretro cores for the built-in player, as native libraries, from Lemuroid's prebuilt cores
- * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0, PPSSPP GPL-2.0). See NOTICE.
+ * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0, PPSSPP GPL-2.0, Beetle PCE Fast
+ * GPL-2.0). See NOTICE.
  */
 val lemuroidCores = "https://raw.githubusercontent.com/Swordfish90/LemuroidCores/fee2e824525daa22bcf318f96127fe43fa8a15ad"
 
@@ -441,6 +442,7 @@ val downloadCores = tasks.register<DownloadPinnedFiles>("downloadCores") {
             "$lemuroidCores/lemuroid_core_pcsx_rearmed/src/main/jniLibs/arm64-v8a/libpcsx_rearmed_libretro_android.so 1c32c21dcc488889db7556bd0bd11c72219228f8d35d36bc30c640472af21fd3 libpcsx_rearmed_libretro_android.so",
             "$lemuroidCores/lemuroid_core_ppsspp/src/main/jniLibs/arm64-v8a/libppsspp_libretro_android.so 2d5370602e07df1e5bc0fb20467cff52aafa8ccbade904b5d7f60b3eebd2ff23 libppsspp_libretro_android.so",
             "$lemuroidCores/lemuroid_core_melonds/src/main/jniLibs/arm64-v8a/libmelonds_libretro_android.so 71f305fa273d27c57eb438fd3447a4c33bbd2f321ead9ac7d5c46d6a707d760d libmelonds_libretro_android.so",
+            "$lemuroidCores/lemuroid_core_mednafen_pce_fast/src/main/jniLibs/arm64-v8a/libmednafen_pce_fast_libretro_android.so 6487d7828b48d1f63d2233e45f5aa909f91543114355bf326364f430a37a32e9 libmednafen_pce_fast_libretro_android.so",
         ),
     )
     cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
