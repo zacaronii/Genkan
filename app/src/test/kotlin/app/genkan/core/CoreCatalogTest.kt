@@ -129,8 +129,9 @@ class CoreCatalogTest {
     }
 
     @Test
-    fun `only Flycast, whose sound comes two frames at a time, keeps off the low-latency stream`() {
-        assertEquals(listOf("flycast"), CoreCatalog.cores.filter { !it.lowLatencySound }.map { it.id })
+    fun `Flycast and Dolphin keep off the low-latency stream, whose short buffer they ran dry`() {
+        // Flycast's sound comes two frames at a time; Dolphin's frames take long now and then.
+        assertEquals(listOf("flycast", "dolphin", "dolphin_wii"), CoreCatalog.cores.filter { !it.lowLatencySound }.map { it.id })
     }
 
     @Test
