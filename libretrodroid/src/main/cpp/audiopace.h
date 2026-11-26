@@ -66,6 +66,16 @@ private:
     int held = 0;
 };
 
+/**
+ * Whether the frame loop draws the screen itself after a step. A core drawn in its own video callback
+ * (one rendering into a framebuffer, Flycast's) is drawn there, but a step held back above gives no
+ * callback, nor does a run that sends no frame: then the last frame is drawn again, or the display
+ * shows a buffer nobody drew in (a 30 fps game held every other step flashed with it).
+ */
+inline bool drawsAfterStep(bool rendersInVideoCallback, bool videoCallbackThisStep) {
+    return !rendersInVideoCallback || !videoCallbackThisStep;
+}
+
 }
 
 #endif //LIBRETRODROID_AUDIOPACE_H

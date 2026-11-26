@@ -195,6 +195,8 @@ private:
     // and how many it makes a frame (its sample rate over its fps).
     std::atomic<size_t> stepAudioFrames{0};
     double soundPerFrame = 0;
+    // Genkan: whether the core called the video callback in this step (audiopace.h's drawsAfterStep).
+    bool videoCallbackThisStep = false;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
 };
