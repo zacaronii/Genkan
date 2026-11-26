@@ -20,7 +20,8 @@ namespace libretrodroid {
 /**
  * Each retro_run's time and each step's count since the last take, so the player can say how
  * fast the game runs and whether the core itself is the cost (the wait for the next frame isn't
- * in it). Recorded on the emulation thread, taken from any.
+ * in it); and the sound the core made, which says it too for a core whose emulation isn't in its
+ * runs. Recorded on the emulation thread, taken from any.
  */
 class FrameStats {
 public:
@@ -32,6 +33,18 @@ public:
     /** The rate the core runs at (its timing.fps), set as a game loads. */
     void setContentFps(double fps);
 
+    /** The core's sound rate (its timing.sample_rate), set as a game loads. */
+    void setSampleRate(double rate);
+
+    /** [frames] of sound the core made, stereo frames. */
+    void recordAudio(int64_t frames);
+
+    /** A step whose run was held back, the core's sound being ahead (audiopace.h): on time, not slow. */
+    void recordPaced();
+
+    /** A read of the sound buffer that found too little and played silence for the rest; from the sound's thread. */
+    void recordDry() { dry.fetch_add(1, std::memory_order_relaxed); }
+
     /** One retro_run that took [nanos]. */
     void recordRun(int64_t nanos);
 
@@ -42,8 +55,10 @@ public:
     int64_t lastStepNanos() const { return lastStep.load(std::memory_order_relaxed); }
 
     /**
-     * Since the last take: runs, their total, longest and 95th-percentile time (ns), steps, and
-     * the content rate in thousandths of a frame a second. Starts the next period.
+     * Since the last take: runs, their total, longest and 95th-percentile time (ns), steps, the
+     * content rate in thousandths of a frame a second, steps held back, sound frames made, and the
+     * sound rate in thousandths of a frame a second, and the sound buffer's dry reads. Starts the next
+     * period.
      */
     std::vector<int64_t> take();
 
@@ -54,8 +69,12 @@ private:
     std::vector<int64_t> runs;
     int64_t steps = 0;
     int64_t contentFpsMilli = 0;
+    int64_t sampleRateMilli = 0;
+    int64_t paced = 0;
+    int64_t audioFrames = 0;
     int64_t stepNanos = 0;
     std::atomic<int64_t> lastStep{0};
+    std::atomic<int64_t> dry{0};
 };
 
 }

@@ -127,6 +127,11 @@ class CoreCatalogTest {
     }
 
     @Test
+    fun `only Flycast, whose sound comes two frames at a time, keeps off the low-latency stream`() {
+        assertEquals(listOf("flycast"), CoreCatalog.cores.filter { !it.lowLatencySound }.map { it.id })
+    }
+
+    @Test
     fun `Dreamcast discs play on Flycast, with RomM's BIOS in its dc folder and its RAM at 0x0C000000`() {
         val dc = CoreCatalog.forPlatform("dc", debug = false)!!
         assertEquals("flycast", dc.id)

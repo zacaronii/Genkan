@@ -55,6 +55,12 @@ data class CoreDef(
      */
     val portDevices: List<Int> = emptyList(),
     /**
+     * The core's sound plays through the low-latency stream when Settings allows (a buffer of four
+     * frames); false for one that makes its sound in bigger lumps, which run that buffer dry between
+     * them: it gets the plain stream's eight.
+     */
+    val lowLatencySound: Boolean = true,
+    /**
      * The console has sticks of its own: the left stick is only its main stick and the right only
      * its second, never also the D-pad, which Android otherwise makes of an unhandled stick.
      */
@@ -195,6 +201,9 @@ object CoreCatalog {
             extensions = setOf("chd", "cdi", "gdi", "cue", "m3u"),
             // On shared storage, where the save sync watches it (WatchedEmulator.BUILT_IN).
             savesFolder = "Genkan/saves/flycast",
+            // Its emulation runs on a thread of its own: a game drawing 30 frames a second makes two
+            // frames of sound a run, every other display frame (libretrodroid's audiopace.h).
+            lowLatencySound = false,
         ),
         CoreDef(
             // libretro's PCSX2 with native ARM64 recompilers, built from source. The PS2's own

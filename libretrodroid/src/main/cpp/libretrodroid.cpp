@@ -437,6 +437,8 @@ void LibretroDroid::resume() {
     input = std::make_unique<Input>();
 
     fpsSync->reset();
+    audioPace.reset();
+    stepAudioFrames = 0;
     audio->start();
     refreshAspectRatio();
 }
@@ -459,6 +461,18 @@ void LibretroDroid::step() {
 
         // If the application runs too slow it's better to just skip those frames.
         frames = std::min(requestedFrames, 2u);
+    }
+
+    // Genkan: a core whose sound is ahead of the frames asked of it (one whose emulation runs on a
+    // thread of its own, more than a frame a run) is held back a step; not while the sound is off or
+    // the game runs fast on purpose.
+    size_t sound = stepAudioFrames.exchange(0);
+    double made = soundPerFrame > 0 ? sound / soundPerFrame : 0;
+    if (!audio || !audioEnabled || frameSpeed != 1 || soundPerFrame <= 0) {
+        audioPace.reset();
+    } else if (!audioPace.run(made, frames)) {
+        frames = 0;
+        FrameStats::getInstance().recordPaced();
     }
 
     for (size_t i = 0; i < frames * frameSpeed; i++) {
@@ -568,6 +582,9 @@ void LibretroDroid::handleVideoRefresh(
 }
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
+    // Genkan: all the sound the core makes, heard or not: how fast its game runs, against its rate.
+    FrameStats::getInstance().recordAudio(static_cast<int64_t>(frames));
+    stepAudioFrames += frames;
     if (audio && audioEnabled) {
         audio->write(data, frames);
     }
@@ -637,6 +654,8 @@ void LibretroDroid::afterGameLoad() {
 
     fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
     FrameStats::getInstance().setContentFps(system_av_info.timing.fps);
+    FrameStats::getInstance().setSampleRate(system_av_info.timing.sample_rate);
+    soundPerFrame = system_av_info.timing.fps > 0 ? system_av_info.timing.sample_rate / system_av_info.timing.fps : 0;
 
     double inputSampleRate = system_av_info.timing.sample_rate * fpsSync->getTimeStretchFactor();
 

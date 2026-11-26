@@ -18,6 +18,7 @@
 #include "log.h"
 
 #include "audio.h"
+#include "framestats.h"
 #include "genkantap.h"
 #include <cmath>
 #include <memory>
@@ -131,6 +132,10 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     framesToSubmit -= currentFramesToSubmit;
 
     int32_t samplesRead = fifoBuffer->readNow(temporaryAudioBuffer.get(), currentFramesToSubmit * 2);
+    // Genkan: the buffer ran dry, and silence filled the rest; the stream's own underruns don't count it.
+    if (samplesRead < currentFramesToSubmit * 2) {
+        FrameStats::getInstance().recordDry();
+    }
 
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
     resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
