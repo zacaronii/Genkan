@@ -10,6 +10,7 @@ using libretrodroid::locateAddress;
 using libretrodroid::readableFrom;
 using libretrodroid::reduceAddress;
 using libretrodroid::unswapWords;
+using libretrodroid::wholeOffset;
 using libretrodroid::wordSpanLength;
 using libretrodroid::wordSpanStart;
 
@@ -61,6 +62,16 @@ int main() {
     check(at(ram, 0x7E0000, 0) && at(ram, 0x7FFFFF, 0x1FFFF), "plain memory reads from its start");
     check(!locateAddress(ram, 0x800000) && !locateAddress(ram, 0x7DFFFF), "and nowhere else");
     check(readableFrom(ram, 0x7FFFF0, 0x1FFF0) == 0x10, "to its end");
+
+    // A PC Engine CD's card RAM, 192 KB under select 0xFFFD0000: the map takes its first and third
+    // 64 KB at their places and not the middle, which a whole read takes.
+    const MemoryDescriptor card { 0x0D0000, 0x30000, 0xFFFD0000, 0 };
+    check(at(card, 0x0D0000, 0) && at(card, 0x0F0000, 0x20000), "the card's first and third 64 KB by the map");
+    check(!locateAddress(card, 0x0E0000), "not its middle");
+    check(wholeOffset(card, 0x0E0000, 0x10000) == 0x10000, "read whole, the middle is the block's second 64 KB");
+    check(wholeOffset(card, 0x0D0000, 0x30000) == 0, "all of it at once");
+    check(!wholeOffset(card, 0x0FFFFF, 2), "not past its end");
+    check(!wholeOffset(card, 0x0CFFFF, 1) && !wholeOffset(card, 0x100000, 1), "nor outside it");
 
     // Work RAM kept as 16-bit words, each byte pair swapped (mednafen_saturn's): the console's
     // "SEGA" (53 45 47 41) lies as 45 53 41 47.

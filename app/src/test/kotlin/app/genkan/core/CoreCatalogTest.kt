@@ -117,6 +117,11 @@ class CoreCatalogTest {
         assertEquals(0L, saturn.ramBase)
         // No other core cuts its RAM up.
         CoreCatalog.cores.filter { it !== saturn }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && !it.ramWords) }
+    }
+
+    @Test
+    fun `only a PC Engine's core reads its blocks whole, for a CD's card RAM`() {
+        assertEquals(listOf("beetle_pce_fast"), CoreCatalog.cores.filter { it.readsWhole }.map { it.id })
         // No core is debug-only now.
         CoreCatalog.cores.forEach { assertFalse(it.id, it.debugOnly) }
     }

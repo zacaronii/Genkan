@@ -71,7 +71,16 @@ public:
     void setSystemRamStretches(std::vector<Stretch> stretches, bool words);
     void clear();
     std::vector<Region> regions();
+    /**
+     * [size] bytes at [address] (what snapshots and the text search read): by the core's map, or, when
+     * reads are whole (setReadsWhole) and the map leaves the address out, from the block it lies in.
+     */
     bool read(uint64_t address, uint8_t *out, size_t size);
+    /**
+     * The core's blocks read whole where its map leaves gaps in them (a PC Engine CD's card RAM), as
+     * Yomikata's harness reads them for snapshots and searches. Scripts keep to the map. Set before the game loads.
+     */
+    void setReadsWhole(bool whole);
     /**
      * Up to `size` bytes at `address` from `among` (a copy of [regions] taken once a frame): how many
      * were there, fewer where the region ends, 0 outside every region. For the script's many small reads.
@@ -129,6 +138,7 @@ private:
 
     std::atomic<bool> splitScreens { false };
     std::atomic<bool> keepPointer { false };
+    std::atomic<bool> readsWhole { false };
     std::mutex gameIdLock;
     std::string gameIdValue;
     std::mutex frameLock;

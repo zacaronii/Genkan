@@ -119,6 +119,12 @@ bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
         if (size > readableFrom(d, address, *at)) return false;
         return copyOut(r, *at, out, size) == size;
     }
+    if (!readsWhole) return false;
+    // Where the map leaves a gap in a block of the core's own, the block read whole (setReadsWhole).
+    for (const auto &r : regions()) {
+        auto at = wholeOffset(descriptorOf(r), address, size);
+        if (at) return copyOut(r, *at, out, size) == size;
+    }
     return false;
 }
 
@@ -198,6 +204,10 @@ void GenkanTap::setSplitScreens(bool split) {
 
 bool GenkanTap::isSplitScreens() {
     return splitScreens;
+}
+
+void GenkanTap::setReadsWhole(bool whole) {
+    readsWhole = whole;
 }
 
 void GenkanTap::setKeepPointer(bool keep) {

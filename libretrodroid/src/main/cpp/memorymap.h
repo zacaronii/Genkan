@@ -64,6 +64,17 @@ inline uint64_t readableFrom(const MemoryDescriptor &d, uint64_t address, uint64
 }
 
 /**
+ * Where [size] bytes at [address] lie in [d]'s memory read whole: from its start on for its length,
+ * whatever its select and disconnect bits say, or nothing when they don't all lie there. A core's own
+ * block, as Yomikata's harness reads it for snapshots and searches: a PC Engine CD's card RAM, whose
+ * map leaves its middle 64 KB out of the console's addresses.
+ */
+inline std::optional<uint64_t> wholeOffset(const MemoryDescriptor &d, uint64_t address, uint64_t size) {
+    if (address < d.start || address - d.start > d.length || size > d.length - (address - d.start)) return std::nullopt;
+    return address - d.start;
+}
+
+/**
  * Memory a core keeps as 16-bit words in the host's order, little-endian (mednafen_saturn's work RAM):
  * each pair of the console's big-endian bytes swapped. A read of [size] bytes at offset [at] fetches
  * the whole words they're in, from [wordSpanStart] for [wordSpanLength] bytes, and [unswapWords] puts

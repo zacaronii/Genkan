@@ -29,6 +29,11 @@ data class CoreDef(
     /** The core keeps that RAM as 16-bit words in the host's order: reads swap each byte pair back. */
     val ramWords: Boolean = false,
     /**
+     * Snapshots and the text search read the core's blocks whole where its map leaves gaps in them
+     * (a PC Engine CD's card RAM), as Yomikata's harness does; scripts keep to the map.
+     */
+    val readsWhole: Boolean = false,
+    /**
      * Folders under shared storage, any of which the core may keep its saves in when it is there
      * (a standalone emulator's, so the two share saves); else Genkan's own.
      */
@@ -147,6 +152,9 @@ object CoreCatalog {
             // in the CD platform's firmware; HuCards need none.
             variables = mapOf("pce_fast_cdbios" to "System Card 3"),
             firmware = mapOf("syscard3.pce" to "syscard3.pce"),
+            // The card's 192 KB is one block of the core's, whose map gives its first and third 64 KB
+            // at their places and not the middle: a CD game's snapshot has it all, as Yomikata's.
+            readsWhole = true,
             extensions = setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
         ),
         CoreDef(
