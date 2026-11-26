@@ -24,3 +24,7 @@ target_include_directories(memory_map_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 # Where a touch leaves a core's pointer (src/main/cpp/pointer.h).
 add_executable(pointer_test pointer_test.cpp)
 target_include_directories(pointer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+
+# The game a core names through Genkan's private call (src/main/cpp/gameid.h).
+add_executable(game_id_test game_id_test.cpp)
+target_include_directories(game_id_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)

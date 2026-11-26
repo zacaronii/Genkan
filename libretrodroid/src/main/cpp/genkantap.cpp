@@ -50,6 +50,10 @@ void GenkanTap::clear() {
         systemRamData = nullptr;
         systemRamSize = nullptr;
     }
+    {
+        std::lock_guard<std::mutex> lock(gameIdLock);
+        gameIdValue.clear();
+    }
     std::lock_guard<std::mutex> lock(audioLock);
     ringStart = 0;
     ringCount = 0;
@@ -176,6 +180,16 @@ void GenkanTap::setKeepPointer(bool keep) {
 
 bool GenkanTap::isKeepPointer() {
     return keepPointer;
+}
+
+void GenkanTap::setGameId(const std::string &id) {
+    std::lock_guard<std::mutex> lock(gameIdLock);
+    gameIdValue = id;
+}
+
+std::string GenkanTap::gameId() {
+    std::lock_guard<std::mutex> lock(gameIdLock);
+    return gameIdValue;
 }
 
 void GenkanTap::keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format) {

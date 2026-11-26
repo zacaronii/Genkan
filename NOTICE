@@ -208,8 +208,9 @@ License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
 
   A submodule at third_party/lrps2, which a normal checkout skips
   (update = none). The buildLrps2 task in app/build.gradle.kts fetches it,
-  applies Genkan's patch in patches/lrps2 (no initial-exec TLS on Android,
-  which can't load the core otherwise; see its README) to a copy, builds it for arm64-v8a with the NDK's CMake toolchain as a libretro core
+  applies Genkan's patches in patches/lrps2 (no initial-exec TLS on Android,
+  which can't load the core otherwise; the game's serial and ELF CRC handed
+  to the frontend; see their README) to a copy, builds it for arm64-v8a with the NDK's CMake toolchain as a libretro core
   with the OpenGL renderer (-DLIBRETRO=ON -DUSE_VULKAN=OFF, android-33,
   c++_static, stripped) and bundles it, in debug builds only, as
   libpcsx2_libretro_android.so. It isn't committed; the source it is built

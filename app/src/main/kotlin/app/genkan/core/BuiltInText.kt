@@ -122,9 +122,11 @@ class BuiltInText @Inject constructor(
         val game = session.game.value
         _notListed.value = false
         val stored = game.rommRomId?.let { yomikataIds.idFor(it).first() }
-        // A cartridge's id is in its header, read once; a disc's is looked for in RAM as it boots.
-        val cartridge = withContext(Dispatchers.IO) { player.cartridgeId() }
+        // A cartridge's id is in its header, read once; a disc's is looked for in RAM as it boots,
+        // or named by the core once its game starts (a PS2's), so asked for again until then.
+        var cartridge = withContext(Dispatchers.IO) { player.cartridgeId() }
         repeat(ID_TRIES) { attempt ->
+            if (cartridge == null) cartridge = withContext(Dispatchers.IO) { player.cartridgeId() }
             val id = withContext(Dispatchers.IO) {
                 // RAM first here too: the id found earlier in this run (another disc's, maybe)
                 // only stands in, as the stored one does.
@@ -209,7 +211,7 @@ class BuiltInText @Inject constructor(
         val script = files.script
         val ram = withContext(Dispatchers.IO) { player.memory()?.use { RamSnapshots.mainRamOf(it, game.platform) } }
         val cartridge = gameCartridge?.takeIf { it.id == id }
-        val buildId = ScriptEvents.buildId(game.platform, ram, cartridge?.headerCrc32)
+        val buildId = ScriptEvents.buildId(game.platform, ram, cartridge)
         val regions = if (withContext(Dispatchers.IO) { player.hasVideoRam() }) setOf("vram") else emptySet()
         script.unusable(withContext(Dispatchers.IO) { player.scriptLevel() }, buildId, regions)?.let { why ->
             Log.i(TAG, "${game.title} ($id): its script can't run here: $why")

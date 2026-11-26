@@ -67,6 +67,12 @@ object GenkanTap {
      */
     @JvmStatic external fun setKeepPointer(keep: Boolean)
 
+    /**
+     * The game the core named, "serial crc" (a PS2 core's disc serial and its ELF's CRC, as PINE
+     * reports them), or null until it does.
+     */
+    @JvmStatic external fun gameId(): String?
+
     /** The last kept frame's width and height, or null before one came. */
     fun frameSize(): Pair<Int, Int>? {
         val packed = packedFrameSize()

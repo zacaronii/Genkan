@@ -1,0 +1,19 @@
+diff --git a/libretro/main.c b/libretro/main.c
+index 6addc9e..b265f1b 100644
+--- a/libretro/main.c
++++ b/libretro/main.c
+@@ -3591,6 +3591,14 @@ void host_on_game_changed(const char* disc_path, const char* elf_override,
+ 
+ 	log_cb(RETRO_LOG_INFO, "[GameDB] Serial: \"%s\"\n", serial);
+ 
++	/* Genkan: the game's serial and ELF CRC for the frontend, the pair PINE
++	 * reports, so a frontend can name the game and its build. A frontend that
++	 * doesn't know the call refuses it, and nothing changes. */
++	{
++		struct { const char* serial; unsigned crc; } genkan_game = { serial, game_crc };
++		environ_cb(RETRO_ENVIRONMENT_PRIVATE | 0x4701, &genkan_game);
++	}
++
+ 	{
+ 		struct retro_variable var;
+ 		bool fastcdvd;

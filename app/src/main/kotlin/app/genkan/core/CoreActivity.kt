@@ -427,7 +427,8 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var cartridge: CartridgeId? = null
 
     private val session = object : ICoreSession.Stub() {
-        override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" }
+        // A cartridge's from its header; else the one the core named (a PS2 disc's serial and CRC).
+        override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" } ?: GenkanTap.gameId()
 
         override fun loadScript(name: String, source: ByteArray, data: Bundle, gameId: String, buildId: String?): String? {
             if (!gameLoaded()) return "no game is running"

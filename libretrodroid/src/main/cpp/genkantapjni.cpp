@@ -105,6 +105,11 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSplitScreen
     GenkanTap::getInstance().setSplitScreens(split == JNI_TRUE);
 }
 
+JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_GenkanTap_gameId(JNIEnv *env, jclass) {
+    std::string id = GenkanTap::getInstance().gameId();
+    return id.empty() ? nullptr : env->NewStringUTF(id.c_str());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setKeepPointer(JNIEnv *, jclass, jboolean keep) {
     GenkanTap::getInstance().setKeepPointer(keep == JNI_TRUE);
 }
