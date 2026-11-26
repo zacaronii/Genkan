@@ -34,6 +34,10 @@ public:
         uint8_t *host;
         // Another address for memory an earlier region already covers (a mirror).
         bool mirror;
+        // The descriptor's select and disconnect bits (memorymap.h): how the console's addresses
+        // reach [host]; zero for plain memory from start for length bytes.
+        uint64_t select = 0;
+        uint64_t disconnect = 0;
     };
 
     static GenkanTap& getInstance() {

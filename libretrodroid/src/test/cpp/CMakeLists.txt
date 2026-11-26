@@ -16,3 +16,7 @@ target_link_libraries(script_host_test PRIVATE yomikata_reader)
 # The part of a hardware core's framebuffer its frame filled (src/main/cpp/renderers/framefill.h).
 add_executable(frame_fill_test frame_fill_test.cpp)
 target_include_directories(frame_fill_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/renderers)
+
+# A console's address read through a core's memory descriptor (src/main/cpp/memorymap.h).
+add_executable(memory_map_test memory_map_test.cpp)
+target_include_directories(memory_map_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
