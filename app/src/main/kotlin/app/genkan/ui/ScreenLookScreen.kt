@@ -54,7 +54,7 @@ private val ALL_LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "psp" to "PlayStation Portable",
 )
 
-/** The consoles this build's built-in player runs (the Saturn only in debug builds, while its core is picked). */
+/** The consoles this build's built-in player runs. */
 val LOOK_CONSOLES: List<Pair<String, String>> = ALL_LOOK_CONSOLES.filter { it.first in app.genkan.core.CoreCatalog.platforms }
 
 @HiltViewModel

@@ -57,17 +57,9 @@ jobs:
           path: .gradle/cores/libbsnes_mercury_libretro_android-${{ env.BSNES_COMMIT }}
           key: bsnes-mercury-${{ env.BSNES_COMMIT }}
 
-      # The Saturn's two candidate cores (debug builds only), likewise.
-      - name: Note the Saturn cores' commits
-        run: |
-          echo "YABASANSHIRO_COMMIT=$(git rev-parse HEAD:third_party/yabasanshiro)" >> "$GITHUB_ENV"
-          echo "BEETLE_SATURN_COMMIT=$(git rev-parse HEAD:third_party/beetle-saturn)" >> "$GITHUB_ENV"
-
-      - name: Cache the built YabaSanshiro
-        uses: actions/cache@v4
-        with:
-          path: .gradle/cores/libyabasanshiro_libretro_android-${{ env.YABASANSHIRO_COMMIT }}
-          key: yabasanshiro-${{ env.YABASANSHIRO_COMMIT }}
+      # Beetle Saturn, the Saturn core, likewise.
+      - name: Note the Beetle Saturn commit
+        run: echo "BEETLE_SATURN_COMMIT=$(git rev-parse HEAD:third_party/beetle-saturn)" >> "$GITHUB_ENV"
 
       - name: Cache the built Beetle Saturn
         uses: actions/cache@v4

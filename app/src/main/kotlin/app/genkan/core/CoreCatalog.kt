@@ -139,24 +139,15 @@ object CoreCatalog {
             firmware = mapOf("syscard3.pce" to "syscard3.pce"),
             extensions = setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
         ),
-        // The Saturn's two candidates, built from source in debug builds only, until a round on the
-        // device picks one. Both boot with the Japanese BIOS from RomM's Saturn firmware.
         CoreDef(
-            // An ARM64 dynarec for the SH-2s and a GLES3 renderer: made for phones.
-            id = "yabasanshiro", displayName = "YabaSanshiro", library = "libyabasanshiro_libretro_android.so",
-            platforms = setOf("saturn"),
-            firmware = mapOf("sega_101.bin" to "sega_101.bin"),
-            extensions = setOf("cue", "iso", "mds", "ccd", "chd"),
-            debugOnly = true,
-        ),
-        CoreDef(
-            // Mednafen's: the most accurate, its SH-2s interpreted.
+            // Mednafen's: the most accurate, its SH-2s interpreted. Full speed on the Thor with half the
+            // CPU spare (YabaSanshiro, the other candidate, drew no picture here). It boots with the
+            // Japanese BIOS from RomM's Saturn firmware.
             id = "beetle_saturn", displayName = "Beetle Saturn", library = "libmednafen_saturn_libretro_android.so",
             platforms = setOf("saturn"),
             firmware = mapOf("sega_101.bin" to "sega_101.bin"),
             // Not zip, which the core reads as an arcade board's: a zipped disc is unpacked first.
             extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
-            debugOnly = true,
         ),
         CoreDef(
             id = "flycast", displayName = "Flycast", library = "libflycast_libretro_android.so",

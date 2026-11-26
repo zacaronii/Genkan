@@ -24,9 +24,10 @@ class PlayerChoiceTest {
     }
 
     @Test
-    fun `only consoles with more than one way get a row, the Saturn's candidates only in debug builds`() {
+    fun `only consoles with more than one way get a row`() {
         assertEquals(listOf("ps2"), PlayerChoice.consoles(debug = false).map { it.first })
-        assertEquals(listOf("ps2", "saturn"), PlayerChoice.consoles(debug = true).map { it.first })
-        assertEquals(listOf("yabasanshiro", "beetle_saturn"), PlayerChoice.options("saturn", debug = true).map { it.value })
+        assertEquals(listOf("ps2"), PlayerChoice.consoles(debug = true).map { it.first })
+        // The Saturn has one way: Beetle Saturn, with no emulator app known.
+        assertEquals(listOf("beetle_saturn"), PlayerChoice.options("saturn", debug = false).map { it.value })
     }
 }

@@ -9,7 +9,7 @@ object BuiltInBoot {
 
     /**
      * [rom] when [core] plays it; for a playlist (m3u) it can't open, the first disc it lists, when
-     * the core plays that (YabaSanshiro takes a Saturn game's discs, not their playlist); else null.
+     * the core plays that (Dolphin takes a GameCube game's discs, not their playlist); else null.
      */
     fun fileFor(core: CoreDef, rom: File): File? {
         if (GameFile.takes(core, rom)) return rom
