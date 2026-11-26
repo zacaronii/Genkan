@@ -36,16 +36,26 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** The consoles the built-in player runs, by platform slug, in the order the page lists them. */
-val LOOK_CONSOLES: List<Pair<String, String>> = listOf(
+/** Every console the built-in player can run, by platform slug, in the order the page lists them. */
+private val ALL_LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "gb" to "Game Boy",
     "gbc" to "Game Boy Color",
     "gba" to "Game Boy Advance",
     "snes" to "Super Famicom",
+    "tg16" to "PC Engine",
+    "turbografx-cd" to "PC Engine CD-ROM²",
     "nds" to "Nintendo DS",
     "psx" to "PlayStation",
+    "saturn" to "Saturn",
+    "dc" to "Dreamcast",
+    "ps2" to "PlayStation 2",
+    "ngc" to "GameCube",
+    "wii" to "Wii",
     "psp" to "PlayStation Portable",
 )
+
+/** The consoles this build's built-in player runs (the Saturn only in debug builds, while its core is picked). */
+val LOOK_CONSOLES: List<Pair<String, String>> = ALL_LOOK_CONSOLES.filter { it.first in app.genkan.core.CoreCatalog.platforms }
 
 @HiltViewModel
 class ScreenLookViewModel @Inject constructor(
@@ -194,7 +204,7 @@ fun ScreenLookContent(
         Text("Screen look and sound", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "How the built-in player draws each console's picture on the top screen. A press opens the looks to pick from. " +
-                "Until you choose, PlayStation, Super Famicom and DS are Sharp, the Game Boys LCD and the PSP Default. " +
+                "Until you choose, PlayStation, Super Famicom, PC Engine and DS are Sharp, the Game Boys LCD, and the PSP and the rest Default. " +
                 "A game can have its own in its details, and the reader's Look chip tries others while playing; " +
                 "Keep then makes the one on screen that game's own.",
             style = MaterialTheme.typography.bodyMedium,

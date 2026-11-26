@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,5 +67,35 @@ class LowLatencyRowsTest {
         compose.setContent { GenkanTheme { ScreenLookContent(emptyMap(), learning = true, onToggleLearning = { presses++ }) } }
         compose.onNodeWithText("Learn each game's speed: on").performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(1, presses)
+    }
+
+    @Test
+    fun `the item-6 consoles have their rows too, a press switching the one pressed`() {
+        val latency = mutableListOf<String>()
+        val swapped = mutableListOf<String>()
+        compose.setContent {
+            GenkanTheme {
+                ScreenLookContent(
+                    emptyMap(), lowLatencyOff = setOf("dc"), onToggleLowLatency = { latency += it },
+                    faceSwapped = setOf("ps2"), onToggleFaceSwap = { swapped += it },
+                )
+            }
+        }
+        compose.onNodeWithText("Dreamcast: off").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf("dc"), latency)
+        compose.onNodeWithText("PlayStation 2: swapped").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf("ps2"), swapped)
+        compose.onNodeWithText("Wii: as the device").assertExists()
+        compose.onNodeWithText("PC Engine: Sharp  ·  ${app.genkan.core.ScreenLook.SHARP.description}").assertExists()
+    }
+
+    @Test
+    fun `every console the built-in player runs has a row, once`() {
+        // sfam is RomM's other name for the Super Famicom, which the snes row covers.
+        val aliases = setOf("sfam")
+        assertEquals(app.genkan.core.CoreCatalog.platforms - aliases, LOOK_CONSOLES.map { it.first }.toSet())
+        assertEquals(LOOK_CONSOLES.size, LOOK_CONSOLES.map { it.first }.toSet().size)
+        // Each one offers looks to pick from.
+        LOOK_CONSOLES.forEach { (platform, _) -> assertTrue(platform, app.genkan.core.ScreenLook.suiting(platform)?.isNotEmpty() == true) }
     }
 }
