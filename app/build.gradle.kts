@@ -411,9 +411,18 @@ abstract class BuildCmakeCore : DefaultTask() {
         logger.lifecycle("Fetching $path at ${commit.get().take(7)}")
         git(root, "submodule", "update", "--init", "--checkout", "--depth", "1", "--", path)
         val wanted = externals.get().ifEmpty {
-            git(source, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$").lines()
-                .map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
+            // git config exits 1 when nothing matches: no .gitmodules, or an empty one (LRPS2's).
+            val listed = ByteArrayOutputStream().also { out ->
+                exec.exec {
+                    commandLine("git", "-C", source.path, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$")
+                    standardOutput = out
+                    isIgnoreExitValue = true
+                }
+            }.toString()
+            listed.lines().map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
         }
+        // A source with no submodules of its own has nothing more to fetch.
+        if (wanted.isEmpty()) return
         git(source, *(listOf("submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8", "--") + wanted).toTypedArray())
     }
 
