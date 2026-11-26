@@ -3,6 +3,7 @@ package app.genkan.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,5 +67,22 @@ class CoreCatalogTest {
         assertEquals(0x80001234L, fold(0xC0001234L))
         assertEquals(0x917F0000L, fold(0x917F0000L))
         assertEquals(0x93FFFFFCL, fold(0xD3FFFFFCL))
+    }
+
+    @Test
+    fun `PC Engine HuCards and CD-ROM discs play on Beetle PCE Fast, CDs with RomM's System Card 3`() {
+        val hucard = CoreCatalog.forPlatform("tg16")!!
+        val cd = CoreCatalog.forPlatform("turbografx-cd")!!
+        assertSame(hucard, cd)
+        assertEquals("beetle_pce_fast", cd.id)
+        assertEquals("libmednafen_pce_fast_libretro_android.so", cd.library)
+        // RomM's file name to the one the core looks for in its system folder.
+        assertEquals(mapOf("syscard3.pce" to "syscard3.pce"), cd.firmware)
+        assertEquals("System Card 3", cd.variables["pce_fast_cdbios"])
+        listOf("game.pce", "game.cue", "game.chd", "game.ccd", "game.toc", "games.m3u").forEach { assertTrue(it, cd.takes(it)) }
+        assertFalse(cd.takes("game.zip"))
+        // A light core: no ladder, its pad's own buttons, saves in Genkan's folder.
+        assertNull(TuningLadders.of(cd.tuning))
+        assertTrue(cd.portDevices.isEmpty() && !cd.sticksOnly && cd.savesFolder == null && !cd.keepPointer)
     }
 }
