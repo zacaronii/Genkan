@@ -99,6 +99,16 @@ jobs:
           path: .gradle/cores/libflycast_libretro_android-${{ env.FLYCAST_COMMIT }}
           key: flycast-${{ env.FLYCAST_COMMIT }}
 
+      # LRPS2, the PS2 core (debug builds only), likewise (third_party/lrps2, which checkout skips).
+      - name: Note the LRPS2 commit
+        run: echo "LRPS2_COMMIT=$(git rev-parse HEAD:third_party/lrps2)" >> "$GITHUB_ENV"
+
+      - name: Cache the built LRPS2
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores/libpcsx2_libretro_android-${{ env.LRPS2_COMMIT }}
+          key: lrps2-${{ env.LRPS2_COMMIT }}
+
       # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
       # the proxy and host; LunaHook comes from LunaTranslator's pinned release.
       - name: Cache LunaHook

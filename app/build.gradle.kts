@@ -487,6 +487,28 @@ val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/**
+ * LRPS2 (libretro/parallel-ps2, GPL-3.0), libretro's PCSX2 with native ARM64 recompilers for the EE
+ * and IOP, built from its repository at this commit with the OpenGL ES renderer (libretrodroid gives
+ * cores no Vulkan). In debug builds only, until a round shows it at full speed. See NOTICE.
+ */
+val lrps2Commit = "4d2c5d0904c339fd18252574e010fbf38d1b1929"
+
+val buildLrps2 = tasks.register<BuildCmakeCore>("buildLrps2") {
+    commit.set(lrps2Commit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/lrps2"))
+    libraryName.set("libpcsx2_libretro_android.so")
+    abi.set("arm64-v8a")
+    cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DUSE_VULKAN=OFF", "-DANDROID_PLATFORM=android-33"))
+    target.set("pcsx2_libretro")
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    libsDir.set(layout.buildDirectory.dir("generated/lrps2/libs"))
+    assetsDir.set(layout.buildDirectory.dir("generated/lrps2/assets"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 val meikiDetect ="https://huggingface.co/rtr46/meiki.text.detect.v0/resolve/a9cffa4f60cbf72ddb87edf19c6f98a01cd042e6"
 val meikiRecognize = "https://huggingface.co/rtr46/meiki.txt.recognition.v0/resolve/a28cf5874dc2438ebb1c86336be26bcec51e3375"
 
@@ -670,10 +692,11 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
-        // The Saturn's candidates, in debug builds only (CoreDef.debugOnly).
+        // The Saturn's candidates and LRPS2, in debug builds only (CoreDef.debugOnly).
         if (variant.buildType == "debug") {
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildYabaSanshiro, BuildLibretroCore::outputDir)
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
+            variant.sources.jniLibs?.addGeneratedSourceDirectory(buildLrps2, BuildCmakeCore::libsDir)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)
