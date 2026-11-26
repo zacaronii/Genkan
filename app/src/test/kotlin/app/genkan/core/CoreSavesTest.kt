@@ -63,4 +63,17 @@ class CoreSavesTest {
         assertEquals(listOf("GC"), watched.folders)
         assertEquals(app.genkan.saves.WatchedEmulator.BY_PLATFORM.getValue("ngc").folders, watched.folders)
     }
+
+    @Test
+    fun `a Wii game's saves sync from the same User folder's NAND, as standalone Dolphin's`() {
+        val core = CoreCatalog.forPlatform("wii")!!
+        assertEquals(File(storage, "Genkan/saves/dolphin"), CoreSaves.directoryFor(core, File(storage, "private"), storage))
+        assertNull(CoreSaves.ownTarget("wii", core, File("/storage/ROMs/wii/Game.rvz"), storage))
+        val watched = app.genkan.saves.WatchedEmulator.BUILT_IN.getValue("wii")
+        assertEquals("dolphin", watched.emulator)
+        assertEquals(app.genkan.saves.WatchedEmulator.BUILT_IN.getValue("ngc").bases, watched.bases)
+        // Only the NAND's saves, never its system files or the GameCube's cards.
+        assertEquals(listOf("Wii/title"), watched.folders)
+        assertEquals(app.genkan.saves.WatchedEmulator.BY_PLATFORM.getValue("wii").folders, watched.folders)
+    }
 }

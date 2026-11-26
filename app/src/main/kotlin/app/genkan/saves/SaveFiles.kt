@@ -53,11 +53,13 @@ data class WatchedEmulator(
         /**
          * The built-in player's, by platform, for a core that keeps its saves in a folder of its own
          * (CoreDef.savesFolder). Dolphin's User folder also holds its config and shader cache: only
-         * the memory cards' GC folder is watched. Its GCI files are standalone Dolphin's, under the
-         * same paths, so the two share saves through RomM.
+         * the memory cards' GC folder is watched, and for a Wii game its NAND's save folder
+         * (Wii/title). The files are standalone Dolphin's, under the same paths, so the two share
+         * saves through RomM.
          */
         val BUILT_IN = mapOf(
             "ngc" to WatchedEmulator("dolphin", listOf("Genkan/saves/dolphin/User"), listOf("GC"), privileged = false),
+            "wii" to WatchedEmulator("dolphin", listOf("Genkan/saves/dolphin/User"), listOf("Wii/title"), privileged = false),
         )
     }
 }
