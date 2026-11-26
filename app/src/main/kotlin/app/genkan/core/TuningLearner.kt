@@ -11,22 +11,29 @@ package app.genkan.core
  *   the next better-looking step is tried for a window, kept while full speed holds, else the game
  *   goes back and that step isn't tried again this session.
  *
- * Nothing is learned in the first [SETTLE] seconds (loading), while the device is hotter than
- * [HOT_C], or across a pause ([paused] starts the windows again). A kept step is a [Decision] to
- * remember for the game; every try and return is one to apply now.
+ * - The device stays hotter than [HOT_C] for [HOT_WINDOW] seconds: the next lighter step is tried
+ *   for a window, kept when the heat stops climbing, else the game goes back. A lighter step the core
+ *   takes only at start is remembered for the game's next start instead ([Decision.nextStart]), once.
+ *
+ * Nothing else is learned in the first [SETTLE] seconds (loading), while the device is hotter than
+ * [HOT_C] (no better-looking step then), or across a pause ([paused] starts the windows again). A
+ * kept step is a [Decision] to remember for the game; every try and return is one to apply now.
  */
 class TuningLearner(private val ladder: TuningLadder, start: String) {
 
     /** One second of play: speed against the core's rate (1.0: full), the busiest thread's share of a CPU, the GPU's busy %, the CPU's heat. */
     data class Second(val speed: Double, val busiest: Double?, val gpuBusyPercent: Int?, val hottestC: Int?)
 
-    /** Move the game to [step] now; [keep]: remember it for the game, with [why]. */
-    data class Decision(val step: String, val keep: Boolean, val why: String)
+    /**
+     * Move the game to [step] now; [keep]: remember it for the game, with [why]. [nextStart]: don't
+     * move now (the core takes the step only at start), only remember it.
+     */
+    data class Decision(val step: String, val keep: Boolean, val why: String, val nextStart: Boolean = false)
 
     var step: String = ladder.step(start)?.id ?: ladder.defaultId
         private set
 
-    private enum class Phase { WATCH, TRY_LIGHTER, TRY_BETTER }
+    private enum class Phase { WATCH, TRY_LIGHTER, TRY_BETTER, TRY_COOLER }
 
     private var phase = Phase.WATCH
     private var played = 0
@@ -36,6 +43,12 @@ class TuningLearner(private val ladder: TuningLadder, start: String) {
     private var trial = 0
     private val failedBetter = mutableSetOf<String>()
     private val failedLighter = mutableSetOf<String>()
+    private var hotSeconds = 0
+    /** The heat a cooler try started at, and the hottest second since. */
+    private var heatAtTry = 0
+    private var heatSince = 0
+    private val failedCooler = mutableSetOf<String>()
+    private var nextStartNoted = false
 
     /** The game was paused or left: windows start again from its next second. */
     fun paused() {
@@ -45,16 +58,22 @@ class TuningLearner(private val ladder: TuningLadder, start: String) {
     fun second(s: Second): Decision? {
         played++
         if (played <= SETTLE) return null
-        if ((s.hottestC ?: 0) > HOT_C) {
-            // Too hot to judge a step by its speed: a try under way goes back.
+        val hot = (s.hottestC ?: 0) > HOT_C
+        hotSeconds = if (hot) hotSeconds + 1 else 0
+        if (phase == Phase.TRY_COOLER) return judgeCooler(s)
+        if (hot) {
+            // Too hot to judge a step by its speed: a try under way goes back. Kept hot, the
+            // game steps down to cool.
             recent.clear()
-            return if (phase != Phase.WATCH) back("too hot to try") else null
+            if (phase != Phase.WATCH) return back("too hot to try")
+            return if (hotSeconds >= HOT_WINDOW) cooler(s) else null
         }
         recent.addLast(s)
         while (recent.size > ROOM) recent.removeFirst()
         return when (phase) {
             Phase.WATCH -> watch()
             Phase.TRY_LIGHTER, Phase.TRY_BETTER -> judge(s)
+            Phase.TRY_COOLER -> null
         }
     }
 
@@ -86,7 +105,42 @@ class TuningLearner(private val ladder: TuningLadder, start: String) {
         return when (phase) {
             Phase.TRY_LIGHTER -> if (speed >= before + GAIN) keep("faster at ${step}") else fail("${step} didn't help")
             Phase.TRY_BETTER -> if (speed >= FULL) keep("full speed at ${step}") else fail("${step} slowed the game")
-            Phase.WATCH -> null
+            Phase.WATCH, Phase.TRY_COOLER -> null
+        }
+    }
+
+    /** The next lighter safe step, to cool the device: tried now when it's live, else remembered for the next start. */
+    private fun cooler(s: Second): Decision? {
+        hotSeconds = 0
+        val at = ladder.steps.indexOfFirst { it.id == step }
+        val lighter = ladder.steps.getOrNull(at + 1)?.takeIf { !it.risky && it.id !in failedCooler } ?: return null
+        if (lighter.live && ladder.steps[at].live) {
+            phase = Phase.TRY_COOLER
+            from = step
+            trial = 0
+            heatAtTry = s.hottestC ?: 0
+            heatSince = 0
+            step = lighter.id
+            return Decision(lighter.id, keep = false, why = "trying ${lighter.id}: the device ran hot")
+        }
+        if (nextStartNoted) return null
+        nextStartNoted = true
+        return Decision(lighter.id, keep = true, why = "${lighter.id} from the next start: the device ran hot", nextStart = true)
+    }
+
+    /** A cooler try: kept once a window passes without the heat climbing past where it started. */
+    private fun judgeCooler(s: Second): Decision? {
+        trial++
+        if (trial <= TRIAL_SETTLE) return null
+        heatSince = maxOf(heatSince, s.hottestC ?: 0)
+        if (trial < TRIAL_SETTLE + WINDOW) return null
+        return if (heatSince <= heatAtTry) {
+            phase = Phase.WATCH
+            recent.clear()
+            Decision(step, keep = true, why = "cooler at ${step}")
+        } else {
+            failedCooler += step
+            back("${step} didn't cool the device")
         }
     }
 
@@ -153,7 +207,9 @@ class TuningLearner(private val ladder: TuningLadder, start: String) {
         const val GAIN = 0.03
         /** The busiest thread's share and the GPU's busy fraction under which the game has room. */
         const val LOAD = 0.60
-        /** Over this, nothing is tried. */
+        /** Over this, nothing better-looking is tried, and a try under way goes back. */
         const val HOT_C = 75
+        /** Seconds over [HOT_C] before the game steps down to cool. */
+        const val HOT_WINDOW = 20
     }
 }

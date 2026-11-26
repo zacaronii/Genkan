@@ -938,6 +938,14 @@ class CoreActivity : ComponentActivity() {
 
     /** A learner's [decision]: the step now, and a kept one remembered for the game's next start. */
     private fun learned(decision: TuningLearner.Decision) {
+        if (decision.nextStart) {
+            // A step the core takes only at start: remembered, and said, since it trades speed for heat.
+            Log.i(TAG, "Learning: ${decision.why}")
+            if (romId > 0) tuningStore.setOverride(romId, decision.step, "learned: ${decision.why}")
+            val label = TuningLadders.of(core.tuning)?.step(decision.step)?.label ?: decision.step
+            runOnUiThread { say(PlayerMessages.runningWarm(label), WARM_NOTICE_MS) }
+            return
+        }
         if (!moveToStep(decision.step)) return
         Log.i(TAG, "Learning: ${decision.why}" + if (decision.keep) ", kept" else "")
         if (decision.keep && romId > 0) tuningStore.setOverride(romId, decision.step, "learned: ${decision.why}")
@@ -1004,6 +1012,8 @@ class CoreActivity : ComponentActivity() {
         private const val TAG = "CoreActivity"
         private const val STATS_TAG = "PlayerStats"
         private const val STATS_EVERY_MS = 1_000L
+        /** How long the running-warm notice stays up. */
+        private const val WARM_NOTICE_MS = 8_000L
         /** The rate assumed when a core doesn't give its own. */
         private const val DEFAULT_RATE = 60f
         const val EXTRA_ROM = "rom"

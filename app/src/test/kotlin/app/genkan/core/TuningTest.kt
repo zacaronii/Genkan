@@ -87,4 +87,14 @@ class TuningTest {
         assertEquals("up", ladder.safeToward("up").id)
         assertEquals("base", ladder.safeToward("missing").id)
     }
+
+    @Test
+    fun `LRPS2 draws on 6 CPU threads by default, with GL as the step lighter on the CPU, both at start`() {
+        val lrps2 = TuningLadders.of("lrps2")!!
+        assertEquals(listOf("default", "gl"), lrps2.steps.map { it.id })
+        assertFalse(lrps2.steps.any { it.live || it.risky })
+        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("default"))
+        assertEquals(mapOf("pcsx2_renderer" to "Auto", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("gl"))
+        assertEquals(listOf("Software", "GL"), lrps2.steps.map { it.label })
+    }
 }

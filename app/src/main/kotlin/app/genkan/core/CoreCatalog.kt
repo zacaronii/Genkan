@@ -187,12 +187,10 @@ object CoreCatalog {
             // games otherwise go to ARMSX2.
             id = "lrps2", displayName = "LRPS2", library = "libpcsx2_libretro_android.so",
             platforms = setOf("ps2"),
-            variables = mapOf(
-                // The frontend's preferred context: libretrodroid answers OpenGL ES 3, for which the
-                // core's GL renderer asks 3.1. ("OpenGL" asks for desktop GL 3.3 and draws nothing.)
-                "pcsx2_renderer" to "Auto",
-                "pcsx2_bios" to "ps2-0230a-20080220.bin",
-            ),
+            // The renderer is its ladder's (TuningLadders): Software on 6 threads, else GL as "Auto",
+            // the frontend's preferred context (libretrodroid answers OpenGL ES 3, for which the
+            // core's GL renderer asks 3.1; "OpenGL" asks for desktop GL 3.3 and draws nothing).
+            variables = mapOf("pcsx2_bios" to "ps2-0230a-20080220.bin"),
             // RomM's PS2 BIOS, in the folder the core looks in.
             firmware = mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"),
             // The core gives the EE's 32 MB without a map, from address 0; games also point at it

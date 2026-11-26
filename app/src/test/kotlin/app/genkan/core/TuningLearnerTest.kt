@@ -1,5 +1,6 @@
 package app.genkan.core
 
+import app.genkan.core.TuningLearner.Companion.HOT_WINDOW
 import app.genkan.core.TuningLearner.Companion.ROOM
 import app.genkan.core.TuningLearner.Companion.SETTLE
 import app.genkan.core.TuningLearner.Companion.TRIAL_SETTLE
@@ -120,7 +121,7 @@ class TuningLearnerTest {
     @Test
     fun `nothing is tried hot, and a try under way goes back`() {
         val learner = settled()
-        assertTrue(learner.feed(slow(0.8).copy(hottestC = 80), WINDOW * 2).isEmpty())
+        assertTrue(learner.feed(slow(0.8).copy(hottestC = 80), HOT_WINDOW - 1).isEmpty())
         learner.feed(slow(0.85), WINDOW)
         val back = learner.second(slow(0.9).copy(hottestC = 80))!!
         assertEquals("base", back.step)
@@ -132,5 +133,53 @@ class TuningLearnerTest {
         learner.feed(full, ROOM - 1)
         learner.paused()
         assertTrue(learner.feed(full, ROOM - 1).isEmpty())
+    }
+
+    @Test
+    fun `kept hot, the game tries the lighter step and keeps it once the heat stops climbing`() {
+        val learner = settled()
+        val hot = full.copy(hottestC = 80)
+        assertTrue(learner.feed(hot, HOT_WINDOW - 1).isEmpty())
+        val tried = learner.second(hot)!!
+        assertEquals(TuningLearner.Decision("light", keep = false, why = "trying light: the device ran hot"), tried)
+        // Hot still, but no hotter than when the try started.
+        val kept = learner.feed(hot.copy(hottestC = 79), TRIAL_SETTLE + WINDOW)
+        assertEquals(listOf(TuningLearner.Decision("light", keep = true, why = "cooler at light")), kept)
+        assertEquals("light", learner.step)
+    }
+
+    @Test
+    fun `a lighter step that doesn't stop the heat climbing goes back and isn't tried again`() {
+        val learner = settled()
+        learner.feed(full.copy(hottestC = 80), HOT_WINDOW)
+        val back = (1..TRIAL_SETTLE + WINDOW).mapNotNull { learner.second(full.copy(hottestC = 80 + it / 4)) }
+        assertEquals("base", back.single().step)
+        assertEquals("back to base: light didn't cool the device", back.single().why)
+        // Hot again: light failed, and the risky step past it is never taken.
+        assertTrue(learner.feed(full.copy(hottestC = 85), HOT_WINDOW * 3).isEmpty())
+    }
+
+    @Test
+    fun `nothing better-looking is tried while hot, however much room`() {
+        val learner = settled()
+        val decisions = learner.feed(full.copy(hottestC = 80), ROOM * 2)
+        assertFalse(decisions.any { it.step == "sharp" })
+    }
+
+    @Test
+    fun `a lighter step taken only at start is remembered for the next start, once`() {
+        val atStart = TuningLadder(
+            steps = listOf(TuningStep("base", emptyMap(), live = false), TuningStep("cool", mapOf("k" to "c"), live = false)),
+            defaultId = "base",
+            defaults = mapOf("k" to "d"),
+        )
+        val learner = TuningLearner(atStart, "base").also { it.feed(full, SETTLE) }
+        val decisions = learner.feed(full.copy(hottestC = 80), HOT_WINDOW * 4)
+        assertEquals(
+            listOf(TuningLearner.Decision("cool", keep = true, why = "cool from the next start: the device ran hot", nextStart = true)),
+            decisions,
+        )
+        // The game keeps running where it was.
+        assertEquals("base", learner.step)
     }
 }
