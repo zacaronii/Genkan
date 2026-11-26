@@ -47,6 +47,9 @@ class CoreCatalogTest {
     fun `a Wii starts with a Wiimote and Nunchuk, its pointer on the touch screen, a wide Japanese console`() {
         assertEquals("nunchuk", wii.variables["dolphin_wiimote_default_device"])
         assertEquals("2", wii.variables["dolphin_ir_mode"])
+        // Sized on the Thor so the cursor travels as far as the finger.
+        assertEquals("24", wii.variables["dolphin_ir_yaw"])
+        assertEquals("13", wii.variables["dolphin_ir_pitch"])
         assertEquals("enabled", wii.variables["dolphin_widescreen"])
         assertEquals("0", wii.variables["dolphin_language"])
         assertEquals("0", wii.variables["dolphin_sensor_bar_position"])

@@ -217,6 +217,10 @@ object CoreCatalog {
                 // The pointer on the touch screen (the core's "mouse" mode reads libretro's pointer),
                 // so the right stick stays the Wiimote's tilt and swing.
                 "dolphin_ir_mode" to "2",
+                // The Wiimote's sweep across the screen, sized so the cursor stays under the finger:
+                // the core's 25° each way took it twice the finger's travel up and down. Measured
+                // on the Thor; 13 is under the core's listed 15, but it reads any number.
+                "dolphin_ir_yaw" to "24", "dolphin_ir_pitch" to "13",
                 // The console's own settings (its SYSCONF): a wide picture, in Japanese, the sensor
                 // bar under the screen. No NAND is needed: the core makes an empty one.
                 "dolphin_widescreen" to "enabled",
