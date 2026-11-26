@@ -171,6 +171,9 @@ object CoreCatalog {
                 // A Japanese console: its BIOS's language and the region discs see.
                 "reicast_region" to "Japan",
                 "reicast_language" to "Japanese",
+                // Each game's own VMU in port A1, named by its product number, in the saves folder;
+                // the core's default is one VMU for every game, in its system folder.
+                "reicast_per_content_vmus" to "VMU A1",
             ),
             // The BIOS and its flash from RomM's Dreamcast firmware, in the dc folder the core looks in.
             firmware = mapOf("dc_boot.bin" to "dc/dc_boot.bin", "dc_flash.bin" to "dc/dc_flash.bin"),
@@ -180,6 +183,8 @@ object CoreCatalog {
             ramBase = 0x0C000000L,
             // Not zip or 7z, which the core reads as an arcade board's: a zipped disc is unpacked first.
             extensions = setOf("chd", "cdi", "gdi", "cue", "m3u"),
+            // On shared storage, where the save sync watches it (WatchedEmulator.BUILT_IN).
+            savesFolder = "Genkan/saves/flycast",
         ),
         CoreDef(
             // libretro's PCSX2 with native ARM64 recompilers, built from source; in debug builds
