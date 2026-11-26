@@ -9,6 +9,9 @@ using libretrodroid::MemoryDescriptor;
 using libretrodroid::locateAddress;
 using libretrodroid::readableFrom;
 using libretrodroid::reduceAddress;
+using libretrodroid::unswapWords;
+using libretrodroid::wordSpanLength;
+using libretrodroid::wordSpanStart;
 
 namespace {
 
@@ -58,6 +61,22 @@ int main() {
     check(at(ram, 0x7E0000, 0) && at(ram, 0x7FFFFF, 0x1FFFF), "plain memory reads from its start");
     check(!locateAddress(ram, 0x800000) && !locateAddress(ram, 0x7DFFFF), "and nowhere else");
     check(readableFrom(ram, 0x7FFFF0, 0x1FFF0) == 0x10, "to its end");
+
+    // Work RAM kept as 16-bit words, each byte pair swapped (mednafen_saturn's): the console's
+    // "SEGA" (53 45 47 41) lies as 45 53 41 47.
+    const uint8_t words[] = { 0x45, 0x53, 0x41, 0x47, 0x00, 0x21 };
+    uint8_t out[6] = {};
+    check(wordSpanStart(0) == 0 && wordSpanLength(0, 4) == 4, "an aligned read fetches its own words");
+    unswapWords(words, 0, out, 4);
+    check(out[0] == 'S' && out[1] == 'E' && out[2] == 'G' && out[3] == 'A', "each pair goes back in the console's order");
+    check(wordSpanStart(1) == 0 && wordSpanLength(1, 2) == 4, "an odd start fetches the word it starts in and the next");
+    unswapWords(words, 1, out, 2);
+    check(out[0] == 'E' && out[1] == 'G', "an odd start reads from the pair's second byte");
+    check(wordSpanLength(5, 1) == 2, "one byte fetches its word");
+    unswapWords(words + 4, 5, out, 1);
+    check(out[0] == 0x00, "the word's second byte, as the console has it");
+    unswapWords(words + 4, 4, out, 1);
+    check(out[0] == 0x21, "and its first");
 
     if (failures == 0) std::printf("memory map: passed\n");
     return failures == 0 ? 0 : 1;

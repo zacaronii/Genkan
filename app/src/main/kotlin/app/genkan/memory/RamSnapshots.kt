@@ -42,6 +42,9 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "dc" -> MainRam(0x0C000000L until 0x0D000000L, 0x0C000000L)
             // A Wii's MEM1, the same 24 MB at 0x80000000; its MEM2 at 0x90000000 isn't needed here.
             "wii" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
+            // A Saturn's high work RAM, 1 MB at 0x06000000, where games keep their data (the low 1 MB
+            // at 0x00200000 reads too, but isn't in a snapshot), in the console's big-endian order.
+            "saturn" -> MainRam(0x06000000L until 0x06100000L, 0x06000000L)
             else -> null
         }
     }
@@ -280,13 +283,15 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
 
         /**
          * The release id the catalog knows the game by, from its RAM: a PS1 disc's boot path
-         * (SLPS-01001), the PSP disc id the game names its saves with (the commonest there), or
-         * a GameCube or Wii disc's six-character id at the start of MEM1.
+         * (SLPS-01001), the PSP disc id the game names its saves with (the commonest there),
+         * a GameCube or Wii disc's six-character id at the start of MEM1, or a Saturn disc's product
+         * number from its header's copy in work RAM.
          */
         fun gameId(platform: String?, ram: ByteArray): String? = when (platform) {
             "psx" -> TextSamples.ps1Serial(ram)
             "ngc" -> gcDiscId(ram)
             "wii" -> wiiDiscId(ram)
+            "saturn" -> saturnRelease(ram)?.id
             "psp" -> PSP_ID.findAll(String(ram, Charsets.ISO_8859_1)).map { it.value }
                 .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             else -> null
@@ -318,6 +323,14 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         fun wiiBuildId(ram: ByteArray): String? = wiiDiscId(ram)?.let { buildOf(it, ram) }
 
         private fun buildOf(id: String, ram: ByteArray) = "%s-%02X".format(id, ram[7].toInt() and 0xFF)
+
+        /**
+         * A Saturn disc's id and build (SegaHeader), from the copy of its header the boot code leaves
+         * in high work RAM at 0x06002000; null before it's there.
+         */
+        fun saturnRelease(ram: ByteArray): SegaHeader.Release? = SegaHeader.read(ram, SATURN_HEADER_AT)
+
+        private const val SATURN_HEADER_AT = 0x2000
 
         private const val GC_MAGIC_AT = 0x1C
         private const val GC_MAGIC = 0xC2339F3DL

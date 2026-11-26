@@ -45,6 +45,8 @@ class RamSnapshotsTest {
         assertEquals(24L * 1024 * 1024, size("ngc"))
         assertEquals(0x0C000000L, MainRam.of("dc")!!.baseAddress)
         assertEquals(16L * 1024 * 1024, size("dc"))
+        assertEquals(0x06000000L, MainRam.of("saturn")!!.baseAddress)
+        assertEquals(1L * 1024 * 1024, size("saturn"))
         assertNull(MainRam.of("n64"))
     }
 
@@ -74,6 +76,22 @@ class RamSnapshotsTest {
         assertNull(RamSnapshots.gameId("wii", gc))
         assertNull(RamSnapshots.wiiBuildId(ByteArray(0x40)))
         assertEquals(MainRam.of("ngc"), MainRam.of("wii"))
+    }
+
+    @Test
+    fun `a Saturn disc is known by its header's copy at 0x06002000, its build with the version`() {
+        // A made-up product number, of disc 2 of 2.
+        val ram = ByteArray(0x3000)
+        val header = ByteArray(0x100) { ' '.code.toByte() }
+        "SEGA SEGASATURN ".toByteArray().copyInto(header)
+        "ABCD-00001".toByteArray().copyInto(header, 0x20)
+        "V1.001".toByteArray().copyInto(header, 0x2A)
+        "CD-2/2".toByteArray().copyInto(header, 0x38)
+        header.copyInto(ram, 0x2000)
+        assertEquals("ABCD-00001-D2", RamSnapshots.gameId("saturn", ram))
+        assertEquals("ABCD-00001-D2-V1.001", app.genkan.core.ScriptEvents.buildId("saturn", ram, null))
+        assertNull(RamSnapshots.gameId("saturn", ByteArray(0x3000)))
+        assertNull(app.genkan.core.ScriptEvents.buildId("saturn", ByteArray(0x3000), null))
     }
 
     @Test

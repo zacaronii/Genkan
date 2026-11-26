@@ -38,6 +38,15 @@ public:
         // reach [host]; zero for plain memory from start for length bytes.
         uint64_t select = 0;
         uint64_t disconnect = 0;
+        // Kept as 16-bit words in the host's order (memorymap.h): reads swap each byte pair back.
+        bool words = false;
+    };
+
+    /** A stretch of the core's system RAM the console sees at an address of its own. */
+    struct Stretch {
+        uint64_t start;
+        uint64_t offset;
+        uint64_t length;
     };
 
     static GenkanTap& getInstance() {
@@ -53,6 +62,13 @@ public:
      * (PPSSPP) set their memory up only after the game has loaded.
      */
     void setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned));
+    /**
+     * A core whose system RAM is more than one of the console's stretches (mednafen_saturn's: the low
+     * 1 MB of work RAM, then the high): each at the console's address, and whether the core keeps them
+     * as 16-bit words in the host's order. Empty, the system RAM is one region from 0. Set before the
+     * game loads, for the game.
+     */
+    void setSystemRamStretches(std::vector<Stretch> stretches, bool words);
     void clear();
     std::vector<Region> regions();
     bool read(uint64_t address, uint8_t *out, size_t size);
@@ -102,6 +118,8 @@ private:
     std::vector<Region> memory;
     void *(*systemRamData)(unsigned) = nullptr;
     size_t (*systemRamSize)(unsigned) = nullptr;
+    std::vector<Stretch> stretches;
+    bool stretchWords = false;
 
     std::mutex audioLock;
     std::vector<int16_t> ring;

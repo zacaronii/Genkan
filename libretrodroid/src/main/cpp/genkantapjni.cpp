@@ -9,6 +9,8 @@
 
 #include <jni.h>
 
+#include <vector>
+
 #include "genkantap.h"
 #include "framestats.h"
 #include "input.h"
@@ -112,6 +114,22 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_GenkanTap_gameId(JNIE
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setKeepPointer(JNIEnv *, jclass, jboolean keep) {
     GenkanTap::getInstance().setKeepPointer(keep == JNI_TRUE);
+}
+
+/** `stretches` as (console address, offset in the system RAM, length) triples. */
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamStretches(
+    JNIEnv *env, jclass, jlongArray stretches, jboolean words
+) {
+    std::vector<GenkanTap::Stretch> out;
+    jsize count = stretches != nullptr ? env->GetArrayLength(stretches) : 0;
+    std::vector<jlong> values(static_cast<size_t>(count));
+    if (count > 0) env->GetLongArrayRegion(stretches, 0, count, values.data());
+    for (jsize i = 0; i + 2 < count; i += 3) {
+        out.push_back(GenkanTap::Stretch {
+            static_cast<uint64_t>(values[i]), static_cast<uint64_t>(values[i + 1]), static_cast<uint64_t>(values[i + 2]),
+        });
+    }
+    GenkanTap::getInstance().setSystemRamStretches(std::move(out), words == JNI_TRUE);
 }
 
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_packedFrameSize(JNIEnv *, jclass) {

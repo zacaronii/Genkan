@@ -2,6 +2,9 @@ package app.genkan.core
 
 import app.genkan.BuildConfig
 
+/** A stretch of a core's system RAM, [length] bytes from [offset], that the console sees at [address]. */
+data class RamStretch(val address: Long, val offset: Long, val length: Long)
+
 /**
  * A libretro core bundled with Genkan, by its native library's file name (the linker finds it in
  * the APK). [pointerMask] folds the addresses a game's pointers hold onto the ones its memory
@@ -18,6 +21,13 @@ data class CoreDef(
     val assets: Pair<String, String>? = null,
     /** Where the game sees the system RAM, for a core that gives no memory map. */
     val ramBase: Long = 0L,
+    /**
+     * For a core that gives no memory map and whose system RAM is more than one of the console's
+     * stretches (a Saturn's work RAM): each, at the address the console sees it at.
+     */
+    val ramStretches: List<RamStretch> = emptyList(),
+    /** The core keeps that RAM as 16-bit words in the host's order: reads swap each byte pair back. */
+    val ramWords: Boolean = false,
     /**
      * Folders under shared storage, any of which the core may keep its saves in when it is there
      * (a standalone emulator's, so the two share saves); else Genkan's own.
@@ -146,6 +156,13 @@ object CoreCatalog {
             id = "beetle_saturn", displayName = "Beetle Saturn", library = "libmednafen_saturn_libretro_android.so",
             platforms = setOf("saturn"),
             firmware = mapOf("sega_101.bin" to "sega_101.bin"),
+            // No memory map: its system RAM is the work RAM, the low 1 MB and then the high, as 16-bit
+            // words in the host's order. Read at the console's addresses and in its order, as
+            // Yomikata's harness does; games point at both past the cache too, at 0x20000000 on.
+            ramStretches = listOf(RamStretch(0x06000000L, 0x100000L, 0x100000L), RamStretch(0x00200000L, 0L, 0x100000L)),
+            ramWords = true,
+            pointerMask = 0xDFFFFFFFL,
+            bigEndian = true,
             // Not zip, which the core reads as an arcade board's: a zipped disc is unpacked first.
             extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
         ),

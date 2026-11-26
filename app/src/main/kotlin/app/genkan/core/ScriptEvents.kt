@@ -15,13 +15,15 @@ object ScriptEvents {
 
     /**
      * The game's build as scripts name it, where Genkan can tell: a GameCube or Wii disc's id and version
-     * from its RAM (`XXXXXX-00`); a PS2 disc's serial and ELF CRC as its core names them, the way
+     * from its RAM (`XXXXXX-00`); a Saturn disc's id and version from its header's copy in RAM
+     * (`ABCD-00001-V1.000`); a PS2 disc's serial and ELF CRC as its core names them, the way
      * PINE gives ARMSX2's (`SLPM-12345-1a2b3c4d`); a cartridge's header CRC-32 (`1a2b3c4d`, as
      * CartridgeId reads it); null otherwise, and the script's own check decides.
      */
     fun buildId(platform: String?, ram: ByteArray?, cartridge: CartridgeId?): String? = when {
         platform == "ngc" -> ram?.let { app.genkan.memory.RamSnapshots.gcBuildId(it) }
         platform == "wii" -> ram?.let { app.genkan.memory.RamSnapshots.wiiBuildId(it) }
+        platform == "saturn" -> ram?.let { app.genkan.memory.RamSnapshots.saturnRelease(it)?.build }
         platform == "ps2" -> cartridge?.let { "${it.id}-${it.headerCrc32.lowercase()}" }
         cartridge != null -> cartridge.headerCrc32.lowercase()
         else -> null
