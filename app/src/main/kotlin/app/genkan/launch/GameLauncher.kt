@@ -74,10 +74,14 @@ class GameLauncher @Inject constructor(
 
     fun installedEmulatorFor(platformSlug: String): Pair<EmulatorDef, String?>? {
         CoreCatalog.forPlatform(platformSlug)?.takeIf { builtInOn.value }?.let { return builtInEmulator(it) to null }
-        return EmulatorCatalog.candidatesFor(platformSlug).firstNotNullOfOrNull { emulator ->
+        return installedAppFor(platformSlug)
+    }
+
+    /** The first installed emulator app for [platformSlug], never the built-in player. */
+    private fun installedAppFor(platformSlug: String): Pair<EmulatorDef, String?>? =
+        EmulatorCatalog.candidatesFor(platformSlug).firstNotNullOfOrNull { emulator ->
             installedVersion(emulator.packageName)?.let { emulator to it.ifEmpty { null } }
         }
-    }
 
     /** The built-in player, when it is switched on and has a core for [platformSlug]. */
     private suspend fun builtInFor(platformSlug: String): CoreDef? =
@@ -101,11 +105,11 @@ class GameLauncher @Inject constructor(
         val rom = if (installed.isDirectory) LaunchCommandBuilder.bootFileIn(installed) else installed
         if (rom == null || !rom.exists()) return@withContext LaunchPlan.Unavailable(LaunchResult.Failed("The game's files are missing; download it again"))
         val builtIn = builtInFor(game.platformSlug)
-        if (builtIn != null && GameFile.takes(builtIn, rom)) return@withContext prepareBuiltIn(game, rom, builtIn)
-        // A file the built-in core can't play (nor a zip holding one) goes to the emulator below, saying so.
+        if (builtIn != null) BuiltInBoot.fileFor(builtIn, rom)?.let { return@withContext prepareBuiltIn(game, it, builtIn) }
+        // A file the built-in core can't play (nor a zip holding one) goes to an emulator app below, saying so.
         val note = builtIn?.let { "${it.displayName} can't play this file" }
 
-        val (emulator, version) = installedEmulatorFor(game.platformSlug)
+        val (emulator, version) = installedAppFor(game.platformSlug)
             ?: return@withContext LaunchPlan.Unavailable(LaunchResult.NoEmulator(EmulatorCatalog.candidatesFor(game.platformSlug)))
 
         withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { firmware.fetch(emulator, game.platformId) }
