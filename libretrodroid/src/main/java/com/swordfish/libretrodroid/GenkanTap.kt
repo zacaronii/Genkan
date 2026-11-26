@@ -61,6 +61,12 @@ object GenkanTap {
      */
     @JvmStatic external fun setSplitScreens(split: Boolean)
 
+    /**
+     * A lifted finger leaves the core's pointer where it was, no longer pressed (a Wii's: aimed,
+     * then left there while a button is pressed); else it goes off the screen with the finger.
+     */
+    @JvmStatic external fun setKeepPointer(keep: Boolean)
+
     /** The last kept frame's width and height, or null before one came. */
     fun frameSize(): Pair<Int, Int>? {
         val packed = packedFrameSize()

@@ -242,6 +242,7 @@ void LibretroDroid::onTouchEvent(float xAxis, float yAxis) {
     LOGD("Received touch event: %.2f, %.2f", xAxis, yAxis);
     if (input && video) {
         auto [x, y] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        input->setKeepPointer(GenkanTap::getInstance().isKeepPointer());
         input->onMotionEvent(0, Input::MOTION_SOURCE_POINTER, x, y);
     }
 }

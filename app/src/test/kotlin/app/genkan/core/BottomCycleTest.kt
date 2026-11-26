@@ -38,5 +38,7 @@ class BottomCycleTest {
         listOf("gb", "gbc", "gba", "nds", "psp").forEach { assertTrue(it, BottomCycle.takesStickClicks(it)) }
         // A PlayStation's DualShock has L3 and R3: the game keeps them, with a manual or without.
         assertFalse(BottomCycle.takesStickClicks("psx"))
+        // A Wii game keeps them too: the Wiimote's Home is on R3.
+        assertFalse(BottomCycle.takesStickClicks("wii"))
     }
 }

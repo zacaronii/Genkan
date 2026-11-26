@@ -170,6 +170,14 @@ bool GenkanTap::isSplitScreens() {
     return splitScreens;
 }
 
+void GenkanTap::setKeepPointer(bool keep) {
+    keepPointer = keep;
+}
+
+bool GenkanTap::isKeepPointer() {
+    return keepPointer;
+}
+
 void GenkanTap::keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format) {
     std::lock_guard<std::mutex> lock(frameLock);
     frame.resize(static_cast<size_t>(width) * height * 4);

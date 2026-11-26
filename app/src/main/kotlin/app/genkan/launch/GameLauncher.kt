@@ -149,7 +149,7 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_LOW_LATENCY, playerSettings.lowLatency(game.platformSlug))
             .putExtra(CoreActivity.EXTRA_A_ON_RIGHT, playerSettings.aOnRight(game.platformSlug))
             .putExtra(CoreActivity.EXTRA_LEARN, playerSettings.learns())
-        tuning.resolve(game.id, core.id)?.let {
+        tuning.resolve(game.id, core.tuning)?.let {
             Log.i(TAG, "Tuning step ${it.step.id} (${it.source.name.lowercase()})")
             intent.putExtra(CoreActivity.EXTRA_TUNING_STEP, it.step.id)
         }

@@ -25,12 +25,14 @@ class StickMotionTest {
     }
 
     @Test
-    fun `a GameCube's sticks are only sticks, other consoles' still steer the D-pad`() {
+    fun `a GameCube's and a Wii's sticks are only sticks, other consoles' still steer the D-pad`() {
         val gamecube = CoreCatalog.forPlatform("ngc")!!
         assertTrue(gamecube.sticksOnly)
         // Handled: Android makes no D-pad presses of the stick, which a game may read as its menus.
         assertTrue(StickMotion.handled(gamecube.sticksOnly))
-        CoreCatalog.cores.filter { it.id != "dolphin" }.forEach { core ->
+        // A Wii's Nunchuk stick and its tilt are sticks too.
+        assertTrue(CoreCatalog.forPlatform("wii")!!.sticksOnly)
+        CoreCatalog.cores.filter { it.library != gamecube.library }.forEach { core ->
             assertFalse(core.id, core.sticksOnly)
             assertFalse(core.id, StickMotion.handled(core.sticksOnly))
         }

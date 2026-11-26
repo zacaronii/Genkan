@@ -19,11 +19,14 @@ class GameTuning @Inject constructor(
     private val ids: YomikataIds,
     private val catalog: YomikataCatalog,
 ) {
-    /** The step for RomM rom [romId] in core [coreId]; null when the core has no ladder. [releaseId], when known now. */
-    suspend fun resolve(romId: Long, coreId: String, releaseId: String? = null): ResolvedTuning? {
-        val ladder = TuningLadders.of(coreId) ?: return null
+    /**
+     * The step for RomM rom [romId] on ladder [tuning] (its core's CoreDef.tuning); null when the
+     * core has no ladder. [releaseId], when known now.
+     */
+    suspend fun resolve(romId: Long, tuning: String, releaseId: String? = null): ResolvedTuning? {
+        val ladder = TuningLadders.of(tuning) ?: return null
         val release = releaseId ?: ids.idFor(romId).first()
-        val bundled = release?.let { catalog.cachedEntry(it)?.tuning?.get(coreId) }
+        val bundled = release?.let { catalog.cachedEntry(it)?.tuning?.get(tuning) }
         return TuningLadders.resolve(ladder, store.override(romId)?.step, bundled, Build.MODEL.orEmpty())
     }
 }

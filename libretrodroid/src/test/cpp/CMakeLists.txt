@@ -20,3 +20,7 @@ target_include_directories(frame_fill_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 # A console's address read through a core's memory descriptor (src/main/cpp/memorymap.h).
 add_executable(memory_map_test memory_map_test.cpp)
 target_include_directories(memory_map_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+
+# Where a touch leaves a core's pointer (src/main/cpp/pointer.h).
+add_executable(pointer_test pointer_test.cpp)
+target_include_directories(pointer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)

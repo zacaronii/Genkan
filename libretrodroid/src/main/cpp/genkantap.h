@@ -79,6 +79,9 @@ public:
      */
     void setSplitScreens(bool split);
     bool isSplitScreens();
+    /** A lifted finger leaves the core's pointer where it was (a Wii's): see PointerState::touch. */
+    void setKeepPointer(bool keep);
+    bool isKeepPointer();
     void keepFrame(const void *data, unsigned width, unsigned height, size_t pitch, retro_pixel_format format);
     /** Rows [firstRow, firstRow + rows) of the last kept frame into [out]; false when it has none that big. */
     bool copyFrame(uint8_t *out, size_t capacity, unsigned firstRow, unsigned rows);
@@ -104,6 +107,7 @@ private:
     int32_t sampleRate = 0;
 
     std::atomic<bool> splitScreens { false };
+    std::atomic<bool> keepPointer { false };
     std::mutex frameLock;
     std::vector<uint8_t> frame;
     unsigned frameWidth = 0;

@@ -154,7 +154,7 @@ class BuiltInText @Inject constructor(
     private suspend fun tuneFor(game: app.genkan.reader.NowPlaying.Game, id: String) {
         val romId = game.rommRomId ?: return
         val core = player.game.value?.core ?: return
-        val resolved = tuning.resolve(romId, core.id, id) ?: return
+        val resolved = tuning.resolve(romId, core.tuning, id) ?: return
         val live = withContext(Dispatchers.IO) { player.setTuningStep(resolved.step.id) }
         Log.i(TAG, "Tuning step ${resolved.step.id} (${resolved.source.name.lowercase()})" + if (live) "" else ", from the next start")
     }

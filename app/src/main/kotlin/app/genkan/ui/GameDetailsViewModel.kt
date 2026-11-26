@@ -292,7 +292,7 @@ class GameDetailsViewModel @Inject constructor(
         } else {
             // Read again as home comes back: the player keeps what it learned from its own process.
             combine(playerSettings.enabled, tuningStore.changes, launcher.inFront) { on, _, _ ->
-                val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.id) }
+                val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.tuning) }
                 if (!on || ladder == null) return@combine null
                 val own = withContext(Dispatchers.IO) { tuningStore.override(game.id) } ?: return@combine null
                 ladder.step(own.step)?.let { GameTuningNote(it.label, own.why.startsWith("learned")) }
