@@ -13,7 +13,6 @@ object PlayerChoice {
     /** The consoles Settings offers a choice for, by platform, in the order it lists them, with their names. */
     val CONSOLES: List<Pair<String, String>> = listOf(
         "ps2" to "PlayStation 2",
-        "saturn" to "Saturn",
     )
 
     /** [platform]'s options, its first core first: the default. [debug]: whether debug-only cores count. */

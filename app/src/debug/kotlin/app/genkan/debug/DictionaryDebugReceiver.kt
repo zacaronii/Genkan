@@ -111,7 +111,7 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
- *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform saturn --es core beetle_saturn
+ *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform ps2 --es core lrps2
  * (plays the console's games with that core, as Settings › Screen look and sound › Plays with does, and kept;
  *  --es core external: its emulator app (ARMSX2 for the PS2); no core: its first core again)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID

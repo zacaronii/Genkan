@@ -108,7 +108,8 @@ a Yomitan dictionary popup. See
 - **Built-in player (on for a fresh install):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
   DS games (melonDS DS), PS1 games (PCSX ReARMed), PSP games (PPSSPP), Super Famicom games
   (bsnes-mercury), GameCube and Wii games (Dolphin) and PC Engine HuCard and CD-ROM² games
-  (Beetle PCE Fast, with RomM's System Card 3 for CDs) and Dreamcast games (Flycast, with RomM's
+  (Beetle PCE Fast, with RomM's System Card 3 for CDs), Saturn games (Beetle Saturn, with RomM's
+  Saturn BIOS) and Dreamcast games (Flycast, with RomM's
   Dreamcast BIOS) and PS2 games (LRPS2, with RomM's PS2 BIOS; ARMSX2 stays a choice in Settings)
   inside Genkan instead of their installed
   emulator, in a process of its own. Genkan then reads the game's frames, sound and memory

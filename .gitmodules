@@ -19,10 +19,6 @@
 [submodule "third_party/beetle-saturn"]
 	path = third_party/beetle-saturn
 	url = https://github.com/libretro/beetle-saturn-libretro
-[submodule "third_party/yabasanshiro"]
-	path = third_party/yabasanshiro
-	url = https://github.com/libretro/yabause
-	branch = yabasanshiro
 [submodule "third_party/flycast"]
 	path = third_party/flycast
 	url = https://github.com/flyinghead/flycast
