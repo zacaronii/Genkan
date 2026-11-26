@@ -56,8 +56,8 @@ data class CoreDef(
     val portDevices: List<Int> = emptyList(),
     /**
      * The core's sound plays through the low-latency stream when Settings allows (a buffer of four
-     * frames); false for one that makes its sound in bigger lumps, which run that buffer dry between
-     * them: it gets the plain stream's eight.
+     * frames); false for one that makes its sound in bigger lumps, or whose frames take long now and
+     * then, either of which runs that buffer dry (a gap of silence): it gets the plain stream's eight.
      */
     val lowLatencySound: Boolean = true,
     /**
@@ -236,6 +236,8 @@ object CoreCatalog {
             extensions = setOf("rvz", "iso", "gcm", "gcz", "ciso"),
             bigEndian = true,
             savesFolder = "Genkan/saves/dolphin",
+            // A frame of 20 to 30 ms now and then emptied the four-frame buffer: gaps of silence.
+            lowLatencySound = false,
             // A GameCube controller in port 1: Dolphin plugs one in for any device but none.
             portDevices = listOf(RETRO_DEVICE_JOYPAD),
             // Games put menus on its D-pad: the stick mustn't press it too.
@@ -271,6 +273,7 @@ object CoreCatalog {
             bigEndian = true,
             // The GameCube's User folder: Wii saves go to its Wii/title.
             savesFolder = "Genkan/saves/dolphin",
+            lowLatencySound = false,
             portDevices = listOf(RETRO_DEVICE_JOYPAD),
             sticksOnly = true,
             tuning = "dolphin",
