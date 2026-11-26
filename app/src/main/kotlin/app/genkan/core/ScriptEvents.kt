@@ -15,7 +15,7 @@ object ScriptEvents {
 
     /**
      * The game's build as scripts name it, where Genkan can tell: a GameCube disc's id and version
-     * from its RAM (`XXXXXX-00`), a cartridge's header CRC-32 (`1a2b3c4d`, as SnesCartridge reads
+     * from its RAM (`XXXXXX-00`), a cartridge's header CRC-32 (`1a2b3c4d`, as CartridgeId reads
      * it); null otherwise, and the script's own check decides.
      */
     fun buildId(platform: String?, ram: ByteArray?, cartridgeCrc: String?): String? = when {

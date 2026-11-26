@@ -170,7 +170,7 @@ class CoreActivity : ComponentActivity() {
     /** Starts [def] on [game], the file it plays (unpacked from [rom] when that is a zip). */
     private fun play(def: CoreDef, rom: File, game: File) {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
-        cartridge = if (def.id == "bsnes_mercury") SnesCartridge.of(game) else null
+        cartridge = CartridgeId.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game)
         // The process may have played a game before this one: its sound problem isn't this one's.
         GenkanTap.clearAudioProblem()
         val system = File(filesDir, "system").apply { mkdirs() }
@@ -411,8 +411,8 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
-    /** The Super Famicom game's header id, read as it starts. */
-    @Volatile private var cartridge: SnesCartridge.Id? = null
+    /** A cartridge's header id (a Super Famicom's, a GBA's), read as it starts. */
+    @Volatile private var cartridge: CartridgeId? = null
 
     private val session = object : ICoreSession.Stub() {
         override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" }

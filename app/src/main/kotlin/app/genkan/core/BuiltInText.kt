@@ -181,7 +181,7 @@ class BuiltInText @Inject constructor(
     @Volatile private var stateLoadedMs: Long? = null
     private var quietJob: kotlinx.coroutines.Job? = null
     /** The cartridge read as the game started, for its script's build id. */
-    @Volatile private var gameCartridge: SnesCartridge.Id? = null
+    @Volatile private var gameCartridge: CartridgeId? = null
 
     /**
      * Runs the catalog's script for [id] in the player, when it has one Genkan can run; whether it
