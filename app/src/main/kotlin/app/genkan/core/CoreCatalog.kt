@@ -188,8 +188,9 @@ object CoreCatalog {
             id = "lrps2", displayName = "LRPS2", library = "libpcsx2_libretro_android.so",
             platforms = setOf("ps2"),
             variables = mapOf(
-                // libretrodroid gives cores OpenGL ES.
-                "pcsx2_renderer" to "OpenGL",
+                // The frontend's preferred context: libretrodroid answers OpenGL ES 3, for which the
+                // core's GL renderer asks 3.1. ("OpenGL" asks for desktop GL 3.3 and draws nothing.)
+                "pcsx2_renderer" to "Auto",
                 "pcsx2_bios" to "ps2-0230a-20080220.bin",
             ),
             // RomM's PS2 BIOS, in the folder the core looks in.

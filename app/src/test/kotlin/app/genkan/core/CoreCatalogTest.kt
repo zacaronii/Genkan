@@ -152,13 +152,13 @@ class CoreCatalogTest {
     }
 
     @Test
-    fun `LRPS2 boots with RomM's BIOS in its own folder, draws with OpenGL and reads the EE's 32 MB`() {
+    fun `LRPS2 boots with RomM's BIOS in its own folder, draws with the frontend's GL ES and reads the EE's 32 MB`() {
         val ps2 = CoreCatalog.byId("lrps2")!!
         assertEquals("libpcsx2_libretro_android.so", ps2.library)
         assertTrue(ps2.debugOnly)
         assertEquals(mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"), ps2.firmware)
         assertEquals("ps2-0230a-20080220.bin", ps2.variables["pcsx2_bios"])
-        assertEquals("OpenGL", ps2.variables["pcsx2_renderer"])
+        assertEquals("Auto", ps2.variables["pcsx2_renderer"])
         listOf("game.chd", "game.iso", "game.cso", "games.m3u").forEach { assertTrue(it, ps2.takes(it)) }
         assertFalse(ps2.takes("game.zip"))
         assertEquals(0L, ps2.ramBase)

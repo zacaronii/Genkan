@@ -490,13 +490,16 @@ val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
 /**
  * LRPS2 (libretro/parallel-ps2, GPL-3.0), libretro's PCSX2 with native ARM64 recompilers for the EE
  * and IOP, built from its repository at this commit with the OpenGL ES renderer (libretrodroid gives
- * cores no Vulkan). In debug builds only, until a round shows it at full speed. See NOTICE.
+ * cores no Vulkan) and Genkan's patch so Android can load it. In debug builds only, until a round
+ * shows it at full speed. See NOTICE.
  */
 val lrps2Commit = "4d2c5d0904c339fd18252574e010fbf38d1b1929"
 
 val buildLrps2 = tasks.register<BuildCmakeCore>("buildLrps2") {
     commit.set(lrps2Commit)
     submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/lrps2"))
+    // Android can't load it unpatched (see patches/lrps2/README.md).
+    patches.from(rootProject.fileTree("patches/lrps2") { include("*.patch") })
     libraryName.set("libpcsx2_libretro_android.so")
     abi.set("arm64-v8a")
     cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DUSE_VULKAN=OFF", "-DANDROID_PLATFORM=android-33"))
