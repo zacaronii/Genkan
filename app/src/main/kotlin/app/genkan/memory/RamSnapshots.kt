@@ -18,6 +18,25 @@ import javax.inject.Singleton
 /** A capture file older than this belongs to no snapshot being written. */
 private const val STALE_CAPTURE_MS = 60_000L
 
+/**
+ * Memory besides main RAM that a snapshot carries, by the name Yomikata's harness gives the region
+ * in a snap (`<name>.<region>.gz`), and the inbox's part for it.
+ */
+data class SnapshotRegion(val name: String, val range: LongRange, val baseAddress: Long) {
+    companion object {
+        /** By RomM platform slug. */
+        fun of(platform: String?): List<SnapshotRegion> = when (platform) {
+            // A Saturn's low work RAM, 1 MB at 0x00200000, where some games keep their data: big-endian
+            // as the high 1 MB is (Yomikata's lwram).
+            "saturn" -> listOf(SnapshotRegion("lwram", 0x00200000L until 0x00300000L, 0x00200000L))
+            else -> emptyList()
+        }
+
+        /** Every region's name, for a snapshot's files. */
+        val NAMES = listOf("lwram")
+    }
+}
+
 data class MainRam(val range: LongRange, val baseAddress: Long) {
     companion object {
         /** By RomM platform slug; null for systems Yomikata takes no snapshots of. */
@@ -86,8 +105,19 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
     /** The frame on screen when the snapshot was taken, as a PNG. */
     fun screenOf(meta: File): File = File(meta.path.removeSuffix(".meta.json") + ".screen.png")
 
+    /** A region of memory taken with a snapshot (SnapshotRegion), gzipped. */
+    fun regionOf(meta: File, name: String): File = File(meta.path.removeSuffix(".meta.json") + ".$name.gz")
+
     /** Whether a snapshot carries anything besides RAM. */
-    fun hasExtras(meta: File): Boolean = vramOf(meta).isFile || stateOf(meta).isFile || screenOf(meta).isFile
+    fun hasExtras(meta: File): Boolean = partsOf(meta).isNotEmpty()
+
+    /**
+     * What goes to the inbox with a snapshot's meta and RAM, by part name: its video RAM, state,
+     * screen and regions, those it has.
+     */
+    fun partsOf(meta: File): List<Pair<String, File>> =
+        (listOf("vram" to vramOf(meta), "state" to stateOf(meta), "screen" to screenOf(meta)) +
+            SnapshotRegion.NAMES.map { it to regionOf(meta, it) }).filter { it.second.isFile }
 
     /** What the emulator can add to a snapshot besides RAM, for the inbox's side to work from. */
     interface Extras {
@@ -114,6 +144,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         vramOf(meta).delete()
         stateOf(meta).delete()
         screenOf(meta).delete()
+        SnapshotRegion.NAMES.forEach { regionOf(meta, it).delete() }
         meta.delete()
     }
 
@@ -197,6 +228,13 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             return false
         }
         GZIPOutputStream(File(dir, "$name.ram.gz").outputStream()).use { it.write(bytes) }
+        // Memory besides main RAM, read just after it (a Saturn's low 1 MB): not held to the moment.
+        val regions = JSONObject()
+        for (region in SnapshotRegion.of(game.platform)) {
+            val data = readRam(memory, MainRam(region.range, region.baseAddress)) ?: continue
+            GZIPOutputStream(File(dir, "$name.${region.name}.gz").outputStream()).use { it.write(data) }
+            regions.put(region.name, JSONObject().put("base_address", "0x%08X".format(region.baseAddress)).put("bytes", data.size))
+        }
         // The screen's line, read now that the moment is taken: what this snapshot shows.
         val text = line.ifBlank { screenLine?.invoke()?.trim().orEmpty() }
         val meta = JSONObject()
@@ -211,6 +249,7 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             .put("captured_at", Instant.now().toString())
         note?.let { meta.put("note", it) }
         script?.let { meta.put("script", it) }
+        if (regions.length() > 0) meta.put("regions", regions)
         // Nothing read the screen: said so, rather than that no text was on it.
         if (text.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
         (if (moment != null) moment.vram else extras?.vram())?.let { video ->

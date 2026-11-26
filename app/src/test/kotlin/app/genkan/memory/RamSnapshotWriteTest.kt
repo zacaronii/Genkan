@@ -104,6 +104,47 @@ class RamSnapshotWriteTest {
         assertFalse(snapshots.stateOf(meta).exists())
     }
 
+    private val saturn = NowPlaying.Game("game:11", "A Saturn game", "saturn", 11)
+
+    @Test
+    fun `a Saturn snapshot carries its low 1 MB as the region lwram, sent as its own part`() {
+        val high = ByteArray(0x100000) { (it % 241).toByte() }
+        val low = ByteArray(0x100000) { (it % 239).toByte() }
+        // The low 1 MB read through the player's memory, at the console's addresses.
+        val lowMemory = object : MemorySource {
+            override val regions: List<LongRange> = listOf(0x00200000L until 0x00300000L)
+            override val maxRead = 4096
+            override fun target(value: Long): Long? = null
+            override fun read(address: Long, size: Int): ByteArray? =
+                if (address in 0x00200000L until 0x00300000L) low.copyOfRange((address - 0x00200000L).toInt(), (address - 0x00200000L).toInt() + size) else null
+            override fun close() {}
+        }
+        assertTrue(snapshots.takeNow(lowMemory, saturn, "ABCD-00001", "あいうえお", "test", extras(high, null), "taken on demand"))
+        val meta = snapshots.pending().single()
+        val json = JSONObject(meta.readText())
+        assertEquals("saturn", json.getString("platform"))
+        assertEquals("0x06000000", json.getString("base_address"))
+        val lwram = json.getJSONObject("regions").getJSONObject("lwram")
+        assertEquals("0x00200000", lwram.getString("base_address"))
+        assertEquals(0x100000, lwram.getInt("bytes"))
+        assertArrayEquals(high, gunzip(snapshots.ramOf(meta)))
+        assertArrayEquals(low, gunzip(snapshots.regionOf(meta, "lwram")))
+        assertEquals(listOf("lwram"), snapshots.partsOf(meta).map { it.first })
+        assertTrue(snapshots.hasExtras(meta))
+        snapshots.remove(meta)
+        assertFalse(snapshots.regionOf(meta, "lwram").exists())
+    }
+
+    @Test
+    fun `only a Saturn has a region, and a snapshot without one sends no region part`() {
+        assertEquals(listOf("lwram"), SnapshotRegion.of("saturn").map { it.name })
+        listOf("psx", "psp", "snes", "gba", "gb", "nds", "ngc", "wii", "dc", "turbografx-cd", "ps2").forEach { assertEquals(it, emptyList<SnapshotRegion>(), SnapshotRegion.of(it)) }
+        assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "あいうえお", "test", extras(ByteArray(128 * 1024), ByteArray(64 * 1024)), "taken on demand"))
+        val meta = snapshots.pending().single()
+        assertFalse(JSONObject(meta.readText()).has("regions"))
+        assertEquals(listOf("vram"), snapshots.partsOf(meta).map { it.first })
+    }
+
     @Test
     fun `the state cap is 128 MB for the GameCube, 64 MB for the rest`() {
         assertEquals(128L * 1024 * 1024, RamSnapshots.maxState("ngc"))

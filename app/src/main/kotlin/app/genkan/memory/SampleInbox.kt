@@ -171,7 +171,7 @@ class SampleInbox @Inject constructor(
         snapshotHeld = false
         var sent = 0
         val pending = snapshots.pending()
-        // An inbox that stores only RAM would take a snapshot and drop its state and screen, and
+        // An inbox that stores only RAM would take a snapshot and drop its state, screen and regions, and
         // the same RAM sent again later is a duplicate: those wait until the inbox keeps them.
         val keepsExtras = pending.none(snapshots::hasExtras) || keepsExtras(config)
         for (meta in pending) {
@@ -189,10 +189,10 @@ class SampleInbox @Inject constructor(
             val parts = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("meta", null, meta.readBytes().toRequestBody(JSON))
                 .addFormDataPart("ram", ram.name, ram.asRequestBody(GZIP))
-            // Video RAM, when it was taken: an inbox that doesn't keep it yet ignores the part.
-            snapshots.vramOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("vram", it.name, it.asRequestBody(GZIP)) }
-            snapshots.stateOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("state", it.name, it.asRequestBody(GZIP)) }
-            snapshots.screenOf(meta).takeIf { it.isFile }?.let { parts.addFormDataPart("screen", it.name, it.asRequestBody(PNG)) }
+            // Video RAM, state, screen and regions, those taken: an inbox that doesn't keep one yet ignores the part.
+            snapshots.partsOf(meta).forEach { (name, file) ->
+                parts.addFormDataPart(name, file.name, file.asRequestBody(if (name == "screen") PNG else GZIP))
+            }
             val body = parts.build()
             val request = Request.Builder()
                 .url(config.snapshotsEndpoint)
@@ -225,7 +225,7 @@ class SampleInbox @Inject constructor(
             }
         }
         if (sent > 0) Log.i(TAG, "Sent $sent RAM snapshots to the inbox")
-        if (!keepsExtras) Log.i(TAG, "Snapshots with state or screen wait until the inbox keeps them")
+        if (!keepsExtras) Log.i(TAG, "Snapshots with state, screen or regions wait until the inbox keeps them")
         sent
     }
 
