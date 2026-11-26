@@ -89,6 +89,16 @@ jobs:
           key: dolphin-${{ env.DOLPHIN_COMMIT }}-${{ hashFiles('app/build.gradle.kts') }}
           restore-keys: dolphin-${{ env.DOLPHIN_COMMIT }}
 
+      # Flycast, the Dreamcast core, likewise (third_party/flycast, which checkout skips).
+      - name: Note the Flycast commit
+        run: echo "FLYCAST_COMMIT=$(git rev-parse HEAD:third_party/flycast)" >> "$GITHUB_ENV"
+
+      - name: Cache the built Flycast
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores/libflycast_libretro_android-${{ env.FLYCAST_COMMIT }}
+          key: flycast-${{ env.FLYCAST_COMMIT }}
+
       # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
       # the proxy and host; LunaHook comes from LunaTranslator's pinned release.
       - name: Cache LunaHook

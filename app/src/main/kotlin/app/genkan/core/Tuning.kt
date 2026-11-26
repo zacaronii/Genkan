@@ -69,6 +69,21 @@ object TuningLadders {
         defaults = mapOf("dolphin_efb_scale" to "1", "dolphin_vi_skip" to "disabled", "dolphin_cpu_clock_rate" to "1.00"),
     )
 
+    // Flycast re-reads its resolution on every options update and announces its new geometry, so
+    // its steps may well apply as the game runs; until a round on the device shows a change both
+    // ways (and an unchanged picture after a step down), they wait for a restart.
+    private val flycast = TuningLadder(
+        steps = listOf(
+            TuningStep("1920x1440", mapOf("reicast_internal_resolution" to "1920x1440"), live = false, label = "3×"),
+            TuningStep("1280x960", mapOf("reicast_internal_resolution" to "1280x960"), live = false, label = "2×"),
+            TuningStep("default", emptyMap(), live = false, label = "1×"),
+            TuningStep("320x240", mapOf("reicast_internal_resolution" to "320x240"), live = false, label = "½×"),
+            TuningStep("auto-skip", mapOf("reicast_internal_resolution" to "320x240", "reicast_auto_skip_frame" to "some"), risky = true, live = false, label = "½×, frame skip"),
+        ),
+        defaultId = "default",
+        defaults = mapOf("reicast_internal_resolution" to "640x480", "reicast_auto_skip_frame" to "disabled"),
+    )
+
     // PPSSPP's core aborts when its resolution changes as the game runs (measured on the Thor):
     // its steps wait for a restart.
     private val ppsspp = TuningLadder(
@@ -85,6 +100,7 @@ object TuningLadders {
     /** The ladder named [tuning] (a core's CoreDef.tuning); null for a core light enough to need none. */
     fun of(tuning: String): TuningLadder? = when (tuning) {
         "dolphin" -> dolphin
+        "flycast" -> flycast
         "ppsspp" -> ppsspp
         else -> null
     }

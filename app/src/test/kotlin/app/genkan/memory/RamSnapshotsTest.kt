@@ -43,6 +43,8 @@ class RamSnapshotsTest {
         assertEquals(4L * 1024 * 1024, size("nds"))
         assertEquals(0x80000000L, MainRam.of("ngc")!!.baseAddress)
         assertEquals(24L * 1024 * 1024, size("ngc"))
+        assertEquals(0x0C000000L, MainRam.of("dc")!!.baseAddress)
+        assertEquals(16L * 1024 * 1024, size("dc"))
         assertNull(MainRam.of("n64"))
     }
 

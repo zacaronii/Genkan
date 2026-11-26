@@ -282,9 +282,10 @@ val buildBeetleSaturn = tasks.register<BuildLibretroCore>("buildBeetleSaturn") {
  * A libretro core built from source with CMake, from a submodule pinned at [commit] that a normal
  * checkout skips (`update = none` in .gitmodules: its externals are large). Built once per commit
  * into [cacheDir] with the zip of the [sysEntries] under the source's Data/Sys the core needs in its
- * system folder, so later builds (and CI, which caches the folder) only copy both; the source and
- * its externals are fetched, shallow, only when the cache has no build of the commit. The zip is
- * cached by its list of entries too: a changed list makes only a new zip.
+ * system folder (none when the list is empty), so later builds (and CI, which caches the folder)
+ * only copy both; the source and its externals are fetched, shallow, only when the cache has no
+ * build of the commit. The zip is cached by its list of entries too: a changed list makes only a
+ * new zip.
  */
 abstract class BuildCmakeCore : DefaultTask() {
     @get:Input abstract val commit: Property<String>
@@ -295,6 +296,8 @@ abstract class BuildCmakeCore : DefaultTask() {
     @get:Input abstract val target: Property<String>
     /** The source's own submodules the build doesn't need (Windows' Qt and FFmpeg). */
     @get:Input abstract val skipExternals: ListProperty<String>
+    /** When given, the only submodules of the source the build needs (each with its own); else all but [skipExternals]. */
+    @get:Input abstract val externals: ListProperty<String>
     @get:Input abstract val sysEntries: ListProperty<String>
     @get:Input abstract val sysZipName: Property<String>
     /** Genkan's own patches to the source (the .patch files in patches/<core>), applied in name order to a copy of it. */
@@ -305,6 +308,13 @@ abstract class BuildCmakeCore : DefaultTask() {
     @get:OutputDirectory abstract val libsDir: DirectoryProperty
     @get:OutputDirectory abstract val assetsDir: DirectoryProperty
     @get:Inject abstract val exec: ExecOperations
+
+    init {
+        skipExternals.convention(emptyList())
+        externals.convention(emptyList())
+        sysEntries.convention(emptyList())
+        sysZipName.convention("")
+    }
 
     private fun git(dir: File, vararg args: String): String = ByteArrayOutputStream().also { out ->
         exec.exec { commandLine(listOf("git", "-C", dir.path) + args); standardOutput = out }
@@ -352,14 +362,16 @@ abstract class BuildCmakeCore : DefaultTask() {
             val strip = ndk.resolve("toolchains/llvm/prebuilt").listFiles()!!.single().resolve("bin/llvm-strip")
             exec.exec { commandLine(strip.path, "-o", library.path, built.path) }
         }
+        val assets = assetsDir.get().asFile.resolve("cores").apply { deleteRecursively(); mkdirs() }
+        val libs = libsDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
+        library.copyTo(libs.resolve(libraryName.get()), overwrite = true)
+        // A core that needs nothing in its system folder but BIOS files has no zip.
+        if (sysEntries.get().isEmpty()) return
         if (!sysZip.isFile) {
             fetch(root, source, path)
             cached.listFiles { f -> f.name.startsWith(sysZipName.get().removeSuffix(".zip") + "-") }?.forEach { it.delete() }
             zipSys(source.resolve("Data/Sys"), sysZip)
         }
-        val libs = libsDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
-        library.copyTo(libs.resolve(libraryName.get()), overwrite = true)
-        val assets = assetsDir.get().asFile.resolve("cores").apply { deleteRecursively(); mkdirs() }
         sysZip.copyTo(assets.resolve(sysZipName.get()), overwrite = true)
     }
 
@@ -398,9 +410,11 @@ abstract class BuildCmakeCore : DefaultTask() {
         if (source.resolve(".git").exists() && git(source, "rev-parse", "HEAD") == commit.get()) return
         logger.lifecycle("Fetching $path at ${commit.get().take(7)}")
         git(root, "submodule", "update", "--init", "--checkout", "--depth", "1", "--", path)
-        val externals = git(source, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$").lines()
-            .map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
-        git(source, *(listOf("submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8", "--") + externals).toTypedArray())
+        val wanted = externals.get().ifEmpty {
+            git(source, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$").lines()
+                .map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
+        }
+        git(source, *(listOf("submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8", "--") + wanted).toTypedArray())
     }
 
     /** [entries] of [sys] zipped under Sys/, in name order and with fixed times: the same zip from the same commit. */
@@ -442,6 +456,34 @@ val buildDolphin = tasks.register<BuildCmakeCore>("buildDolphin") {
     libsDir.set(layout.buildDirectory.dir("generated/dolphin/libs"))
     assetsDir.set(layout.buildDirectory.dir("generated/dolphin/assets"))
     // After the app's native configure, which installs the SDK's CMake when it's missing.
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+/**
+ * Flycast (GPL-2.0-or-later), the Dreamcast core, built from its repository at this commit as a
+ * libretro core with OpenGL ES (the SH-4's ARM64 dynarec included), without Vulkan, Lua or the crash
+ * reporter. Only the four submodules that build uses are fetched. See NOTICE.
+ */
+val flycastCommit = "12a7f18b81c0c7dc2e52c29b6615c7fe0d496ee5"
+
+val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
+    commit.set(flycastCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/flycast"))
+    libraryName.set("libflycast_libretro_android.so")
+    abi.set("arm64-v8a")
+    cmakeArgs.set(
+        listOf(
+            "-DLIBRETRO=ON", "-DUSE_GLES=ON", "-DUSE_VULKAN=OFF", "-DUSE_BREAKPAD=OFF", "-DUSE_LUA=OFF",
+            "-DUSE_OPENMP=OFF", "-DANDROID_PLATFORM=android-33",
+        ),
+    )
+    target.set("flycast_libretro")
+    externals.set(listOf("core/deps/asio", "core/deps/libchdr", "core/deps/tinygettext", "core/deps/xbyak"))
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    libsDir.set(layout.buildDirectory.dir("generated/flycast/libs"))
+    assetsDir.set(layout.buildDirectory.dir("generated/flycast/assets"))
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
@@ -634,6 +676,7 @@ androidComponents {
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
         // The PC hook kit (tools/hookbridge/kit.sh, which needs MinGW): packed when it's been

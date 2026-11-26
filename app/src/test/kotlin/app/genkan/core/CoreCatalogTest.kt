@@ -117,4 +117,21 @@ class CoreCatalogTest {
             assertSame(core, CoreCatalog.byId(core.id))
         }
     }
+
+    @Test
+    fun `Dreamcast discs play on Flycast, with RomM's BIOS in its dc folder and its RAM at 0x0C000000`() {
+        val dc = CoreCatalog.forPlatform("dc", debug = false)!!
+        assertEquals("flycast", dc.id)
+        assertEquals("libflycast_libretro_android.so", dc.library)
+        assertEquals(mapOf("dc_boot.bin" to "dc/dc_boot.bin", "dc_flash.bin" to "dc/dc_flash.bin"), dc.firmware)
+        assertEquals("Japan", dc.variables["reicast_region"])
+        assertEquals("Japanese", dc.variables["reicast_language"])
+        listOf("game.chd", "game.gdi", "game.cdi", "game.cue", "games.m3u").forEach { assertTrue(it, dc.takes(it)) }
+        listOf("game.zip", "game.7z", "track01.bin").forEach { assertFalse(it, dc.takes(it)) }
+        // Pointers through the cached and uncached mirrors fold onto the RAM's own addresses.
+        assertEquals(0x0C000000L, dc.ramBase)
+        assertEquals(0x0C123456L, 0x8C123456L and dc.pointerMask)
+        assertEquals(0x0C123456L, 0xAC123456L and dc.pointerMask)
+        assertNotNull(TuningLadders.of(dc.tuning))
+    }
 }
