@@ -14,12 +14,14 @@ class CoreCatalogTest {
     private val wii = CoreCatalog.forPlatform("wii")!!
 
     @Test
-    fun `Dolphin gets a controller in port 1, the other cores keep their own default`() {
-        // Dolphin's ports start with no device: without one the game never sees a GameCube pad.
+    fun `Dolphin and Flycast get a controller in port 1, the other cores keep their own default`() {
+        // Their ports start with no device: without one the game never sees a pad.
+        val dreamcast = CoreCatalog.forPlatform("dc")!!
         assertEquals(listOf(CoreCatalog.RETRO_DEVICE_JOYPAD), gameCube.portDevices)
         assertEquals(listOf(CoreCatalog.RETRO_DEVICE_JOYPAD), wii.portDevices)
+        assertEquals(listOf(CoreCatalog.RETRO_DEVICE_JOYPAD), dreamcast.portDevices)
         assertEquals(1, CoreCatalog.RETRO_DEVICE_JOYPAD)
-        CoreCatalog.cores.filter { it.library != gameCube.library }.forEach { assertEquals(it.id, emptyList<Int>(), it.portDevices) }
+        CoreCatalog.cores.filter { it.library != gameCube.library && it !== dreamcast }.forEach { assertEquals(it.id, emptyList<Int>(), it.portDevices) }
     }
 
     @Test

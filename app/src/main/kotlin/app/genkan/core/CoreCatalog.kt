@@ -201,6 +201,8 @@ object CoreCatalog {
             extensions = setOf("chd", "cdi", "gdi", "cue", "m3u"),
             // On shared storage, where the save sync watches it (WatchedEmulator.BUILT_IN).
             savesFolder = "Genkan/saves/flycast",
+            // A Dreamcast controller in port 1: with the core's own default the game read no button.
+            portDevices = listOf(RETRO_DEVICE_JOYPAD),
             // Its emulation runs on a thread of its own: a game drawing 30 frames a second makes two
             // frames of sound a run, every other display frame (libretrodroid's audiopace.h).
             lowLatencySound = false,
