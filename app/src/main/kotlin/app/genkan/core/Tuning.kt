@@ -84,6 +84,19 @@ object TuningLadders {
         defaults = mapOf("reicast_internal_resolution" to "640x480", "reicast_auto_skip_frame" to "disabled"),
     )
 
+    // LRPS2's GS drawn on 6 CPU threads ("Software (HW)", presented through GL) held full speed on
+    // the Thor where its GL renderer fell to 90% (the GPU stuck at its lowest clock, CPU and GPU
+    // waiting on each other). GL is the step lighter on the CPU, for a device running hot, though
+    // not always as fast. The renderer is chosen at start: both wait for a restart.
+    private val lrps2 = TuningLadder(
+        steps = listOf(
+            TuningStep("default", emptyMap(), live = false, label = "Software"),
+            TuningStep("gl", mapOf("pcsx2_renderer" to "Auto"), live = false, label = "GL"),
+        ),
+        defaultId = "default",
+        defaults = mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"),
+    )
+
     // PPSSPP's core aborts when its resolution changes as the game runs (measured on the Thor):
     // its steps wait for a restart.
     private val ppsspp = TuningLadder(
@@ -101,6 +114,7 @@ object TuningLadders {
     fun of(tuning: String): TuningLadder? = when (tuning) {
         "dolphin" -> dolphin
         "flycast" -> flycast
+        "lrps2" -> lrps2
         "ppsspp" -> ppsspp
         else -> null
     }

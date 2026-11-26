@@ -152,13 +152,17 @@ class CoreCatalogTest {
     }
 
     @Test
-    fun `LRPS2 boots with RomM's BIOS in its own folder, draws with the frontend's GL ES and reads the EE's 32 MB`() {
+    fun `LRPS2 boots with RomM's BIOS in its own folder, draws as its ladder says and reads the EE's 32 MB`() {
         val ps2 = CoreCatalog.byId("lrps2")!!
         assertEquals("libpcsx2_libretro_android.so", ps2.library)
         assertTrue(ps2.debugOnly)
         assertEquals(mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"), ps2.firmware)
         assertEquals("ps2-0230a-20080220.bin", ps2.variables["pcsx2_bios"])
-        assertEquals("Auto", ps2.variables["pcsx2_renderer"])
+        // The renderer is the ladder's: Software on 6 threads by default, GL ("Auto") as the lighter step.
+        assertNull(ps2.variables["pcsx2_renderer"])
+        val ladder = TuningLadders.of(ps2.tuning)!!
+        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), ladder.assignment("default"))
+        assertEquals("Auto", ladder.assignment("gl")["pcsx2_renderer"])
         listOf("game.chd", "game.iso", "game.cso", "games.m3u").forEach { assertTrue(it, ps2.takes(it)) }
         assertFalse(ps2.takes("game.zip"))
         assertEquals(0L, ps2.ramBase)

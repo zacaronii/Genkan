@@ -1,5 +1,8 @@
 package app.genkan.core
 
+import app.genkan.core.TuningLearner.Companion.CEILING_WINDOW
+import app.genkan.core.TuningLearner.Companion.CLOCK_BASE
+import app.genkan.core.TuningLearner.Companion.HOT_WINDOW
 import app.genkan.core.TuningLearner.Companion.ROOM
 import app.genkan.core.TuningLearner.Companion.SETTLE
 import app.genkan.core.TuningLearner.Companion.TRIAL_SETTLE
@@ -120,7 +123,7 @@ class TuningLearnerTest {
     @Test
     fun `nothing is tried hot, and a try under way goes back`() {
         val learner = settled()
-        assertTrue(learner.feed(slow(0.8).copy(hottestC = 80), WINDOW * 2).isEmpty())
+        assertTrue(learner.feed(slow(0.8).copy(hottestC = 80), HOT_WINDOW - 1).isEmpty())
         learner.feed(slow(0.85), WINDOW)
         val back = learner.second(slow(0.9).copy(hottestC = 80))!!
         assertEquals("base", back.step)
@@ -132,5 +135,90 @@ class TuningLearnerTest {
         learner.feed(full, ROOM - 1)
         learner.paused()
         assertTrue(learner.feed(full, ROOM - 1).isEmpty())
+    }
+
+    /** Settled, with the fastest core at [mhz] through the session's first minute: the clock it counts as its own. */
+    private fun clocked(mhz: Int = 3000, ladder: TuningLadder = this.ladder) =
+        TuningLearner(ladder, ladder.defaultId).also { it.feed(full.copy(busiest = 0.9, fastestMhz = mhz), SETTLE + CLOCK_BASE) }
+
+    @Test
+    fun `heat alone, with full speed and the clock held, changes nothing`() {
+        // As on the Thor's 20-minute round: around 85 °C for long, the clock and speed held.
+        val learner = clocked()
+        assertTrue(learner.feed(full.copy(hottestC = 86, fastestMhz = 3000), 20 * 60).isEmpty())
+        assertEquals("base", learner.step)
+    }
+
+    @Test
+    fun `hot with the clock falling, the game tries the lighter step and keeps it once the heat stops climbing`() {
+        val learner = clocked()
+        val throttled = full.copy(hottestC = 85, fastestMhz = 2500)
+        assertTrue(learner.feed(throttled, HOT_WINDOW - 1).isEmpty())
+        val tried = learner.second(throttled)!!
+        assertEquals(TuningLearner.Decision("light", keep = false, why = "trying light: the device ran hot and its clock fell"), tried)
+        val kept = learner.feed(throttled.copy(hottestC = 84), TRIAL_SETTLE + WINDOW)
+        assertEquals(listOf(TuningLearner.Decision("light", keep = true, why = "cooler at light")), kept)
+        assertEquals("light", learner.step)
+    }
+
+    @Test
+    fun `a clock that only dips between busy moments isn't throttling`() {
+        // The governor idles the fastest core between frames; its highest second in the window counts.
+        val learner = clocked()
+        val decisions = (1..HOT_WINDOW * 5).mapNotNull { learner.second(full.copy(hottestC = 85, fastestMhz = if (it % 3 == 0) 3000 else 1900)) }
+        assertTrue(decisions.isEmpty())
+    }
+
+    @Test
+    fun `hot and behind, the game tries the lighter step`() {
+        val learner = clocked()
+        val decisions = learner.feed(slow(0.93).copy(hottestC = 80, fastestMhz = 3000), HOT_WINDOW)
+        assertEquals("trying light: the device ran hot and the game fell behind", decisions.single().why)
+    }
+
+    @Test
+    fun `a lighter step that doesn't stop the heat climbing goes back and isn't tried again`() {
+        val learner = clocked()
+        learner.feed(full.copy(hottestC = 85, fastestMhz = 2500), HOT_WINDOW)
+        val back = (1..TRIAL_SETTLE + WINDOW).mapNotNull { learner.second(full.copy(hottestC = 85 + it / 4, fastestMhz = 2500)) }
+        assertEquals("base", back.single().step)
+        assertEquals("back to base: light didn't cool the device", back.single().why)
+        // Throttled again: light failed, and the risky step past it is never taken.
+        assertTrue(learner.feed(full.copy(hottestC = 85, fastestMhz = 2500), HOT_WINDOW * 3).isEmpty())
+    }
+
+    @Test
+    fun `at the ceiling for a minute the game steps down whatever it costs, but not for spikes`() {
+        val learner = clocked()
+        // Spikes to 92 °C between cooler seconds, as on the Thor: never a minute straight.
+        assertTrue((1..CEILING_WINDOW * 5).mapNotNull { learner.second(full.copy(hottestC = if (it % 2 == 0) 92 else 88, fastestMhz = 3000)) }.isEmpty())
+        assertTrue(learner.feed(full.copy(hottestC = 80, fastestMhz = 3000), 1).isEmpty())
+        val ceiling = full.copy(hottestC = 92, fastestMhz = 3000)
+        assertTrue(learner.feed(ceiling, CEILING_WINDOW - 1).isEmpty())
+        assertEquals("trying light: the device stayed at 92 °C", learner.second(ceiling)!!.why)
+    }
+
+    @Test
+    fun `nothing better-looking is tried while hot, however much room`() {
+        val learner = clocked()
+        val decisions = learner.feed(full.copy(hottestC = 80, fastestMhz = 3000), ROOM * 2)
+        assertTrue(decisions.isEmpty())
+    }
+
+    @Test
+    fun `a lighter step taken only at start is remembered for the next start, once`() {
+        val atStart = TuningLadder(
+            steps = listOf(TuningStep("base", emptyMap(), live = false), TuningStep("cool", mapOf("k" to "c"), live = false)),
+            defaultId = "base",
+            defaults = mapOf("k" to "d"),
+        )
+        val learner = clocked(ladder = atStart)
+        val decisions = learner.feed(full.copy(hottestC = 93, fastestMhz = 3000), CEILING_WINDOW * 4)
+        assertEquals(
+            listOf(TuningLearner.Decision("cool", keep = true, why = "cool from the next start: the device stayed at 92 °C", nextStart = true)),
+            decisions,
+        )
+        // The game keeps running where it was.
+        assertEquals("base", learner.step)
     }
 }
