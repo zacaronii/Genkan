@@ -8,6 +8,7 @@
  */
 
 #include "genkantap.h"
+#include "memorymap.h"
 
 #include <algorithm>
 #include <cstring>
@@ -26,7 +27,7 @@ void GenkanTap::setMemoryMaps(const struct retro_memory_map *map) {
         bool mirror = std::any_of(memory.begin(), memory.end(), [&](const Region &r) {
             return host >= r.host && host < r.host + r.length;
         });
-        memory.push_back(Region { d.start, d.len, host, mirror });
+        memory.push_back(Region { d.start, d.len, host, mirror, d.select, d.disconnect });
     }
 }
 
@@ -64,25 +65,38 @@ std::vector<GenkanTap::Region> GenkanTap::regions() {
     return { Region { 0, size, data, false } };
 }
 
+namespace {
+
+MemoryDescriptor descriptorOf(const GenkanTap::Region &r) {
+    return MemoryDescriptor { r.start, r.length, r.select, r.disconnect };
+}
+
+}
+
 bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
     for (const auto &r : regions()) {
-        if (address >= r.start && address + size <= r.start + r.length) {
-            // Copied by the kernel, so memory the core unmapped or never mapped fails the read
-            // instead of crashing the game.
-            struct iovec local { out, size };
-            struct iovec remote { r.host + (address - r.start), size };
-            return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
-        }
+        auto d = descriptorOf(r);
+        auto at = locateAddress(d, address);
+        if (!at) continue;
+        // The first region that takes the address answers: the whole read there, or none.
+        if (size > readableFrom(d, address, *at)) return false;
+        // Copied by the kernel, so memory the core unmapped or never mapped fails the read
+        // instead of crashing the game.
+        struct iovec local { out, size };
+        struct iovec remote { r.host + *at, size };
+        return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
     }
     return false;
 }
 
 size_t GenkanTap::readClipped(const std::vector<Region> &among, uint64_t address, uint8_t *out, size_t size) {
     for (const auto &r : among) {
-        if (address < r.start || address >= r.start + r.length) continue;
-        size_t n = static_cast<size_t>(std::min<uint64_t>(size, r.start + r.length - address));
+        auto d = descriptorOf(r);
+        auto at = locateAddress(d, address);
+        if (!at) continue;
+        size_t n = static_cast<size_t>(std::min<uint64_t>(size, readableFrom(d, address, *at)));
         struct iovec local { out, n };
-        struct iovec remote { r.host + (address - r.start), n };
+        struct iovec remote { r.host + *at, n };
         ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
         return got > 0 ? static_cast<size_t>(got) : 0;
     }

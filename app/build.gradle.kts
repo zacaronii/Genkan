@@ -534,6 +534,18 @@ val frameFillTest = tasks.register<NativeHostTest>("frameFillTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/** A console's address read through a core's memory descriptor, as libretro and Yomikata's harness define it. */
+val memoryMapTest = tasks.register<NativeHostTest>("memoryMapTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/memorymap.h"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    target.set("memory_map_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("memory-map-test"))
+    passed.set(layout.buildDirectory.file("memory-map-test/passed"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 /**
  * The popup page's script tests (src/test/js), with Node's own test runner: no packages. The unit
  * tests wait for it, so CI and the local check run it.
@@ -560,7 +572,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->
