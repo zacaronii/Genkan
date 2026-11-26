@@ -1000,7 +1000,7 @@ class CoreActivity : ComponentActivity() {
             }
             learner?.let { l ->
                 if (row == null) l.paused()
-                else l.second(TuningLearner.Second(row.speed, row.busiest?.share, row.gpuBusyPercent, DeviceHeat.hottestCpuC()))?.let(::learned)
+                else l.second(TuningLearner.Second(row.speed, row.busiest?.share, row.gpuBusyPercent, DeviceHeat.hottestCpuC(), DeviceHeat.fastestMhz()))?.let(::learned)
             }
             if (row != null && app.genkan.BuildConfig.DEBUG) {
                 Log.i(STATS_TAG, "${row.line()} | cpu ${DeviceHeat.fastestMhz() ?: "?"} MHz, ${DeviceHeat.hottestCpuC() ?: "?"} °C" + if (stats.behind) " | behind" else "")
