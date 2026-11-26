@@ -20,9 +20,19 @@ private val Context.playerStore: DataStore<Preferences> by preferencesDataStore(
 @Singleton
 class PlayerSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
+    /** On for a fresh install unless switched off; an updated install keeps what it had ([settleDefault]). */
     val enabled: Flow<Boolean> = context.playerStore.data.map { it[ENABLED] == true }
 
     suspend fun isEnabled(): Boolean = enabled.first()
+
+    /**
+     * Keeps the switch's first value, once: on for a fresh install, off for one updated from a
+     * version where it was off unless switched on, so an update changes nothing. A value already
+     * kept (switched either way) stays as it is.
+     */
+    suspend fun settleDefault(freshInstall: Boolean) {
+        context.playerStore.edit { prefs -> if (prefs[ENABLED] == null) prefs[ENABLED] = BuiltInDefault.on(freshInstall) }
+    }
 
     suspend fun setEnabled(on: Boolean) {
         context.playerStore.edit { it[ENABLED] = on }
@@ -83,14 +93,40 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
     }
 
     /** Whether [platform]'s game is played with A on the right ([FaceButtons.aOnRight]). */
+    /**
+     * What plays each console, by platform: a built-in core's id, or CoreCatalog.EXTERNAL for its
+     * emulator app. A console not in it plays on its first core (CoreCatalog.forPlatform).
+     */
+    val coreChoice: Flow<Map<String, String>> = context.playerStore.data.map { prefs ->
+        prefs[CORE_CHOICE].orEmpty().mapNotNull { entry -> entry.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+    }
+
+    /** Plays [platform]'s games with [choice] (a core id, or CoreCatalog.EXTERNAL); null, its first core again. */
+    suspend fun setCoreChoice(platform: String, choice: String?) {
+        context.playerStore.edit { prefs ->
+            val others = prefs[CORE_CHOICE].orEmpty().filterNot { it.startsWith("$platform=") }.toSet()
+            prefs[CORE_CHOICE] = if (choice == null) others else others + "$platform=$choice"
+        }
+    }
+
     suspend fun aOnRight(platform: String): Boolean = FaceButtons.aOnRight(aOnRight.first(), platform in faceSwapped.first())
 
     private companion object {
         val A_ON_RIGHT = booleanPreferencesKey("a_on_right")
+        val CORE_CHOICE = stringSetPreferencesKey("core_choice")
         val FACE_SWAPPED = stringSetPreferencesKey("face_swapped")
         val LOW_LATENCY_OFF = stringSetPreferencesKey("low_latency_off")
         val ENABLED = booleanPreferencesKey("enabled")
         val SAMPLES = booleanPreferencesKey("yomikata_samples")
         val LEARNING = booleanPreferencesKey("learning")
     }
+}
+
+/** The built-in player switch's first value, kept once ([PlayerSettings.settleDefault]). */
+object BuiltInDefault {
+    /** On for a fresh install; off for one updated from a version where it was off until switched on. */
+    fun on(freshInstall: Boolean): Boolean = freshInstall
+
+    /** Whether the app has never been updated since it was installed: an install, not an update. */
+    fun isFreshInstall(firstInstallTime: Long, lastUpdateTime: Long): Boolean = firstInstallTime == lastUpdateTime
 }

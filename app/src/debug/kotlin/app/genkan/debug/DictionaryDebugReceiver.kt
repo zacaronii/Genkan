@@ -112,8 +112,8 @@ import javax.inject.Inject
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
  *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform saturn --es core beetle_saturn
- * (plays the console's games with that one of its debug-only cores until the app restarts; no core: the first listed.
- *  The PS2's LRPS2 plays only when chosen so: --es platform ps2 --es core lrps2; else ARMSX2 does)
+ * (plays the console's games with that core, as Settings › Screen look and sound › Plays with does, and kept;
+ *  --es core external: its emulator app (ARMSX2 for the PS2); no core: its first core again)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -172,12 +172,10 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                     "app.genkan.debug.CORE" -> {
                         val platform = intent.getStringExtra("platform").orEmpty()
                         val core = intent.getStringExtra("core")
-                        app.genkan.core.CoreCatalog.debugChoice = if (core.isNullOrEmpty()) {
-                            app.genkan.core.CoreCatalog.debugChoice - platform
-                        } else {
-                            app.genkan.core.CoreCatalog.debugChoice + (platform to core)
-                        }
-                        Log.i(TAG, "Core for $platform: ${app.genkan.core.CoreCatalog.forPlatform(platform)?.id}")
+                        // The same setting Settings changes: kept, and mirrored into CoreCatalog.choice.
+                        playerSettings.setCoreChoice(platform, core?.takeIf { it.isNotEmpty() })
+                        app.genkan.core.CoreCatalog.choice = playerSettings.coreChoice.first()
+                        Log.i(TAG, "Core for $platform: ${app.genkan.core.CoreCatalog.forPlatform(platform)?.id ?: "its emulator app"}")
                     }
                     "app.genkan.debug.DOWNLOAD" -> {
                         val game = database.library().game(intent.getLongExtra("rom", 0))

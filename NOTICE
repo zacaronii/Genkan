@@ -201,7 +201,7 @@ License: GPL-2.0-or-later (its source files' headers; LICENSE at that commit
   commit.
 
 --------------------------------------------------------------------------
-LRPS2, libretro's PCSX2 (GPL-3.0), the PS2 core, in debug builds only
+LRPS2, libretro's PCSX2 (GPL-3.0), the PS2 core
 https://github.com/libretro/parallel-ps2
 Pinned commit: 4d2c5d0904c339fd18252574e010fbf38d1b1929
 License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
@@ -212,7 +212,7 @@ License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
   which can't load the core otherwise; the game's serial and ELF CRC handed
   to the frontend; see their README) to a copy, builds it for arm64-v8a with the NDK's CMake toolchain as a libretro core
   with the OpenGL renderer (-DLIBRETRO=ON -DUSE_VULKAN=OFF, android-33,
-  c++_static, stripped) and bundles it, in debug builds only, as
+  c++_static, stripped) and bundles it as
   libpcsx2_libretro_android.so. It isn't committed; the source it is built
   from is the submodule at that commit.
 

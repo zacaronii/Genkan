@@ -702,6 +702,22 @@ class ScreenshotTest {
         )
     }
 
+    /** The screen look page's Plays with rows: the PS2 on ARMSX2, the Saturn's two candidates (a debug build's). */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun playsWith() = shoot("screen_look_plays_with", TOP_PIXELS) {
+        androidx.compose.foundation.layout.Box(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background)
+                .padding(horizontal = androidx.compose.ui.unit.Dp(48f), vertical = androidx.compose.ui.unit.Dp(32f)),
+        ) {
+            PlaysWith(
+                consoles = listOf("ps2" to "PlayStation 2", "saturn" to "Saturn"),
+                choice = mapOf("ps2" to app.genkan.core.CoreCatalog.EXTERNAL),
+                onCycle = {},
+            )
+        }
+    }
+
     @Test
     @Config(qualifiers = TOP_SCREEN)
     fun settingsPlaying() = shootSettings(1, SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 1))
