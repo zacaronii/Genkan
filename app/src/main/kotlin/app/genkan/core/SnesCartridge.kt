@@ -12,8 +12,6 @@ import java.util.zip.CRC32
  */
 object SnesCartridge {
 
-    data class Id(val id: String, val headerCrc32: String)
-
     /** The header's bus addresses 0xFFB0-0xFFDF, as 48 bytes. */
     private const val HEADER = 0x30
     private const val LOROM = 0x7FB0
@@ -21,7 +19,7 @@ object SnesCartridge {
     private const val COPIER = 512
 
     /** [file]'s id, or null when it's too short to hold a header or can't be read. */
-    fun of(file: File): Id? = runCatching {
+    fun of(file: File): CartridgeId? = runCatching {
         RandomAccessFile(file, "r").use { f ->
             val size = f.length()
             val head = ByteArray(minOf(size, (COPIER + HIROM + HEADER).toLong()).toInt())
@@ -31,7 +29,7 @@ object SnesCartridge {
     }.getOrNull()
 
     /** The id from the start of a file of [size] bytes ([head]: its first bytes, at least up to the header). */
-    fun of(head: ByteArray, size: Long): Id? {
+    fun of(head: ByteArray, size: Long): CartridgeId? {
         // A copier's 512-byte header in front of the game.
         val skip = if (size % 0x8000 == COPIER.toLong()) COPIER else 0
         val header = listOf(LOROM to false, HIROM to true)
@@ -45,7 +43,7 @@ object SnesCartridge {
         } else {
             "SFC-%08X".format(crc)
         }
-        return Id(id, "%08x".format(crc))
+        return CartridgeId(id, "%08x".format(crc))
     }
 
     /** A game code: 2 to 4 letters and digits, once trailing spaces are dropped. */
