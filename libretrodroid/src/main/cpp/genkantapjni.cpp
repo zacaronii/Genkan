@@ -132,6 +132,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamSt
     GenkanTap::getInstance().setSystemRamStretches(std::move(out), words == JNI_TRUE);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setReadsWhole(JNIEnv *, jclass, jboolean whole) {
+    GenkanTap::getInstance().setReadsWhole(whole == JNI_TRUE);
+}
+
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_packedFrameSize(JNIEnv *, jclass) {
     auto [width, height] = GenkanTap::getInstance().frameSize();
     return (static_cast<jlong>(width) << 32) | height;

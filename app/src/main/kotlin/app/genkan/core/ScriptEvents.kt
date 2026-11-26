@@ -37,5 +37,7 @@ object ScriptEvents {
         else -> "kind $kind"
     }
 
-    private val CATALOG_PLATFORMS = mapOf("ngc" to "gc", "psx" to "ps1", "snes" to "sfc", "sfam" to "sfc")
+    private val CATALOG_PLATFORMS = mapOf(
+        "ngc" to "gc", "psx" to "ps1", "snes" to "sfc", "sfam" to "sfc", "tg16" to "pce", "turbografx-cd" to "pce-cd",
+    )
 }

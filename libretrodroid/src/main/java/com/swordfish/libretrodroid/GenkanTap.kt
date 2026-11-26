@@ -68,6 +68,13 @@ object GenkanTap {
     @JvmStatic external fun setKeepPointer(keep: Boolean)
 
     /**
+     * [readMemory] reads the core's blocks whole where its map leaves gaps in them (a PC Engine CD's
+     * card RAM), as Yomikata's harness does for snapshots and searches; scripts keep to the map.
+     * Set before the game loads.
+     */
+    @JvmStatic external fun setReadsWhole(whole: Boolean)
+
+    /**
      * A core whose system RAM is more than one of the console's stretches (mednafen_saturn's work
      * RAM): [stretches] as (console address, offset in the system RAM, length) triples, each read at
      * its console address; [words] when the core keeps them as 16-bit words in the host's order, so

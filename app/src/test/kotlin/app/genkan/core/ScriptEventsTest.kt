@@ -12,6 +12,9 @@ class ScriptEventsTest {
         assertEquals("sfc", ScriptEvents.catalogPlatform("snes"))
         assertEquals("sfc", ScriptEvents.catalogPlatform("sfam"))
         assertEquals("psp", ScriptEvents.catalogPlatform("psp"))
+        // A PC Engine's HuCards and CDs, as Yomikata names them.
+        assertEquals("pce", ScriptEvents.catalogPlatform("tg16"))
+        assertEquals("pce-cd", ScriptEvents.catalogPlatform("turbografx-cd"))
     }
 
     @Test

@@ -114,6 +114,7 @@ class TextSamples @Inject constructor(private val settings: PlayerSettings) {
             // The GameCube keeps RomM's ngc, as the inbox names it.
             "psx" to "ps1", "snes" to "sfc", "sfam" to "sfc", "nes" to "fc", "famicom" to "fc",
             "genesis" to "md", "genesis-slash-megadrive" to "md", "megadrive" to "md",
+            "tg16" to "pce", "turbografx-cd" to "pce-cd",
         )
         private const val TAG = "TextSamples"
         /** Search no more than this much memory (a PS1 has 2 MB; a 3DS hundreds). */
