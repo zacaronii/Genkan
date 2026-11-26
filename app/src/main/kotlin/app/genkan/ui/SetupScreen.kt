@@ -315,7 +315,8 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
         else -> "Another launcher answers Home."
     }
     SwitchKey.BUILT_IN_PLAYER -> if (state.builtInPlayer) {
-        "GB, GBA, Super Famicom, DS, PS1 and PSP games run inside Genkan. " +
+        "GB, GBA, Super Famicom, DS, PS1, PSP, GameCube, Wii, PC Engine, Dreamcast and PS2 games run inside Genkan " +
+            "(Screen look and sound › Plays with picks ARMSX2 for the PS2 instead). " +
             "Hold Select: +Start quits, +R1 saves a state, +L1 loads it, +left/right picks its slot, +R2 fast-forwards. " +
             "On a DS game, a stick click swaps its lower screen and the reader."
     } else {

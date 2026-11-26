@@ -50,6 +50,9 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
         // What plays each console, as Settings keeps it, for the launcher, the details and the save
         // sync to read without waiting (the player's process is told its core by the launcher).
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+            // The built-in player is on for a fresh install; an update keeps what it had.
+            val info = packageManager.getPackageInfo(packageName, 0)
+            playerSettings.get().settleDefault(app.genkan.core.BuiltInDefault.isFreshInstall(info.firstInstallTime, info.lastUpdateTime))
             playerSettings.get().coreChoice.collect { app.genkan.core.CoreCatalog.choice = it }
         }
         // The reader listens for a texthooker from the start: a game's lines can arrive while

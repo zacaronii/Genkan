@@ -20,9 +20,19 @@ private val Context.playerStore: DataStore<Preferences> by preferencesDataStore(
 @Singleton
 class PlayerSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
+    /** On for a fresh install unless switched off; an updated install keeps what it had ([settleDefault]). */
     val enabled: Flow<Boolean> = context.playerStore.data.map { it[ENABLED] == true }
 
     suspend fun isEnabled(): Boolean = enabled.first()
+
+    /**
+     * Keeps the switch's first value, once: on for a fresh install, off for one updated from a
+     * version where it was off unless switched on, so an update changes nothing. A value already
+     * kept (switched either way) stays as it is.
+     */
+    suspend fun settleDefault(freshInstall: Boolean) {
+        context.playerStore.edit { prefs -> if (prefs[ENABLED] == null) prefs[ENABLED] = BuiltInDefault.on(freshInstall) }
+    }
 
     suspend fun setEnabled(on: Boolean) {
         context.playerStore.edit { it[ENABLED] = on }
@@ -110,4 +120,13 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         val SAMPLES = booleanPreferencesKey("yomikata_samples")
         val LEARNING = booleanPreferencesKey("learning")
     }
+}
+
+/** The built-in player switch's first value, kept once ([PlayerSettings.settleDefault]). */
+object BuiltInDefault {
+    /** On for a fresh install; off for one updated from a version where it was off until switched on. */
+    fun on(freshInstall: Boolean): Boolean = freshInstall
+
+    /** Whether the app has never been updated since it was installed: an install, not an update. */
+    fun isFreshInstall(firstInstallTime: Long, lastUpdateTime: Long): Boolean = firstInstallTime == lastUpdateTime
 }

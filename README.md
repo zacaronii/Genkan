@@ -105,7 +105,7 @@ a Yomitan dictionary popup. See
   followed and stay on OCR. Games that keep a whole scene's script loaded (逆転裁判5) have no
   string to follow: OCR stays on to tell which page shows, and each line is swapped for that
   page's exact text from memory. Azahar's RPC listens on the whole network while a game runs.
-- **Built-in player (opt-in):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
+- **Built-in player (on for a fresh install):** *Built-in player* in settings runs GB, GBC and GBA games (mGBA),
   DS games (melonDS DS), PS1 games (PCSX ReARMed), PSP games (PPSSPP), Super Famicom games
   (bsnes-mercury), GameCube and Wii games (Dolphin) and PC Engine HuCard and CD-ROM² games
   (Beetle PCE Fast, with RomM's System Card 3 for CDs) and Dreamcast games (Flycast, with RomM's
