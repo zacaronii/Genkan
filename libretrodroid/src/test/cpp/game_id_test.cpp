@@ -22,7 +22,7 @@ void check(bool ok, const char *what) {
 
 int main() {
     check(formatGameId("SLPM-12345", 0x1A2B3C4Du) == "SLPM-12345 1a2b3c4d", "a disc's serial and its CRC, lower-case hex");
-    check(formatGameId("SCPS-10001", 0xABCDu) == "SCPS-10001 0000abcd", "the CRC keeps its 8 digits");
+    check(formatGameId("ABCD-00001", 0xABCDu) == "ABCD-00001 0000abcd", "the CRC keeps its 8 digits");
     check(formatGameId("20991231-120000", 0x12345678u).empty(), "a BIOS-style date serial isn't a game");
     check(formatGameId("", 0x12345678u).empty(), "no serial, no game");
     check(formatGameId(nullptr, 0x12345678u).empty(), "nor a missing one");
