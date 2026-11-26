@@ -188,6 +188,7 @@ class CoreActivity : ComponentActivity() {
 
         GenkanTap.setSplitScreens(def.splitScreens)
         GenkanTap.setKeepPointer(def.keepPointer)
+        GenkanTap.setSystemRamStretches(def.ramStretches.flatMap { listOf(it.address, it.offset, it.length) }.toLongArray(), def.ramWords)
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
             coreFilePath = def.library

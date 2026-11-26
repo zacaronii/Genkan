@@ -100,6 +100,23 @@ class CoreCatalogTest {
         assertFalse(saturn.takes("game.zip"))
         assertNull(TuningLadders.of(saturn.tuning))
         assertSame(saturn, CoreCatalog.byId("beetle_saturn"))
+    }
+
+    @Test
+    fun `a Saturn's work RAM reads at the console's addresses, in its order, past the cache too`() {
+        val saturn = CoreCatalog.forPlatform("saturn", debug = false)!!
+        // The core's system RAM: the low 1 MB, then the high, as words in the host's order.
+        assertEquals(
+            listOf(RamStretch(0x06000000L, 0x100000L, 0x100000L), RamStretch(0x00200000L, 0L, 0x100000L)),
+            saturn.ramStretches,
+        )
+        assertTrue(saturn.ramWords)
+        assertTrue(saturn.bigEndian)
+        assertEquals(0x06001234L, 0x26001234L and saturn.pointerMask)
+        assertEquals(0x00201234L, 0x20201234L and saturn.pointerMask)
+        assertEquals(0L, saturn.ramBase)
+        // No other core cuts its RAM up.
+        CoreCatalog.cores.filter { it !== saturn }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && !it.ramWords) }
         // No core is debug-only now.
         CoreCatalog.cores.forEach { assertFalse(it.id, it.debugOnly) }
     }

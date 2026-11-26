@@ -68,6 +68,14 @@ object GenkanTap {
     @JvmStatic external fun setKeepPointer(keep: Boolean)
 
     /**
+     * A core whose system RAM is more than one of the console's stretches (mednafen_saturn's work
+     * RAM): [stretches] as (console address, offset in the system RAM, length) triples, each read at
+     * its console address; [words] when the core keeps them as 16-bit words in the host's order, so
+     * reads swap each byte pair back. Empty, the system RAM is one region from 0. Set before the game loads.
+     */
+    @JvmStatic external fun setSystemRamStretches(stretches: LongArray, words: Boolean)
+
+    /**
      * The game the core named, "serial crc" (a PS2 core's disc serial and its ELF's CRC, as PINE
      * reports them), or null until it does.
      */

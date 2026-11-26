@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstring>
 #include <sys/uio.h>
+#include <vector>
 #include <unistd.h>
 
 namespace libretrodroid {
@@ -35,6 +36,12 @@ void GenkanTap::setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned)) 
     std::lock_guard<std::mutex> lock(memoryLock);
     systemRamData = data;
     systemRamSize = size;
+}
+
+void GenkanTap::setSystemRamStretches(std::vector<Stretch> given, bool words) {
+    std::lock_guard<std::mutex> lock(memoryLock);
+    stretches = std::move(given);
+    stretchWords = words;
 }
 
 void GenkanTap::clear() {
@@ -66,13 +73,39 @@ std::vector<GenkanTap::Region> GenkanTap::regions() {
     auto *data = static_cast<uint8_t *>(systemRamData(RETRO_MEMORY_SYSTEM_RAM));
     size_t size = systemRamSize(RETRO_MEMORY_SYSTEM_RAM);
     if (data == nullptr || size == 0) return {};
-    return { Region { 0, size, data, false } };
+    if (stretches.empty()) return { Region { 0, size, data, false } };
+    std::vector<Region> out;
+    for (const auto &s : stretches) {
+        if (s.offset >= size) continue;
+        out.push_back(Region { s.start, std::min<uint64_t>(s.length, size - s.offset), data + s.offset, false, 0, 0, stretchWords });
+    }
+    return out;
 }
 
 namespace {
 
 MemoryDescriptor descriptorOf(const GenkanTap::Region &r) {
     return MemoryDescriptor { r.start, r.length, r.select, r.disconnect };
+}
+
+/**
+ * [size] bytes at offset [at] of [r] into [out], in the console's order; how many came. Copied by the
+ * kernel, so memory the core unmapped or never mapped fails the read instead of crashing the game.
+ */
+size_t copyOut(const GenkanTap::Region &r, uint64_t at, uint8_t *out, size_t size) {
+    if (!r.words) {
+        struct iovec local { out, size };
+        struct iovec remote { r.host + at, size };
+        ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
+        return got > 0 ? static_cast<size_t>(got) : 0;
+    }
+    // Whole words, then each byte pair swapped back; a word-kept region's length is even.
+    std::vector<uint8_t> span(wordSpanLength(at, size));
+    struct iovec local { span.data(), span.size() };
+    struct iovec remote { r.host + wordSpanStart(at), span.size() };
+    if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != static_cast<ssize_t>(span.size())) return 0;
+    unswapWords(span.data(), at, out, size);
+    return size;
 }
 
 }
@@ -84,11 +117,7 @@ bool GenkanTap::read(uint64_t address, uint8_t *out, size_t size) {
         if (!at) continue;
         // The first region that takes the address answers: the whole read there, or none.
         if (size > readableFrom(d, address, *at)) return false;
-        // Copied by the kernel, so memory the core unmapped or never mapped fails the read
-        // instead of crashing the game.
-        struct iovec local { out, size };
-        struct iovec remote { r.host + *at, size };
-        return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
+        return copyOut(r, *at, out, size) == size;
     }
     return false;
 }
@@ -99,10 +128,7 @@ size_t GenkanTap::readClipped(const std::vector<Region> &among, uint64_t address
         auto at = locateAddress(d, address);
         if (!at) continue;
         size_t n = static_cast<size_t>(std::min<uint64_t>(size, readableFrom(d, address, *at)));
-        struct iovec local { out, n };
-        struct iovec remote { r.host + *at, n };
-        ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
-        return got > 0 ? static_cast<size_t>(got) : 0;
+        return copyOut(r, *at, out, n);
     }
     return 0;
 }
