@@ -499,8 +499,7 @@ val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
 /**
  * LRPS2 (libretro/parallel-ps2, GPL-3.0), libretro's PCSX2 with native ARM64 recompilers for the EE
  * and IOP, built from its repository at this commit with the OpenGL ES renderer (libretrodroid gives
- * cores no Vulkan) and Genkan's patch so Android can load it. In debug builds only, until a round
- * shows it at full speed. See NOTICE.
+ * cores no Vulkan) and Genkan's patches. The PS2's own player unless ARMSX2 is chosen. See NOTICE.
  */
 val lrps2Commit = "4d2c5d0904c339fd18252574e010fbf38d1b1929"
 
@@ -716,11 +715,11 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
-        // The Saturn's candidates and LRPS2, in debug builds only (CoreDef.debugOnly).
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildLrps2, BuildCmakeCore::libsDir)
+        // The Saturn's candidates, in debug builds only (CoreDef.debugOnly).
         if (variant.buildType == "debug") {
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildYabaSanshiro, BuildLibretroCore::outputDir)
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
-            variant.sources.jniLibs?.addGeneratedSourceDirectory(buildLrps2, BuildCmakeCore::libsDir)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)

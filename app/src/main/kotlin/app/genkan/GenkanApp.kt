@@ -1,5 +1,6 @@
 package app.genkan
 
+import kotlinx.coroutines.launch
 import android.app.Application
 import app.genkan.art.ArtLoaders
 import app.genkan.art.LibraryArtFetch
@@ -40,11 +41,17 @@ class GenkanApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var artLoaders: Lazy<ArtLoaders>
     @Inject lateinit var libraryArt: Lazy<LibraryArtFetch>
     @Inject lateinit var manualPrefetch: Lazy<ManualPrefetch>
+    @Inject lateinit var playerSettings: Lazy<app.genkan.core.PlayerSettings>
 
     override fun onCreate() {
         super.onCreate()
         // The built-in player's process runs one game and nothing of the launcher's.
         if (getProcessName().endsWith(":core")) return
+        // What plays each console, as Settings keeps it, for the launcher, the details and the save
+        // sync to read without waiting (the player's process is told its core by the launcher).
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+            playerSettings.get().coreChoice.collect { app.genkan.core.CoreCatalog.choice = it }
+        }
         // The reader listens for a texthooker from the start: a game's lines can arrive while
         // the bottom screen is released or not yet placed.
         readerSession.get().start()

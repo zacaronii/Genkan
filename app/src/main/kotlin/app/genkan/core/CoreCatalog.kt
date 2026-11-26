@@ -58,15 +58,9 @@ data class CoreDef(
     val keepPointer: Boolean = false,
     /**
      * Only in debug builds, whose library holds it: one of two cores tried side by side for a
-     * console until a round on the device picks one (see [CoreCatalog.debugChoice]).
+     * console until a round on the device picks one (see [CoreCatalog.choice]).
      */
     val debugOnly: Boolean = false,
-    /**
-     * A debug-only core for a console that already plays elsewhere (the PS2 in ARMSX2): it plays
-     * only once the debug CORE broadcast chooses it, so a debug build otherwise keeps the console
-     * where it was.
-     */
-    val optIn: Boolean = false,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -187,9 +181,8 @@ object CoreCatalog {
             savesFolder = "Genkan/saves/flycast",
         ),
         CoreDef(
-            // libretro's PCSX2 with native ARM64 recompilers, built from source; in debug builds
-            // only, and only when chosen, until a round on the device shows it at full speed. PS2
-            // games otherwise go to ARMSX2.
+            // libretro's PCSX2 with native ARM64 recompilers, built from source. The PS2's own
+            // player unless ARMSX2 is chosen for it (Settings, CoreCatalog.choice).
             id = "lrps2", displayName = "LRPS2", library = "libpcsx2_libretro_android.so",
             platforms = setOf("ps2"),
             // The renderer is its ladder's (TuningLadders): Software on 6 threads, else GL as "Auto",
@@ -202,8 +195,6 @@ object CoreCatalog {
             // through the uncached views at 0x20000000 and 0x30000000.
             pointerMask = 0x01FFFFFFL,
             extensions = setOf("iso", "chd", "cso", "zso", "ciso", "cue", "elf", "m3u"),
-            debugOnly = true,
-            optIn = true,
         ),
         CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
@@ -256,20 +247,32 @@ object CoreCatalog {
         ),
     )
 
-    /**
-     * In a debug build, which of a console's debug-only cores plays its games, by platform: a core
-     * id (set by the debug CORE broadcast, for this run of the app). Absent, the first listed.
-     */
-    @Volatile var debugChoice: Map<String, String> = emptyMap()
+    /** [choice]'s value for a console played by its emulator app, not the built-in player. */
+    const val EXTERNAL = "external"
 
-    /** The core for RomM's platform [platformSlug]; [debug]: whether debug-only cores count (a debug build). */
+    /**
+     * What plays each console, by platform, as Settings keeps it (PlayerSettings.coreChoice, mirrored
+     * here in the launcher's process): one of its cores' ids, or [EXTERNAL]. Absent, its first core.
+     */
+    @Volatile var choice: Map<String, String> = emptyMap()
+
+    /** The cores for RomM's platform [platformSlug] in this build; [debug]: whether debug-only ones count. */
+    fun coresFor(platformSlug: String, debug: Boolean = BuildConfig.DEBUG): List<CoreDef> =
+        cores.filter { platformSlug in it.platforms && (debug || !it.debugOnly) }
+
+    /**
+     * The core that plays RomM's platform [platformSlug]: the chosen one, else its first; null
+     * when it has none, or its emulator app is chosen. [debug]: whether debug-only cores count.
+     */
     fun forPlatform(platformSlug: String, debug: Boolean = BuildConfig.DEBUG): CoreDef? {
-        val candidates = cores.filter { platformSlug in it.platforms && (debug || !it.debugOnly) }
-        return candidates.firstOrNull { it.id == debugChoice[platformSlug] } ?: candidates.firstOrNull { !it.optIn }
+        val chosen = choice[platformSlug]
+        if (chosen == EXTERNAL) return null
+        val candidates = coresFor(platformSlug, debug)
+        return candidates.firstOrNull { it.id == chosen } ?: candidates.firstOrNull()
     }
 
     /** A core by its id; null for none. */
     fun byId(id: String?): CoreDef? = cores.firstOrNull { it.id == id }
 
-    val platforms: Set<String> get() = cores.filter { (BuildConfig.DEBUG || !it.debugOnly) && !it.optIn }.flatMap { it.platforms }.toSet()
+    val platforms: Set<String> get() = cores.filter { BuildConfig.DEBUG || !it.debugOnly }.flatMap { it.platforms }.toSet()
 }

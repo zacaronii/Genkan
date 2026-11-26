@@ -90,17 +90,17 @@ class CoreCatalogTest {
     fun `a Saturn plays on either debug-only candidate, as the debug choice says, and on none in a release`() {
         try {
             assertEquals("yabasanshiro", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
-            CoreCatalog.debugChoice = mapOf("saturn" to "beetle_saturn")
+            CoreCatalog.choice = mapOf("saturn" to "beetle_saturn")
             assertEquals("beetle_saturn", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
             // A choice of a core the console doesn't have falls back to its first.
-            CoreCatalog.debugChoice = mapOf("saturn" to "mgba")
+            CoreCatalog.choice = mapOf("saturn" to "mgba")
             assertEquals("yabasanshiro", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
             assertNull(CoreCatalog.forPlatform("saturn", debug = false))
         } finally {
-            CoreCatalog.debugChoice = emptyMap()
+            CoreCatalog.choice = emptyMap()
         }
-        // Every other console's core is in releases too, but for the PS2's.
-        CoreCatalog.cores.filter { "saturn" !in it.platforms && "ps2" !in it.platforms }.forEach { assertFalse(it.id, it.debugOnly) }
+        // Every other console's core is in releases too.
+        CoreCatalog.cores.filter { "saturn" !in it.platforms }.forEach { assertFalse(it.id, it.debugOnly) }
         assertEquals("mgba", CoreCatalog.forPlatform("gba", debug = false)!!.id)
     }
 
@@ -136,26 +136,28 @@ class CoreCatalogTest {
     }
 
     @Test
-    fun `the PS2 stays on ARMSX2 unless a debug build chooses LRPS2`() {
+    fun `the PS2 plays on LRPS2 unless its emulator app is chosen, in releases too`() {
         try {
-            // Not chosen: no built-in core, so the launcher keeps ARMSX2, in a debug build too.
-            assertNull(CoreCatalog.forPlatform("ps2", debug = true))
-            assertFalse("ps2" in CoreCatalog.platforms)
-            CoreCatalog.debugChoice = mapOf("ps2" to "lrps2")
+            assertEquals("lrps2", CoreCatalog.forPlatform("ps2", debug = false)!!.id)
             assertEquals("lrps2", CoreCatalog.forPlatform("ps2", debug = true)!!.id)
+            assertTrue("ps2" in CoreCatalog.platforms)
+            // ARMSX2 chosen: no built-in core, so the launcher sends the game to it.
+            CoreCatalog.choice = mapOf("ps2" to CoreCatalog.EXTERNAL)
             assertNull(CoreCatalog.forPlatform("ps2", debug = false))
+            // Another console's choice changes nothing for the PS2's.
+            CoreCatalog.choice = mapOf("psx" to CoreCatalog.EXTERNAL)
+            assertEquals("lrps2", CoreCatalog.forPlatform("ps2", debug = false)!!.id)
+            assertNull(CoreCatalog.forPlatform("psx", debug = false))
         } finally {
-            CoreCatalog.debugChoice = emptyMap()
+            CoreCatalog.choice = emptyMap()
         }
-        // Opting in is the PS2's alone: the Saturn's candidates play without a choice.
-        CoreCatalog.cores.filter { it.optIn }.forEach { assertEquals(setOf("ps2"), it.platforms) }
     }
 
     @Test
     fun `LRPS2 boots with RomM's BIOS in its own folder, draws as its ladder says and reads the EE's 32 MB`() {
         val ps2 = CoreCatalog.byId("lrps2")!!
         assertEquals("libpcsx2_libretro_android.so", ps2.library)
-        assertTrue(ps2.debugOnly)
+        assertFalse(ps2.debugOnly)
         assertEquals(mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"), ps2.firmware)
         assertEquals("ps2-0230a-20080220.bin", ps2.variables["pcsx2_bios"])
         // The renderer is the ladder's: Software on 6 threads by default, GL ("Auto") as the lighter step.

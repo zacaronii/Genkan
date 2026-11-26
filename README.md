@@ -109,7 +109,8 @@ a Yomitan dictionary popup. See
   DS games (melonDS DS), PS1 games (PCSX ReARMed), PSP games (PPSSPP), Super Famicom games
   (bsnes-mercury), GameCube and Wii games (Dolphin) and PC Engine HuCard and CD-ROM² games
   (Beetle PCE Fast, with RomM's System Card 3 for CDs) and Dreamcast games (Flycast, with RomM's
-  Dreamcast BIOS) inside Genkan instead of their installed
+  Dreamcast BIOS) and PS2 games (LRPS2, with RomM's PS2 BIOS; ARMSX2 stays a choice in Settings)
+  inside Genkan instead of their installed
   emulator, in a process of its own. Genkan then reads the game's frames, sound and memory
   itself: OCR and card audio need no screen-capture prompt, and text is found in memory as for
   Azahar (a PSP scan takes a third of a second), with no hook profile or network debugger.

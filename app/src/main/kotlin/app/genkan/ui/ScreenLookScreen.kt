@@ -83,6 +83,15 @@ class ScreenLookViewModel @Inject constructor(
     }
 
 
+    /** What plays each console that has a choice (PlayerChoice): a core's id, or the emulator app. */
+    val coreChoice: StateFlow<Map<String, String>> = player.coreChoice.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Moves [platform] to its next way of playing. */
+    fun cycleCore(platform: String) {
+        val next = app.genkan.core.PlayerChoice.next(platform, coreChoice.value) ?: return
+        viewModelScope.launch { player.setCoreChoice(platform, next.value) }
+    }
+
     /** The looks chosen for consoles; a console that isn't in it has its default. */
     val consoles: StateFlow<Map<String, ScreenLook>> =
         looks.consoles.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
@@ -112,6 +121,7 @@ fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
     val aOnRight by viewModel.aOnRight.collectAsStateWithLifecycle()
     val learning by viewModel.learning.collectAsStateWithLifecycle()
     val faceSwapped by viewModel.faceSwapped.collectAsStateWithLifecycle()
+    val coreChoice by viewModel.coreChoice.collectAsStateWithLifecycle()
     // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
     DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
     ScreenLookContent(
@@ -120,6 +130,7 @@ fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
         aOnRight = aOnRight, onToggleAOnRight = viewModel::toggleAOnRight,
         faceSwapped = faceSwapped, onToggleFaceSwap = viewModel::toggleFaceSwap,
         learning = learning, onToggleLearning = viewModel::toggleLearning,
+        coreChoice = coreChoice, onCycleCore = viewModel::cycleCore,
     )
 }
 
@@ -146,6 +157,11 @@ fun ScreenLookContent(
     /** Whether the player learns each game's speed step, and a press on that row. */
     learning: Boolean = true,
     onToggleLearning: () -> Unit = {},
+    /** What plays each console that has a choice, and a press on one's row (its next option). */
+    coreChoice: Map<String, String> = emptyMap(),
+    onCycleCore: (String) -> Unit = {},
+    /** The consoles with a choice in this build (PlayerChoice.consoles). */
+    choiceConsoles: List<Pair<String, String>> = app.genkan.core.PlayerChoice.consoles(),
 ) {
     // The console whose list was opened last: the pad comes back to its row.
     var returnTo by remember { mutableStateOf<String?>(null) }
@@ -238,6 +254,7 @@ fun ScreenLookContent(
                 )
             }
         }
+        if (choiceConsoles.isNotEmpty()) PlaysWith(choiceConsoles, coreChoice, onCycleCore)
         Text("Speed", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
         Text(
             "The player keeps each game at full speed: when one falls behind it tries a lighter setting, and when one " +
@@ -248,5 +265,27 @@ fun ScreenLookContent(
         )
         ActionRow("Learn each game's speed: " + if (learning) "on" else "off", focused = null, onClick = onToggleLearning)
         HintRow(Hints.form())
+    }
+}
+
+/** Which player runs each console in [consoles] ([choice], as kept), a row each; a press moves one to its next. */
+@Composable
+fun PlaysWith(consoles: List<Pair<String, String>>, choice: Map<String, String>, onCycle: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Plays with", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
+        Text(
+            "Which player runs a console that has more than one: Genkan's built-in player, or the console's " +
+                "emulator app, when it's installed. A press moves to the next. An emulator app's text is read its own way " +
+                "(ARMSX2's through PINE, once that's switched on in ARMSX2).",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            consoles.forEach { (platform, name) ->
+                val current = app.genkan.core.PlayerChoice.current(platform, choice)
+                ActionRow("$name: ${current?.label ?: "?"}", focused = null, onClick = { onCycle(platform) })
+            }
+        }
     }
 }

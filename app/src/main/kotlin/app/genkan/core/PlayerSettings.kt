@@ -83,10 +83,27 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
     }
 
     /** Whether [platform]'s game is played with A on the right ([FaceButtons.aOnRight]). */
+    /**
+     * What plays each console, by platform: a built-in core's id, or CoreCatalog.EXTERNAL for its
+     * emulator app. A console not in it plays on its first core (CoreCatalog.forPlatform).
+     */
+    val coreChoice: Flow<Map<String, String>> = context.playerStore.data.map { prefs ->
+        prefs[CORE_CHOICE].orEmpty().mapNotNull { entry -> entry.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+    }
+
+    /** Plays [platform]'s games with [choice] (a core id, or CoreCatalog.EXTERNAL); null, its first core again. */
+    suspend fun setCoreChoice(platform: String, choice: String?) {
+        context.playerStore.edit { prefs ->
+            val others = prefs[CORE_CHOICE].orEmpty().filterNot { it.startsWith("$platform=") }.toSet()
+            prefs[CORE_CHOICE] = if (choice == null) others else others + "$platform=$choice"
+        }
+    }
+
     suspend fun aOnRight(platform: String): Boolean = FaceButtons.aOnRight(aOnRight.first(), platform in faceSwapped.first())
 
     private companion object {
         val A_ON_RIGHT = booleanPreferencesKey("a_on_right")
+        val CORE_CHOICE = stringSetPreferencesKey("core_choice")
         val FACE_SWAPPED = stringSetPreferencesKey("face_swapped")
         val LOW_LATENCY_OFF = stringSetPreferencesKey("low_latency_off")
         val ENABLED = booleanPreferencesKey("enabled")
