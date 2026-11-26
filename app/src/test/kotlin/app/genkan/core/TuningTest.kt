@@ -26,6 +26,18 @@ class TuningTest {
         assertNull(TuningLadders.of("mgba"))
         assertEquals(listOf("efb-2x", "default"), dolphin.steps.filter { it.live }.map { it.id })
         assertFalse(TuningLadders.of("ppsspp")!!.steps.any { it.live })
+        assertFalse(TuningLadders.of("flycast")!!.steps.any { it.live })
+    }
+
+    @Test
+    fun `Flycast's ladder is its resolution, sharpest first, and frame skip only as a risky last step`() {
+        val flycast = TuningLadders.of("flycast")!!
+        assertEquals(listOf("1920x1440", "1280x960", "default", "320x240", "auto-skip"), flycast.steps.map { it.id })
+        assertEquals("default", flycast.defaultId)
+        assertEquals(listOf("auto-skip"), flycast.steps.filter { it.risky }.map { it.id })
+        assertEquals(mapOf("reicast_internal_resolution" to "640x480", "reicast_auto_skip_frame" to "disabled"), flycast.assignment("default"))
+        assertEquals(mapOf("reicast_internal_resolution" to "1280x960", "reicast_auto_skip_frame" to "disabled"), flycast.assignment("1280x960"))
+        assertEquals("1×", flycast.step("default")!!.label)
     }
 
     @Test

@@ -113,7 +113,7 @@ object GameFile {
             .toList()
     }
 
-    /** A file that lists a game's other files: a cue sheet, a playlist, a CloneCD or cdrdao table. */
+    /** A file that lists a game's other files: a cue sheet, a playlist, a CloneCD or cdrdao table, a Dreamcast GDI. */
     private fun isIndex(name: String) = name.substringAfterLast('.', "").lowercase() in INDEX_EXTENSIONS
 
     /** Removes everything unpacked for [gameKey] (its game was removed, or its zip changed). */
@@ -141,7 +141,7 @@ object GameFile {
     private const val SPACE_MARGIN_BYTES = 64L shl 20
     private const val BUFFER_BYTES = 1 shl 16
     private const val MB = 1L shl 20
-    private val INDEX_EXTENSIONS = setOf("cue", "m3u", "ccd", "toc")
+    private val INDEX_EXTENSIONS = setOf("cue", "m3u", "ccd", "toc", "gdi")
     /** Written last into a folder whose file is whole. */
     private const val DONE = ".done"
 }

@@ -36,6 +36,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "nds" -> MainRam(0x02000000L until 0x02400000L, 0x02000000L)
             // MEM1, 24 MB at 0x80000000 (Dolphin's memory map gives the game's addresses), big-endian.
             "ngc" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
+            // A Dreamcast's 16 MB at 0x0C000000 (Flycast's, which Genkan reads from that base).
+            "dc" -> MainRam(0x0C000000L until 0x0D000000L, 0x0C000000L)
             // A Wii's MEM1, the same 24 MB at 0x80000000; its MEM2 at 0x90000000 isn't needed here.
             "wii" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
             else -> null

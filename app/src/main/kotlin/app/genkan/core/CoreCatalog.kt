@@ -159,6 +159,23 @@ object CoreCatalog {
             debugOnly = true,
         ),
         CoreDef(
+            id = "flycast", displayName = "Flycast", library = "libflycast_libretro_android.so",
+            platforms = setOf("dc"),
+            variables = mapOf(
+                // A Japanese console: its BIOS's language and the region discs see.
+                "reicast_region" to "Japan",
+                "reicast_language" to "Japanese",
+            ),
+            // The BIOS and its flash from RomM's Dreamcast firmware, in the dc folder the core looks in.
+            firmware = mapOf("dc_boot.bin" to "dc/dc_boot.bin", "dc_flash.bin" to "dc/dc_flash.bin"),
+            // The core gives its 16 MB of RAM without a map: games see it at 0x0C000000, and point at
+            // it through the 0x8C000000 and 0xAC000000 mirrors.
+            pointerMask = 0x1FFFFFFFL,
+            ramBase = 0x0C000000L,
+            // Not zip or 7z, which the core reads as an arcade board's: a zipped disc is unpacked first.
+            extensions = setOf("chd", "cdi", "gdi", "cue", "m3u"),
+        ),
+        CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
             platforms = setOf("ngc"),
             // Measured on the Thor: a steady 60 fps at the native resolution with the GL renderer

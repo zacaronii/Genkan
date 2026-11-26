@@ -193,4 +193,23 @@ class GameFileTest {
         assertEquals("AGB-ZQXJ", CartridgeId.of("gba", prepared.file)!!.id)
         assertEquals(GbaCartridge.of(game), CartridgeId.of("gba", prepared.file))
     }
+
+    @Test
+    fun `a Dreamcast disc is played through its GDI, with every track beside it`() {
+        val dc = CoreCatalog.forPlatform("dc", debug = false)!!
+        val gdi = "3\n1 0 4 2352 track01.bin 0\n2 600 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n".toByteArray()
+        val rom = zip(
+            "disc.zip",
+            "disc/disc.gdi" to gdi,
+            "disc/track01.bin" to bytes(2352, 29),
+            "disc/track02.raw" to bytes(2352, 30),
+            "disc/track03.bin" to bytes(2352, 31),
+        )
+        val ready = GameFile.prepare(dc, rom, cache, "10") as GameFile.Prepared.Ready
+        assertEquals("disc.gdi", ready.file.name)
+        val folder = ready.file.parentFile!!
+        listOf("track01.bin" to 29, "track02.raw" to 30, "track03.bin" to 31).forEach { (name, fill) ->
+            assertTrue(name, File(folder, name).readBytes().contentEquals(bytes(2352, fill)))
+        }
+    }
 }

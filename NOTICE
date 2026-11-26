@@ -184,6 +184,23 @@ License: GPL-2.0-or-later (COPYING and LICENSES/ at that commit; parts under
   they are built from is the submodule at that commit.
 
 --------------------------------------------------------------------------
+Flycast (GPL-2.0-or-later), the Dreamcast core
+https://github.com/flyinghead/flycast
+Pinned commit: 12a7f18b81c0c7dc2e52c29b6615c7fe0d496ee5
+License: GPL-2.0-or-later (its source files' headers; LICENSE at that commit
+  is GPL-2.0's text), its dependencies under their own
+
+  A submodule at third_party/flycast, unmodified, which a normal checkout
+  skips (update = none). The buildFlycast task in app/build.gradle.kts fetches
+  it with the four submodules its libretro build uses (core/deps/asio,
+  libchdr, tinygettext and xbyak), builds it for arm64-v8a with the NDK's
+  CMake toolchain as a libretro core with OpenGL ES (-DLIBRETRO=ON
+  -DUSE_GLES=ON, without Vulkan, Lua, OpenMP or breakpad; android-33,
+  c++_static, stripped) and bundles it as libflycast_libretro_android.so. It
+  isn't committed; the source it is built from is the submodule at that
+  commit.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

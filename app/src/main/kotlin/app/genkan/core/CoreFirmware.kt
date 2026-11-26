@@ -37,7 +37,8 @@ class CoreFirmware @Inject constructor(
     suspend fun fetch(core: CoreDef, platformId: Long) = withContext(Dispatchers.IO) {
         val (api, files) = listed(core.firmware, platformId) ?: return@withContext
         for (firmware in files) {
-            val target = File(systemDir.apply { mkdirs() }, core.firmware.getValue(firmware.fileName))
+            // A core may look in a folder of its own there (Flycast's dc/).
+            val target = File(systemDir, core.firmware.getValue(firmware.fileName)).apply { parentFile?.mkdirs() }
             if (target.length() == firmware.fileSizeBytes) continue
             if (download(api, firmware, target)) Log.i(TAG, "Fetched ${firmware.fileName} as ${target.name} for ${core.displayName}")
         }
