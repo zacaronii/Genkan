@@ -119,7 +119,8 @@ class CoreActivity : ComponentActivity() {
         val rom = intent.getStringExtra(EXTRA_ROM)?.let(::File)
         val platform = intent.getStringExtra(EXTRA_PLATFORM).orEmpty()
         stickCycles = BottomCycle.takesStickClicks(platform)
-        val def = CoreCatalog.forPlatform(platform)
+        // The core the launcher chose (a debug build may try another for the console), else the console's.
+        val def = CoreCatalog.byId(intent.getStringExtra(EXTRA_CORE))?.takeIf { platform in it.platforms } ?: CoreCatalog.forPlatform(platform)
         if (rom == null || !rom.isFile || def == null) {
             Log.w(TAG, "Nothing to play: $rom on $platform")
             finish()
@@ -1014,6 +1015,8 @@ class CoreActivity : ComponentActivity() {
         /** A Wii game's controller (WiiController, see [GameWiiController]); absent, the core's default. */
         const val EXTRA_WII_CONTROLLER = "wii_controller"
         const val EXTRA_PLATFORM = "platform"
+        /** The core to play with, by id (CoreDef.id); absent, the platform's. */
+        const val EXTRA_CORE = "core"
         /** The [ScreenLook] to draw the game with, by name. */
         const val EXTRA_LOOK = "look"
         /** Whether to ask for a low-latency sound stream (the console's setting); yes when absent. */
@@ -1063,7 +1066,7 @@ enum class BottomCycle {
 
     companion object {
         /** Consoles whose own pad has no stick clicks; a PlayStation's (DualShock) has. */
-        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd")
+        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn")
 
         /** Whether the stick clicks step the bottom screen for [platform], rather than going to the game. */
         fun takesStickClicks(platform: String): Boolean = platform in NO_STICK_CLICKS

@@ -1,5 +1,7 @@
 package app.genkan.core
 
+import app.genkan.BuildConfig
+
 /**
  * A libretro core bundled with Genkan, by its native library's file name (the linker finds it in
  * the APK). [pointerMask] folds the addresses a game's pointers hold onto the ones its memory
@@ -54,6 +56,11 @@ data class CoreDef(
     val tuning: String = id,
     /** A lifted finger leaves the game's pointer where it was (a Wii's: aimed, then left there). */
     val keepPointer: Boolean = false,
+    /**
+     * Only in debug builds, whose library holds it: one of two cores tried side by side for a
+     * console until a round on the device picks one (see [CoreCatalog.debugChoice]).
+     */
+    val debugOnly: Boolean = false,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -132,6 +139,25 @@ object CoreCatalog {
             firmware = mapOf("syscard3.pce" to "syscard3.pce"),
             extensions = setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
         ),
+        // The Saturn's two candidates, built from source in debug builds only, until a round on the
+        // device picks one. Both boot with the Japanese BIOS from RomM's Saturn firmware.
+        CoreDef(
+            // An ARM64 dynarec for the SH-2s and a GLES3 renderer: made for phones.
+            id = "yabasanshiro", displayName = "YabaSanshiro", library = "libyabasanshiro_libretro_android.so",
+            platforms = setOf("saturn"),
+            firmware = mapOf("sega_101.bin" to "sega_101.bin"),
+            extensions = setOf("cue", "iso", "mds", "ccd", "chd"),
+            debugOnly = true,
+        ),
+        CoreDef(
+            // Mednafen's: the most accurate, its SH-2s interpreted.
+            id = "beetle_saturn", displayName = "Beetle Saturn", library = "libmednafen_saturn_libretro_android.so",
+            platforms = setOf("saturn"),
+            firmware = mapOf("sega_101.bin" to "sega_101.bin"),
+            // Not zip, which the core reads as an arcade board's: a zipped disc is unpacked first.
+            extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
+            debugOnly = true,
+        ),
         CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
             platforms = setOf("ngc"),
@@ -183,7 +209,20 @@ object CoreCatalog {
         ),
     )
 
-    fun forPlatform(platformSlug: String): CoreDef? = cores.firstOrNull { platformSlug in it.platforms }
+    /**
+     * In a debug build, which of a console's debug-only cores plays its games, by platform: a core
+     * id (set by the debug CORE broadcast, for this run of the app). Absent, the first listed.
+     */
+    @Volatile var debugChoice: Map<String, String> = emptyMap()
 
-    val platforms: Set<String> get() = cores.flatMap { it.platforms }.toSet()
+    /** The core for RomM's platform [platformSlug]; [debug]: whether debug-only cores count (a debug build). */
+    fun forPlatform(platformSlug: String, debug: Boolean = BuildConfig.DEBUG): CoreDef? {
+        val candidates = cores.filter { platformSlug in it.platforms && (debug || !it.debugOnly) }
+        return candidates.firstOrNull { it.id == debugChoice[platformSlug] } ?: candidates.firstOrNull()
+    }
+
+    /** A core by its id; null for none. */
+    fun byId(id: String?): CoreDef? = cores.firstOrNull { it.id == id }
+
+    val platforms: Set<String> get() = cores.filter { BuildConfig.DEBUG || !it.debugOnly }.flatMap { it.platforms }.toSet()
 }

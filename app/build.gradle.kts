@@ -244,6 +244,41 @@ val buildBsnes = tasks.register<BuildLibretroCore>("buildBsnes") {
 }
 
 /**
+ * The Saturn's two candidate cores (both GPL-2.0), built from libretro's repositories at these
+ * commits and packed into debug builds only, until a round on the device picks one. See NOTICE.
+ * YabaSanshiro: an ARM64 SH-2 dynarec and a GLES3 renderer. Beetle Saturn: Mednafen's, accurate,
+ * its SH-2s interpreted.
+ */
+val yabaSanshiroCommit = "10f50efbbfed745757ce20d34ced7c80f06c68dd"
+val beetleSaturnCommit = "7126d65b83b65b4316736434ecca2f5ff4f1a3dd"
+
+val buildYabaSanshiro = tasks.register<BuildLibretroCore>("buildYabaSanshiro") {
+    commit.set(yabaSanshiroCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/yabasanshiro"))
+    projectDir.set(rootProject.layout.projectDirectory.dir("third_party/yabasanshiro/yabause/src/libretro"))
+    libraryName.set("libyabasanshiro_libretro_android.so")
+    abi.set("arm64-v8a")
+    variables.set(emptyList())
+    flags.set(emptyList())
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/yabasanshiro"))
+}
+
+val buildBeetleSaturn = tasks.register<BuildLibretroCore>("buildBeetleSaturn") {
+    commit.set(beetleSaturnCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/beetle-saturn"))
+    projectDir.set(rootProject.layout.projectDirectory.dir("third_party/beetle-saturn"))
+    libraryName.set("libmednafen_saturn_libretro_android.so")
+    abi.set("arm64-v8a")
+    variables.set(emptyList())
+    flags.set(emptyList())
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/beetle-saturn"))
+}
+
+/**
  * A libretro core built from source with CMake, from a submodule pinned at [commit] that a normal
  * checkout skips (`update = none` in .gitmodules: its externals are large). Built once per commit
  * into [cacheDir] with the zip of the [sysEntries] under the source's Data/Sys the core needs in its
@@ -593,6 +628,11 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
+        // The Saturn's candidates, in debug builds only (CoreDef.debugOnly).
+        if (variant.buildType == "debug") {
+            variant.sources.jniLibs?.addGeneratedSourceDirectory(buildYabaSanshiro, BuildLibretroCore::outputDir)
+            variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
+        }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
