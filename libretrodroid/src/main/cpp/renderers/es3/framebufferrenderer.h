@@ -53,6 +53,11 @@ private:
 
     unsigned int width;
     unsigned int height;
+    // Genkan: the size asked for (base geometry, or a game's), and the largest frame drawn (framefill.h).
+    unsigned int askedWidth;
+    unsigned int askedHeight;
+    int largestWidth = 0;
+    int largestHeight = 0;
 
     bool isDirty = false;
 
@@ -62,6 +67,7 @@ private:
     std::unique_ptr<ES3Utils::Framebuffers> framebuffers = std::make_unique<ES3Utils::Framebuffers>();
 
     void initializeBuffers();
+    void resize();
 };
 
 }

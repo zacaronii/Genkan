@@ -16,6 +16,8 @@
  */
 
 #include "framebufferrenderer.h"
+
+#include <algorithm>
 #include "../framefill.h"
 #include "es3utils.h"
 #include "../../log.h"
@@ -33,6 +35,8 @@ FramebufferRenderer::FramebufferRenderer(
     this->stencil = stencil;
     this->width = width;
     this->height = height;
+    this->askedWidth = width;
+    this->askedHeight = height;
     this->shaders = std::move(shaders);
 
     initializeBuffers();
@@ -40,6 +44,13 @@ FramebufferRenderer::FramebufferRenderer(
 
 void FramebufferRenderer::onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) {
     Renderer::onNewFrame(data, width, height, pitch);
+
+    // Genkan: a frame larger than the framebuffer grows it (framefill.h's framebufferSize).
+    if ((int) width > largestWidth || (int) height > largestHeight) {
+        largestWidth = std::max(largestWidth, (int) width);
+        largestHeight = std::max(largestHeight, (int) height);
+        resize();
+    }
 
     if (isDirty) {
         initializeBuffers();
@@ -74,9 +85,17 @@ void FramebufferRenderer::setPixelFormat(int pixelFormat) {
 }
 
 void FramebufferRenderer::updateRenderedResolution(unsigned int width, unsigned int height) {
-    if (this->width != width || this->height != height) {
-        this->width = width;
-        this->height = height;
+    askedWidth = width;
+    askedHeight = height;
+    resize();
+}
+
+void FramebufferRenderer::resize() {
+    auto size = framebufferSize(askedWidth, askedHeight, largestWidth, largestHeight);
+    if (this->width != size.first || this->height != size.second) {
+        LOGI("Framebuffer for the core: %u x %u", size.first, size.second);
+        this->width = size.first;
+        this->height = size.second;
         isDirty = true;
     }
 }
