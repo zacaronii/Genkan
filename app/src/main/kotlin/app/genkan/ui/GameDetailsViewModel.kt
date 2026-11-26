@@ -90,7 +90,12 @@ data class GameDetails(
     val textSource: TextSource? = null,
     /** How the built-in player draws it, when the player is on and runs its console. */
     val look: GameLook? = null,
+    /** The game's own step on its core's ladder, when it has one (learned, or set). */
+    val tuning: GameTuningNote? = null,
 )
+
+/** A game's own ladder step ([label]: what it does), and whether learning chose it. */
+data class GameTuningNote(val label: String, val learned: Boolean)
 
 /** A game's own look in the built-in player ([own], null: its console's) and its console's. */
 data class GameLook(val own: ScreenLook?, val console: ScreenLook)
@@ -99,7 +104,7 @@ data class GameLook(val own: ScreenLook?, val console: ScreenLook)
 @HiltViewModel
 class GameDetailsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    launcher: LauncherPresence,
+    private val launcher: LauncherPresence,
     private val focusedGame: FocusedGame,
     playSessions: PlaySessionDao,
     readingDao: ReadingDao,
@@ -115,6 +120,7 @@ class GameDetailsViewModel @Inject constructor(
     private val manuals: Manuals,
     private val steamStore: SteamStore,
     private val artLoaders: ArtLoaders,
+    private val tuningStore: app.genkan.core.TuningStore,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
@@ -149,13 +155,13 @@ class GameDetailsViewModel @Inject constructor(
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
                 // Favourite, and how its text would be read (the cached catalog only, off the main thread).
-                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game)) { f, t, l -> Triple(f, t, l) },
+                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game), tuningOf(game)) { f, t, l, n -> Extras(f, t, l, n) },
             ) { (p, st), r, d, s, f ->
                 GameDetails(
                     st?.let { focus.copy(game = it.applyTo(game)) } ?: focus,
                     p, r.first, d, s,
                     st?.let { GameArt(fanart = it.background, screenshots = it.screenshots) } ?: art,
-                    f.first, r.second, f.second, f.third,
+                    f.favourite, r.second, f.source, f.look, f.tuning,
                 )
             }
         }
@@ -276,6 +282,28 @@ class GameDetailsViewModel @Inject constructor(
                     withContext(Dispatchers.IO) { TextSource.of(id, catalog::cachedEntry, { catalog.table(it) != null }, builtIn, catalog::cachedHasScript) }
                 }
         }
+
+    private data class Extras(val favourite: Boolean, val source: TextSource?, val look: GameLook?, val tuning: GameTuningNote?)
+
+    /** The game's own step, when the built-in player is on, runs its console with a ladder, and the game has one. */
+    private fun tuningOf(game: GameEntity) =
+        if (LocalShelves.isLocal(game)) {
+            flowOf(null)
+        } else {
+            // Read again as home comes back: the player keeps what it learned from its own process.
+            combine(playerSettings.enabled, tuningStore.changes, launcher.inFront) { on, _, _ ->
+                val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.id) }
+                if (!on || ladder == null) return@combine null
+                val own = withContext(Dispatchers.IO) { tuningStore.override(game.id) } ?: return@combine null
+                ladder.step(own.step)?.let { GameTuningNote(it.label, own.why.startsWith("learned")) }
+            }
+        }
+
+    /** Forgets the focused game's own step: it starts at the catalog's or its core's again. */
+    fun resetTuning() {
+        val game = details.value?.focus?.game ?: return
+        viewModelScope.launch(Dispatchers.IO) { tuningStore.clearOverride(game.id) }
+    }
 
     private fun lookOf(game: GameEntity) =
         if (LocalShelves.isLocal(game) || CoreCatalog.forPlatform(game.platformSlug) == null) {

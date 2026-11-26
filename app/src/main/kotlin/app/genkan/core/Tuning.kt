@@ -6,7 +6,14 @@ package app.genkan.core
  * taken on its own: only from a catalog profile measured on this device. A [live] step the core
  * applies while the game runs; another waits for the next start.
  */
-data class TuningStep(val id: String, val options: Map<String, String>, val risky: Boolean = false, val live: Boolean = true)
+data class TuningStep(
+    val id: String,
+    val options: Map<String, String>,
+    val risky: Boolean = false,
+    val live: Boolean = true,
+    /** What the step does, short enough for a button on the game's details (resolutions as the console's times). */
+    val label: String = id,
+)
 
 /**
  * A core's steps, from the best-looking to the lightest, with the core's own [defaultId] among
@@ -53,10 +60,10 @@ object TuningLadders {
     // steps wait for a restart.
     private val dolphin = TuningLadder(
         steps = listOf(
-            TuningStep("efb-2x", mapOf("dolphin_efb_scale" to "2")),
-            TuningStep("default", emptyMap()),
-            TuningStep("vi-skip", mapOf("dolphin_vi_skip" to "enabled"), risky = true, live = false),
-            TuningStep("vi-skip-cpu-80", mapOf("dolphin_vi_skip" to "enabled", "dolphin_cpu_clock_rate" to "0.80"), risky = true, live = false),
+            TuningStep("efb-2x", mapOf("dolphin_efb_scale" to "2"), label = "2×"),
+            TuningStep("default", emptyMap(), label = "1×"),
+            TuningStep("vi-skip", mapOf("dolphin_vi_skip" to "enabled"), risky = true, live = false, label = "VI skip"),
+            TuningStep("vi-skip-cpu-80", mapOf("dolphin_vi_skip" to "enabled", "dolphin_cpu_clock_rate" to "0.80"), risky = true, live = false, label = "VI skip, CPU 80%"),
         ),
         defaultId = "default",
         defaults = mapOf("dolphin_efb_scale" to "1", "dolphin_vi_skip" to "disabled", "dolphin_cpu_clock_rate" to "1.00"),
@@ -66,10 +73,10 @@ object TuningLadders {
     // its steps wait for a restart.
     private val ppsspp = TuningLadder(
         steps = listOf(
-            TuningStep("1920x1088", mapOf("ppsspp_internal_resolution" to "1920x1088"), live = false),
-            TuningStep("default", emptyMap(), live = false),
-            TuningStep("960x544", mapOf("ppsspp_internal_resolution" to "960x544"), live = false),
-            TuningStep("480x272", mapOf("ppsspp_internal_resolution" to "480x272"), live = false),
+            TuningStep("1920x1088", mapOf("ppsspp_internal_resolution" to "1920x1088"), live = false, label = "4×"),
+            TuningStep("default", emptyMap(), live = false, label = "3×"),
+            TuningStep("960x544", mapOf("ppsspp_internal_resolution" to "960x544"), live = false, label = "2×"),
+            TuningStep("480x272", mapOf("ppsspp_internal_resolution" to "480x272"), live = false, label = "1×"),
         ),
         defaultId = "default",
         defaults = mapOf("ppsspp_internal_resolution" to "1440x816"),

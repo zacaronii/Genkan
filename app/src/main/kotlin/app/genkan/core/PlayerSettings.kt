@@ -53,6 +53,18 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         }
     }
 
+    /**
+     * Whether the built-in player learns each game's step on its core's ladder as it's played
+     * ([TuningLearner]): on unless turned off.
+     */
+    val learning: Flow<Boolean> = context.playerStore.data.map { it[LEARNING] != false }
+
+    suspend fun learns(): Boolean = learning.first()
+
+    suspend fun setLearning(on: Boolean) {
+        context.playerStore.edit { it[LEARNING] = on }
+    }
+
     /** The device's A is its right button (Nintendo layout); no: the bottom one (Xbox layout, as before). */
     val aOnRight: Flow<Boolean> = context.playerStore.data.map { it[A_ON_RIGHT] == true }
 
@@ -79,5 +91,6 @@ class PlayerSettings @Inject constructor(@ApplicationContext private val context
         val LOW_LATENCY_OFF = stringSetPreferencesKey("low_latency_off")
         val ENABLED = booleanPreferencesKey("enabled")
         val SAMPLES = booleanPreferencesKey("yomikata_samples")
+        val LEARNING = booleanPreferencesKey("learning")
     }
 }

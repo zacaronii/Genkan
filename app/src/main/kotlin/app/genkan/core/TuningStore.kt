@@ -20,6 +20,9 @@ class TuningStore internal constructor(private val dir: File) {
 
     private val file get() = File(dir, FILE)
 
+    /** Counts this process's changes, for screens showing a step to read it again (the player writes from its own process). */
+    val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     @Synchronized
     fun override(romId: Long): Override? = read().optJSONObject(romId.toString())?.let {
         Override(it.optString("step"), it.optLong("at"), it.optString("why"))
@@ -28,12 +31,14 @@ class TuningStore internal constructor(private val dir: File) {
     @Synchronized
     fun setOverride(romId: Long, step: String, why: String, atMs: Long = System.currentTimeMillis()) {
         write(read().put(romId.toString(), JSONObject().put("step", step).put("at", atMs).put("why", why)))
+        changes.value++
     }
 
     @Synchronized
     fun clearOverride(romId: Long) {
         val all = read()
         if (all.remove(romId.toString()) != null) write(all)
+        changes.value++
     }
 
     private fun read(): JSONObject = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject())
