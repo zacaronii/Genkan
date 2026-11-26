@@ -287,14 +287,15 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         /**
          * The release id the catalog knows the game by, from its RAM: a PS1 disc's boot path
          * (SLPS-01001), the PSP disc id the game names its saves with (the commonest there),
-         * a GameCube or Wii disc's six-character id at the start of MEM1, or a Saturn disc's product
-         * number from its header's copy in work RAM.
+         * a GameCube or Wii disc's six-character id at the start of MEM1, or a Saturn or Dreamcast
+         * disc's product number from its header's copy in RAM.
          */
         fun gameId(platform: String?, ram: ByteArray): String? = when (platform) {
             "psx" -> TextSamples.ps1Serial(ram)
             "ngc" -> gcDiscId(ram)
             "wii" -> wiiDiscId(ram)
             "saturn" -> saturnRelease(ram)?.id
+            "dc" -> dreamcastRelease(ram)?.id
             "psp" -> PSP_ID.findAll(String(ram, Charsets.ISO_8859_1)).map { it.value }
                 .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             else -> null
@@ -334,6 +335,14 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         fun saturnRelease(ram: ByteArray): SegaHeader.Release? = SegaHeader.read(ram, SATURN_HEADER_AT)
 
         private const val SATURN_HEADER_AT = 0x2000
+
+        /**
+         * A Dreamcast disc's id and build (SegaHeader), from the copy of its IP.BIN the boot loads to
+         * 0x8C008000, in main RAM at 0x0C008000; null before it's there.
+         */
+        fun dreamcastRelease(ram: ByteArray): SegaHeader.Release? = SegaHeader.read(ram, DREAMCAST_HEADER_AT)
+
+        private const val DREAMCAST_HEADER_AT = 0x8000
 
         private const val GC_MAGIC_AT = 0x1C
         private const val GC_MAGIC = 0xC2339F3DL
