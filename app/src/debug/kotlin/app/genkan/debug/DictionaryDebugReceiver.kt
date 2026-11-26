@@ -111,6 +111,8 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
+ *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform saturn --es core beetle_saturn
+ * (plays the console's games with that one of its debug-only cores until the app restarts; no core: the first listed)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
@@ -165,6 +167,16 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         // Without a rom, every downloaded game.
                         val roms = if (rom != 0L) listOf(rom) else database.downloads().all().first().map { it.romId }
                         roms.forEach { Log.i(TAG, "Save sync of rom $it ran: ${saveSync.sync(it, dryRun = dry)}") }
+                    }
+                    "app.genkan.debug.CORE" -> {
+                        val platform = intent.getStringExtra("platform").orEmpty()
+                        val core = intent.getStringExtra("core")
+                        app.genkan.core.CoreCatalog.debugChoice = if (core.isNullOrEmpty()) {
+                            app.genkan.core.CoreCatalog.debugChoice - platform
+                        } else {
+                            app.genkan.core.CoreCatalog.debugChoice + (platform to core)
+                        }
+                        Log.i(TAG, "Core for $platform: ${app.genkan.core.CoreCatalog.forPlatform(platform)?.id}")
                     }
                     "app.genkan.debug.DOWNLOAD" -> {
                         val game = database.library().game(intent.getLongExtra("rom", 0))

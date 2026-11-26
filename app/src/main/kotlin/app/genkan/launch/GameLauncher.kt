@@ -146,6 +146,7 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_ROM, rom.absolutePath)
             .putExtra(CoreActivity.EXTRA_ROM_ID, game.id)
             .putExtra(CoreActivity.EXTRA_PLATFORM, game.platformSlug)
+            .putExtra(CoreActivity.EXTRA_CORE, core.id)
             .putExtra(CoreActivity.EXTRA_LOOK, screenLooks.forLaunch(game.id, game.platformSlug).name)
             .putExtra(CoreActivity.EXTRA_LOW_LATENCY, playerSettings.lowLatency(game.platformSlug))
             .putExtra(CoreActivity.EXTRA_A_ON_RIGHT, playerSettings.aOnRight(game.platformSlug))

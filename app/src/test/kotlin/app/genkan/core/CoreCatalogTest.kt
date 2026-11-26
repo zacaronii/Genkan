@@ -85,4 +85,36 @@ class CoreCatalogTest {
         assertNull(TuningLadders.of(cd.tuning))
         assertTrue(cd.portDevices.isEmpty() && !cd.sticksOnly && cd.savesFolder == null && !cd.keepPointer)
     }
+
+    @Test
+    fun `a Saturn plays on either debug-only candidate, as the debug choice says, and on none in a release`() {
+        try {
+            assertEquals("yabasanshiro", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
+            CoreCatalog.debugChoice = mapOf("saturn" to "beetle_saturn")
+            assertEquals("beetle_saturn", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
+            // A choice of a core the console doesn't have falls back to its first.
+            CoreCatalog.debugChoice = mapOf("saturn" to "mgba")
+            assertEquals("yabasanshiro", CoreCatalog.forPlatform("saturn", debug = true)!!.id)
+            assertNull(CoreCatalog.forPlatform("saturn", debug = false))
+        } finally {
+            CoreCatalog.debugChoice = emptyMap()
+        }
+        // Every other console's core is in releases too.
+        CoreCatalog.cores.filter { "saturn" !in it.platforms }.forEach { assertFalse(it.id, it.debugOnly) }
+        assertEquals("mgba", CoreCatalog.forPlatform("gba", debug = false)!!.id)
+    }
+
+    @Test
+    fun `both Saturn candidates boot with RomM's Japanese BIOS and take its discs, not zips`() {
+        val saturn = CoreCatalog.cores.filter { "saturn" in it.platforms }
+        assertEquals(listOf("yabasanshiro", "beetle_saturn"), saturn.map { it.id })
+        saturn.forEach { core ->
+            assertTrue(core.id, core.debugOnly)
+            assertEquals(core.id, mapOf("sega_101.bin" to "sega_101.bin"), core.firmware)
+            listOf("game.cue", "game.chd", "game.ccd").forEach { assertTrue("${core.id} $it", core.takes(it)) }
+            assertFalse(core.id, core.takes("game.zip"))
+            assertNull(core.id, TuningLadders.of(core.tuning))
+            assertSame(core, CoreCatalog.byId(core.id))
+        }
+    }
 }

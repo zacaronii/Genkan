@@ -21,7 +21,7 @@ class CoreHostService : Service() {
 
     private val binder = object : ICoreHost.Stub() {
         override fun attach(session: ICoreSession, romId: Long, coreId: String, look: String) {
-            val core = CoreCatalog.cores.firstOrNull { it.id == coreId } ?: return
+            val core = CoreCatalog.byId(coreId) ?: return
             player.attach(session, romId, core, ScreenLook.of(look))
         }
 
