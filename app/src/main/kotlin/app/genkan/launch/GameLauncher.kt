@@ -60,6 +60,7 @@ class GameLauncher @Inject constructor(
     private val firmware: CoreFirmware,
     private val screenLooks: ScreenLooks,
     private val tuning: app.genkan.core.GameTuning,
+    private val wiiController: app.genkan.core.GameWiiController,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -152,6 +153,12 @@ class GameLauncher @Inject constructor(
         tuning.resolve(game.id, core.tuning)?.let {
             Log.i(TAG, "Tuning step ${it.step.id} (${it.source.name.lowercase()})")
             intent.putExtra(CoreActivity.EXTRA_TUNING_STEP, it.step.id)
+        }
+        if (app.genkan.core.WiiController.OPTION in core.variables) {
+            wiiController.resolve(game.id)?.let {
+                Log.i(TAG, "Wii controller $it")
+                intent.putExtra(CoreActivity.EXTRA_WII_CONTROLLER, it)
+            }
         }
         return LaunchPlan.Ready(builtIn = true) {
             Log.i(TAG, "Launching ${game.name} in the built-in player (${core.displayName}): ${rom.name}")

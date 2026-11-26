@@ -108,4 +108,15 @@ class CatalogEntryTest {
         assertFalse("broken" in entry.tuning)
         assertTrue(CatalogEntry.parse("""{"id": "SLPM-12345", "platform": "ngc", "encoding": "shift_jis"}""").tuning.isEmpty())
     }
+
+    @Test
+    fun `a Wii entry's controller is one of the three, else not said`() {
+        // Made-up releases: no game's real id.
+        fun controller(field: String) = CatalogEntry.parse("""{"id": "RZZJ01", "platform": "wii", "encoding": "shift_jis"$field}""").wiiController
+        assertEquals("classic", controller(""", "wii_controller": "classic""""))
+        assertEquals("sideways", controller(""", "wii_controller": "sideways""""))
+        assertEquals("nunchuk", controller(""", "wii_controller": "nunchuk""""))
+        assertNull(controller(""", "wii_controller": "balance_board""""))
+        assertNull(controller(""))
+    }
 }

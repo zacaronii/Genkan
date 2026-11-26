@@ -57,6 +57,24 @@ class RamSnapshotsTest {
     }
 
     @Test
+    fun `a Wii disc is known by its own magic word, its build the same way`() {
+        // A made-up disc id.
+        val ram = ByteArray(0x40)
+        "RTST01".toByteArray().copyInto(ram)
+        ram[7] = 0x01
+        byteArrayOf(0x5D, 0x1C, 0x9E.toByte(), 0xA3.toByte()).copyInto(ram, 0x18)
+        assertEquals("RTST01", RamSnapshots.gameId("wii", ram))
+        assertEquals("RTST01-01", RamSnapshots.wiiBuildId(ram))
+        assertEquals("RTST01-01", app.genkan.core.ScriptEvents.buildId("wii", ram, null))
+        // Not a GameCube disc, and a GameCube's header isn't a Wii's.
+        assertNull(RamSnapshots.gcDiscId(ram))
+        val gc = ByteArray(0x40).also { "GTST01".toByteArray().copyInto(it); byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D).copyInto(it, 0x1C) }
+        assertNull(RamSnapshots.gameId("wii", gc))
+        assertNull(RamSnapshots.wiiBuildId(ByteArray(0x40)))
+        assertEquals(MainRam.of("ngc"), MainRam.of("wii"))
+    }
+
+    @Test
     fun `video RAM is labelled by console, PS1's as its frame buffer`() {
         assertEquals("ps1-15bit", RamSnapshots.vramFormat("psx"))
         assertEquals("sfc-vram", RamSnapshots.vramFormat("snes"))

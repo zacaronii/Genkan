@@ -178,4 +178,19 @@ class GameFileTest {
         // A console with no built-in core goes to the outside emulator as before.
         assertNull(CoreCatalog.forPlatform("n64"))
     }
+
+    @Test
+    fun `a zipped GBA game is identified from the file it's unpacked to`() {
+        // A made-up header: the game code at 0xAC, the fixed 0x96 at 0xB2.
+        val game = bytes(0x400, 27).also {
+            "ZQXJ".toByteArray(Charsets.US_ASCII).copyInto(it, 0xAC)
+            it[0xB2] = 0x96.toByte()
+        }
+        val rom = zip("game.zip", "readme.txt" to bytes(16, 28), "game.gba" to game)
+        // The zip's own first bytes are no header.
+        assertNull(CartridgeId.of("gba", rom))
+        val prepared = GameFile.prepare(mgba, rom, cache, "9") as GameFile.Prepared.Ready
+        assertEquals("AGB-ZQXJ", CartridgeId.of("gba", prepared.file)!!.id)
+        assertEquals(GbaCartridge.of(game), CartridgeId.of("gba", prepared.file))
+    }
 }

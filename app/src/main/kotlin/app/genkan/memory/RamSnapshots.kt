@@ -36,6 +36,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "nds" -> MainRam(0x02000000L until 0x02400000L, 0x02000000L)
             // MEM1, 24 MB at 0x80000000 (Dolphin's memory map gives the game's addresses), big-endian.
             "ngc" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
+            // A Wii's MEM1, the same 24 MB at 0x80000000; its MEM2 at 0x90000000 isn't needed here.
+            "wii" -> MainRam(0x80000000L until 0x81800000L, 0x80000000L)
             else -> null
         }
     }
@@ -179,8 +181,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         val frame = if (moment != null) moment.frame else extras?.screen()
         // What can't be read stays zeros: the dump keeps its addresses.
         val bytes = moment?.ram ?: readRam(memory, ram) ?: return false
-        // A GameCube's MEM1 starts with its disc's header, which the inbox checks the dump against.
-        if (game.platform == "ngc" && gcDiscId(bytes) != id) {
+        // A GameCube's or Wii's MEM1 starts with its disc's header, which the inbox checks the dump against.
+        if ((game.platform == "ngc" && gcDiscId(bytes) != id) || (game.platform == "wii" && wiiDiscId(bytes) != id)) {
             Log.w(TAG, "MEM1 doesn't start with disc $id's header: no snapshot")
             return false
         }
@@ -275,11 +277,12 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         /**
          * The release id the catalog knows the game by, from its RAM: a PS1 disc's boot path
          * (SLPS-01001), the PSP disc id the game names its saves with (the commonest there), or
-         * a GameCube disc's six-character id at the start of MEM1.
+         * a GameCube or Wii disc's six-character id at the start of MEM1.
          */
         fun gameId(platform: String?, ram: ByteArray): String? = when (platform) {
             "psx" -> TextSamples.ps1Serial(ram)
             "ngc" -> gcDiscId(ram)
+            "wii" -> wiiDiscId(ram)
             "psp" -> PSP_ID.findAll(String(ram, Charsets.ISO_8859_1)).map { it.value }
                 .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             else -> null
@@ -290,9 +293,14 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
          * header there, its magic word C2339F3D at 0x1C, in the console's big-endian order. Null
          * for anything else, a word-swapped dump among them.
          */
-        fun gcDiscId(ram: ByteArray): String? {
-            if (ram.size < GC_MAGIC_AT + 4) return null
-            if (MemoryScan.u32(ram, GC_MAGIC_AT, bigEndian = true) != GC_MAGIC) return null
+        fun gcDiscId(ram: ByteArray): String? = discId(ram, GC_MAGIC_AT, GC_MAGIC)
+
+        /** The same for a Wii disc (RTST01, say), whose header has its magic word 5D1C9EA3 at 0x18 instead. */
+        fun wiiDiscId(ram: ByteArray): String? = discId(ram, WII_MAGIC_AT, WII_MAGIC)
+
+        private fun discId(ram: ByteArray, magicAt: Int, magic: Long): String? {
+            if (ram.size < magicAt + 4) return null
+            if (MemoryScan.u32(ram, magicAt, bigEndian = true) != magic) return null
             return String(ram, 0, 6, Charsets.US_ASCII).takeIf { id -> id.all { it in 'A'..'Z' || it in '0'..'9' } }
         }
 
@@ -300,13 +308,17 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
          * A GameCube game's build as scripts name it: the disc id and the disc's version (the byte at
          * 0x80000007) as two hex digits, `GTST01-00`; null without the disc's header.
          */
-        fun gcBuildId(ram: ByteArray): String? {
-            val id = gcDiscId(ram) ?: return null
-            return "%s-%02X".format(id, ram[7].toInt() and 0xFF)
-        }
+        fun gcBuildId(ram: ByteArray): String? = gcDiscId(ram)?.let { buildOf(it, ram) }
+
+        /** A Wii game's build, the same way: `RTST01-00`. */
+        fun wiiBuildId(ram: ByteArray): String? = wiiDiscId(ram)?.let { buildOf(it, ram) }
+
+        private fun buildOf(id: String, ram: ByteArray) = "%s-%02X".format(id, ram[7].toInt() and 0xFF)
 
         private const val GC_MAGIC_AT = 0x1C
         private const val GC_MAGIC = 0xC2339F3DL
+        private const val WII_MAGIC_AT = 0x18
+        private const val WII_MAGIC = 0x5D1C9EA3L
 
         private val PSP_ID = Regex("(?<![A-Z0-9])(?:UL|UC|NP)[A-Z]{2}\\d{5}(?![0-9])")
 
