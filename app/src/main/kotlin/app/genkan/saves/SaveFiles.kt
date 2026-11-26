@@ -60,6 +60,8 @@ data class WatchedEmulator(
         val BUILT_IN = mapOf(
             "ngc" to WatchedEmulator("dolphin", listOf("Genkan/saves/dolphin/User"), listOf("GC"), privileged = false),
             "wii" to WatchedEmulator("dolphin", listOf("Genkan/saves/dolphin/User"), listOf("Wii/title"), privileged = false),
+            // Flycast's VMUs, one per game (reicast_per_content_vmus), in its saves folder.
+            "dc" to WatchedEmulator("flycast", listOf("Genkan/saves"), listOf("flycast"), privileged = false),
         )
     }
 }

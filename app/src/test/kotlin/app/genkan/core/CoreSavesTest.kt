@@ -1,6 +1,7 @@
 package app.genkan.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.File
@@ -75,5 +76,19 @@ class CoreSavesTest {
         // Only the NAND's saves, never its system files or the GameCube's cards.
         assertEquals(listOf("Wii/title"), watched.folders)
         assertEquals(app.genkan.saves.WatchedEmulator.BY_PLATFORM.getValue("wii").folders, watched.folders)
+    }
+
+    @Test
+    fun `Flycast keeps each game's VMU on shared storage, where the save sync watches it`() {
+        val core = CoreCatalog.forPlatform("dc", debug = false)!!
+        // Each game's own VMU, by its product number, not one for every game in the system folder.
+        assertEquals("VMU A1", core.variables["reicast_per_content_vmus"])
+        assertEquals(File(storage, "Genkan/saves/flycast"), CoreSaves.directoryFor(core, File(storage, "private"), storage))
+        // The VMU files sync through the watched folder, not as an .srm.
+        assertNull(CoreSaves.ownTarget("dc", core, File("/storage/ROMs/dc/Game.chd"), storage))
+        val watched = app.genkan.saves.WatchedEmulator.BUILT_IN.getValue("dc")
+        assertEquals("flycast", watched.emulator)
+        assertEquals(core.savesFolder, "${watched.bases.single()}/${watched.folders.single()}")
+        assertFalse(watched.privileged)
     }
 }
