@@ -4,6 +4,7 @@
 #include "audiopace.h"
 
 using libretrodroid::AudioPace;
+using libretrodroid::drawsAfterStep;
 
 namespace {
 
@@ -64,6 +65,10 @@ int main() {
     reset.run(5, 1);
     reset.reset();
     check(reset.run(1, 1), "a reset forgets the hold");
+
+    check(drawsAfterStep(false, false) && drawsAfterStep(false, true), "a core drawn by the loop is drawn every step");
+    check(!drawsAfterStep(true, true), "a core drawn in its video callback isn't drawn twice");
+    check(drawsAfterStep(true, false), "but is drawn again after a step that gave no frame (held back)");
 
     if (failures == 0) std::printf("audio pace: passed\n");
     return failures == 0 ? 0 : 1;

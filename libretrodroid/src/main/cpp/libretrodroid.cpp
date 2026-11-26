@@ -475,6 +475,7 @@ void LibretroDroid::step() {
         FrameStats::getInstance().recordPaced();
     }
 
+    videoCallbackThisStep = false;
     for (size_t i = 0; i < frames * frameSpeed; i++) {
         auto started = std::chrono::steady_clock::now();
         core->retro_run();
@@ -484,7 +485,8 @@ void LibretroDroid::step() {
     }
     FrameStats::getInstance().recordStep();
 
-    if (video && !video->rendersInVideoCallback()) {
+    // Genkan: a core drawn in its video callback is drawn again when the step gave no frame.
+    if (video && drawsAfterStep(video->rendersInVideoCallback(), videoCallbackThisStep)) {
         video->renderFrame();
     }
 
@@ -563,6 +565,7 @@ void LibretroDroid::handleVideoRefresh(
     unsigned int height,
     size_t pitch
 ) {
+    videoCallbackThisStep = true;
     if (video) {
         auto &tap = GenkanTap::getInstance();
         if (tap.isSplitScreens() && data != nullptr && data != RETRO_HW_FRAME_BUFFER_VALID) {
