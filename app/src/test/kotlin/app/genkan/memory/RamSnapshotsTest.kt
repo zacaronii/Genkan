@@ -100,6 +100,24 @@ class RamSnapshotsTest {
     }
 
     @Test
+    fun `a Dreamcast disc is known by its IP_BIN's copy at 0x0C008000, its build with the version`() {
+        // A made-up product number, of disc 1 of 2.
+        val ram = ByteArray(0x9000)
+        val header = ByteArray(0x100) { ' '.code.toByte() }
+        "SEGA SEGAKATANA ".toByteArray().copyInto(header)
+        "GD-ROM1/2".toByteArray().copyInto(header, 0x20)
+        "ABC-0001".toByteArray().copyInto(header, 0x40)
+        "V1.002".toByteArray().copyInto(header, 0x4A)
+        header.copyInto(ram, 0x8000)
+        assertEquals("ABC-0001-D1", RamSnapshots.gameId("dc", ram))
+        assertEquals("ABC-0001-D1-V1.002", app.genkan.core.ScriptEvents.buildId("dc", ram, null))
+        // A Saturn's header place isn't a Dreamcast's.
+        assertNull(RamSnapshots.gameId("saturn", ram))
+        assertNull(RamSnapshots.gameId("dc", ByteArray(0x9000)))
+        assertNull(app.genkan.core.ScriptEvents.buildId("dc", ByteArray(0x9000), null))
+    }
+
+    @Test
     fun `video RAM is labelled by console, PS1's as its frame buffer`() {
         assertEquals("ps1-15bit", RamSnapshots.vramFormat("psx"))
         assertEquals("sfc-vram", RamSnapshots.vramFormat("snes"))
