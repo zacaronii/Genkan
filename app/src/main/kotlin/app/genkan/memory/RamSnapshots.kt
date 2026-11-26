@@ -29,11 +29,16 @@ data class SnapshotRegion(val name: String, val range: LongRange, val baseAddres
             // A Saturn's low work RAM, 1 MB at 0x00200000, where some games keep their data: big-endian
             // as the high 1 MB is (Yomikata's lwram).
             "saturn" -> listOf(SnapshotRegion("lwram", 0x00200000L until 0x00300000L, 0x00200000L))
+            // A Game Boy's I/O registers and high RAM, the 256 bytes from 0xFF00 (Yomikata's io): the
+            // LCD's registers say whether a window shows.
+            "gb", "gbc" -> listOf(SnapshotRegion("io", 0xFF00L until 0x10000L, 0xFF00L))
+            // A PC Engine CD's own 8 KB at 0x1F0000, beside the card's and the CD's RAM (Yomikata's wram).
+            "turbografx-cd" -> listOf(SnapshotRegion("wram", 0x1F0000L until 0x1F2000L, 0x1F0000L))
             else -> emptyList()
         }
 
         /** Every region's name, for a snapshot's files. */
-        val NAMES = listOf("lwram")
+        val NAMES = listOf("lwram", "io", "wram")
     }
 }
 
@@ -403,7 +408,18 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
             var at = 0
             while (at < size) {
                 val n = minOf(memory.maxRead, size - at)
-                memory.read(ram.range.first + at, n)?.let { it.copyInto(out, at, 0, minOf(it.size, n)); any = true }
+                val start = ram.range.first + at
+                memory.read(start, n)?.let { it.copyInto(out, at, 0, minOf(it.size, n)); any = true }
+                    // A read can't cross from one of the source's regions into the next (a Game Boy's
+                    // I/O, high RAM and interrupt register, three in mGBA's map): each one's part alone.
+                    ?: memory.regions.forEach { region ->
+                        val from = maxOf(start, region.first)
+                        val until = minOf(start + n, region.last + 1)
+                        if (from < until) memory.read(from, (until - from).toInt())?.let {
+                            it.copyInto(out, at + (from - start).toInt(), 0, minOf(it.size, (until - from).toInt()))
+                            any = true
+                        }
+                    }
                 at += n
             }
             return out.takeIf { any }
