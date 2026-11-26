@@ -655,6 +655,19 @@ val audioPaceTest = tasks.register<NativeHostTest>("audioPaceTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/** One sector of a CHD's data track through libchdr: a disc's boot block, read for its id. */
+val discSectorTest = tasks.register<NativeHostTest>("discSectorTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/discsector.h", "libretrodroid/src/main/cpp/discsector.cpp"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    commits.add(submoduleCommit("third_party/libchdr"))
+    target.set("disc_sector_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("disc-sector-test"))
+    passed.set(layout.buildDirectory.file("disc-sector-test/passed"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 /** Where a touch leaves a core's pointer: off the screen with the finger, or where it was (a Wii's). */
 val pointerTest = tasks.register<NativeHostTest>("pointerTest") {
     testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
@@ -705,7 +718,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, audioPaceTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, audioPaceTest, discSectorTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->

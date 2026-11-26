@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "genkantap.h"
+#include "discsector.h"
 #include "framestats.h"
 #include "input.h"
 #include "libretrodroid.h"
@@ -22,6 +23,17 @@ using libretrodroid::Input;
 using libretrodroid::LibretroDroid;
 
 extern "C" {
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_chdDataSector(JNIEnv *env, jclass, jstring path, jint sector) {
+    if (path == nullptr || sector < 0) return nullptr;
+    const char *chars = env->GetStringUTFChars(path, nullptr);
+    std::vector<uint8_t> data = libretrodroid::chdDataSector(chars, static_cast<uint32_t>(sector));
+    env->ReleaseStringUTFChars(path, chars);
+    if (data.empty()) return nullptr;
+    jbyteArray result = env->NewByteArray(static_cast<jsize>(data.size()));
+    env->SetByteArrayRegion(result, 0, static_cast<jsize>(data.size()), reinterpret_cast<const jbyte *>(data.data()));
+    return result;
+}
 
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_lastStepNanos(JNIEnv *, jclass) {
     return FrameStats::getInstance().lastStepNanos();

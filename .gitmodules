@@ -29,3 +29,6 @@
 	url = https://github.com/libretro/parallel-ps2
 	shallow = true
 	update = none
+[submodule "third_party/libchdr"]
+	path = third_party/libchdr
+	url = https://github.com/flyinghead/libchdr.git
