@@ -47,6 +47,7 @@ class BuiltInText @Inject constructor(
     private val snapshots: RamSnapshots,
     private val catalog: YomikataCatalog,
     private val yomikataIds: YomikataIds,
+    private val tuning: GameTuning,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val text = MemoryText(session, ocr, TAG, ::missing)
@@ -139,10 +140,23 @@ class BuiltInText @Inject constructor(
                 startScript(game, id)
                 // The entry's cleanup, for the game's own codes in the lines memory gives.
                 text.rules = MemoryText.rulesOf(entryOf(game.title, id))
+                tuneFor(game, id)
                 return
             }
             delay(ID_RETRY_MS)
         }
+    }
+
+    /**
+     * The catalog's step for the release now known as [id] (on a first play the launch didn't know
+     * it), applied as the game runs when the core can; else from its next start.
+     */
+    private suspend fun tuneFor(game: app.genkan.reader.NowPlaying.Game, id: String) {
+        val romId = game.rommRomId ?: return
+        val core = player.game.value?.core ?: return
+        val resolved = tuning.resolve(romId, core.id, id) ?: return
+        val live = withContext(Dispatchers.IO) { player.setTuningStep(resolved.step.id) }
+        Log.i(TAG, "Tuning step ${resolved.step.id} (${resolved.source.name.lowercase()})" + if (live) "" else ", from the next start")
     }
 
     private val _scriptScreen = MutableStateFlow(app.genkan.ocr.ScreenText.EMPTY)

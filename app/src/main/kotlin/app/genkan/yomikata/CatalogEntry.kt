@@ -7,7 +7,8 @@ import java.util.regex.Pattern
 /**
  * One release's reading rules from the Yomikata catalog (docs/format.md there): its encoding,
  * and for games with their own codes, a character table, control codes and cleanup. PSP entries
- * may carry [hooks], the code addresses each line passes through.
+ * may carry [hooks], the code addresses each line passes through. [tuning] is the built-in
+ * player's step for the release, by core id (see [app.genkan.core.TuningLadders]).
  */
 data class CatalogEntry(
     val id: String,
@@ -21,6 +22,7 @@ data class CatalogEntry(
     val controls: Map<String, String> = emptyMap(),
     val cleanup: List<CleanupStep> = emptyList(),
     val hooks: List<Hook> = emptyList(),
+    val tuning: Map<String, app.genkan.core.BundledTuning> = emptyMap(),
 ) {
     /** A printing the entry is known to fit: a boot executable's hash (discs) or a header CRC (cartridges). */
     data class Version(val id: String?, val exeSha1: String?, val headerCrc32: String?)
@@ -54,6 +56,13 @@ data class CatalogEntry(
                 controls = o.optJSONObject("controls")?.let { c -> c.keys().asSequence().associate { it.uppercase() to c.getString(it) } }.orEmpty(),
                 cleanup = CleanupStep.parse(o.optJSONArray("cleanup")),
                 hooks = o.optJSONArray("hooks").objects().map(::parseHook),
+                tuning = o.optJSONObject("tuning")?.let { t ->
+                    t.keys().asSequence().mapNotNull { core ->
+                        val step = t.optJSONObject(core) ?: return@mapNotNull null
+                        val id = step.optStringOrNull("step") ?: return@mapNotNull null
+                        core to app.genkan.core.BundledTuning(id, step.optStringOrNull("measured_on"))
+                    }.toMap()
+                }.orEmpty(),
             )
         }
 

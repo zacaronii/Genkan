@@ -91,4 +91,21 @@ class CatalogEntryTest {
         assertEquals("あう\n学�\n\n", table.decode(bytes, unit = 2, controls = mapOf("FFF0" to "wait")))
         assertEquals(3, table.size)
     }
+
+    @Test
+    fun `an entry's tuning gives each core's step and where it was measured`() {
+        // A made-up release: no game's real id.
+        val entry = CatalogEntry.parse(
+            """
+            {"id": "SLPM-12345", "platform": "ngc", "encoding": "shift_jis",
+             "tuning": {"dolphin": {"step": "vi-skip", "measured_on": "Made-up Handheld"},
+                        "ppsspp": {"step": "960x544"},
+                        "broken": {"measured_on": "no step"}}}
+            """,
+        )
+        assertEquals(app.genkan.core.BundledTuning("vi-skip", "Made-up Handheld"), entry.tuning["dolphin"])
+        assertEquals(app.genkan.core.BundledTuning("960x544", null), entry.tuning["ppsspp"])
+        assertFalse("broken" in entry.tuning)
+        assertTrue(CatalogEntry.parse("""{"id": "SLPM-12345", "platform": "ngc", "encoding": "shift_jis"}""").tuning.isEmpty())
+    }
 }

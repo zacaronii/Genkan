@@ -63,4 +63,6 @@ interface ICoreSession {
     int scriptLevel() = 19;
     /** Where the game's picture sits on the view: left, top, right, bottom as fractions; null before one is drawn. */
     float[] pictureBounds() = 20;
+    /** Moves the game to its core's ladder step [step] while it runs; false when that needs a restart (or no such step). */
+    boolean setTuningStep(String step) = 21;
 }
