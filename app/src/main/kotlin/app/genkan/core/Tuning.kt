@@ -82,8 +82,8 @@ object TuningLadders {
         defaults = mapOf("ppsspp_internal_resolution" to "1440x816"),
     )
 
-    /** The ladder for a core; null for one light enough to need none. */
-    fun of(coreId: String): TuningLadder? = when (coreId) {
+    /** The ladder named [tuning] (a core's CoreDef.tuning); null for a core light enough to need none. */
+    fun of(tuning: String): TuningLadder? = when (tuning) {
         "dolphin" -> dolphin
         "ppsspp" -> ppsspp
         else -> null

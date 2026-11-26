@@ -22,11 +22,15 @@
 #include <unordered_set>
 #include <array>
 
+#include "pointer.h"
+
 namespace libretrodroid {
 
 class Input {
 
 private:
+    bool keepPointer = false;
+
     struct GamePadState {
         std::unordered_set<int> pressedKeys;
 
@@ -36,8 +40,7 @@ private:
         float joypadLeftYAxis = 0;
         float joypadRightXAxis = 0;
         float joypadRightYAxis = 0;
-        float pointerScreenXAxis = -1;
-        float pointerScreenYAxis = -1;
+        PointerState pointer;
     };
 
 public:
@@ -56,6 +59,9 @@ public:
 
     void onKeyEvent(unsigned int port, int action, int keyCode);
     void onMotionEvent(int port, int motionSource, float xAxis, float yAxis);
+
+    /** Genkan: a lifted finger leaves the pointer where it was (see PointerState::touch). */
+    void setKeepPointer(bool keep) { keepPointer = keep; }
 
 private:
     const int UNKNOWN_KEY = -1;

@@ -125,7 +125,7 @@ class CoreActivity : ComponentActivity() {
         }
         core = def
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
-        val ladder = TuningLadders.of(def.id)
+        val ladder = TuningLadders.of(def.tuning)
         tuningStep = ladder?.let { it.step(intent.getStringExtra(EXTRA_TUNING_STEP))?.id ?: it.defaultId }
         if (ladder != null && intent.getBooleanExtra(EXTRA_LEARN, false)) learner = TuningLearner(ladder, tuningStep!!)
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
@@ -177,13 +177,14 @@ class CoreActivity : ComponentActivity() {
         def.assets?.let { (zip, folder) -> CoreAssets.unpack(this, zip, File(system, folder)) }
 
         GenkanTap.setSplitScreens(def.splitScreens)
+        GenkanTap.setKeepPointer(def.keepPointer)
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
             coreFilePath = def.library
             gameFilePath = game.absolutePath
             systemDirectory = system.absolutePath
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
-            variables = (def.variables + (tuningStep?.let { TuningLadders.of(def.id)?.assignment(it) } ?: emptyMap()))
+            variables = (def.variables + (tuningStep?.let { TuningLadders.of(def.tuning)?.assignment(it) } ?: emptyMap()))
                 .map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
             sticksOnly = def.sticksOnly
@@ -444,7 +445,7 @@ class CoreActivity : ComponentActivity() {
         override fun setTuningStep(step: String): Boolean {
             val moved = moveToStep(step)
             // Set from outside (the catalog's step, a debug build): learning starts again from it.
-            if (moved && learner != null) TuningLadders.of(core.id)?.let { learner = TuningLearner(it, tuningStep!!) }
+            if (moved && learner != null) TuningLadders.of(core.tuning)?.let { learner = TuningLearner(it, tuningStep!!) }
             return moved
         }
 
@@ -900,7 +901,7 @@ class CoreActivity : ComponentActivity() {
     /** Moves the game to ladder step [step] as it runs; false when the core can only take it at start. */
     @Synchronized
     private fun moveToStep(step: String): Boolean {
-        val ladder = TuningLadders.of(core.id) ?: return false
+        val ladder = TuningLadders.of(core.tuning) ?: return false
         val next = ladder.step(step) ?: return false
         if (next.id == tuningStep) return true
         // Leaving a step the core reads only at start needs a start too.

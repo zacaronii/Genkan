@@ -47,6 +47,13 @@ data class CoreDef(
      * User folder: memory cards, and its config and shader cache), instead of Genkan's own files.
      */
     val savesFolder: String? = null,
+    /**
+     * Its ladder (TuningLadders) and the catalog's key for its tuning: a console played by another's
+     * core (a Wii by the GameCube's Dolphin) shares that core's.
+     */
+    val tuning: String = id,
+    /** A lifted finger leaves the game's pointer where it was (a Wii's: aimed, then left there). */
+    val keepPointer: Boolean = false,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -132,6 +139,37 @@ object CoreCatalog {
             portDevices = listOf(RETRO_DEVICE_JOYPAD),
             // Games put menus on its D-pad: the stick mustn't press it too.
             sticksOnly = true,
+        ),
+        CoreDef(
+            // The same core and library as the GameCube's: Dolphin plays a Wii disc as one.
+            id = "dolphin_wii", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
+            platforms = setOf("wii"),
+            variables = mapOf(
+                "dolphin_renderer" to "Hardware", "dolphin_efb_scale" to "1",
+                // A Wiimote with a Nunchuk, the controller most games play with, and those for the
+                // Wiimote alone too. The core plugs it in for any device in port 1 but none.
+                "dolphin_wiimote_default_device" to "nunchuk",
+                // The pointer on the touch screen (the core's "mouse" mode reads libretro's pointer),
+                // so the right stick stays the Wiimote's tilt and swing.
+                "dolphin_ir_mode" to "2",
+                // The console's own settings (its SYSCONF): a wide picture, in Japanese, the sensor
+                // bar under the screen. No NAND is needed: the core makes an empty one.
+                "dolphin_widescreen" to "enabled",
+                "dolphin_language" to "0",
+                "dolphin_sensor_bar_position" to "0",
+            ),
+            // MEM1 at 0x80000000 and MEM2 (64 MB) at 0x90000000, as games see them cached;
+            // 0xC0000000 and 0xD0000000 are the same RAM uncached.
+            pointerMask = 0x93FFFFFFL,
+            assets = "dolphin.zip" to "dolphin-emu",
+            extensions = setOf("rvz", "iso", "wbfs", "wia", "gcz", "ciso"),
+            bigEndian = true,
+            // The GameCube's User folder: Wii saves go to its Wii/title.
+            savesFolder = "Genkan/saves/dolphin",
+            portDevices = listOf(RETRO_DEVICE_JOYPAD),
+            sticksOnly = true,
+            tuning = "dolphin",
+            keepPointer = true,
         ),
     )
 

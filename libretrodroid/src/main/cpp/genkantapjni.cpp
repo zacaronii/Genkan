@@ -105,6 +105,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSplitScreen
     GenkanTap::getInstance().setSplitScreens(split == JNI_TRUE);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setKeepPointer(JNIEnv *, jclass, jboolean keep) {
+    GenkanTap::getInstance().setKeepPointer(keep == JNI_TRUE);
+}
+
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_GenkanTap_packedFrameSize(JNIEnv *, jclass) {
     auto [width, height] = GenkanTap::getInstance().frameSize();
     return (static_cast<jlong>(width) << 32) | height;
