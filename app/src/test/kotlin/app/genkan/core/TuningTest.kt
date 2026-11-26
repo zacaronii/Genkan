@@ -22,9 +22,9 @@ class TuningTest {
     }
 
     @Test
-    fun `only cores that need one have a ladder, and none applies as the game runs yet`() {
+    fun `only cores that need one have a ladder, and only Dolphin's EFB steps apply as the game runs`() {
         assertNull(TuningLadders.of("mgba"))
-        assertFalse(dolphin.steps.any { it.live })
+        assertEquals(listOf("efb-2x", "default"), dolphin.steps.filter { it.live }.map { it.id })
         assertFalse(TuningLadders.of("ppsspp")!!.steps.any { it.live })
     }
 

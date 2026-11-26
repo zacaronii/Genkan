@@ -48,13 +48,13 @@ data class ResolvedTuning(val step: TuningStep, val source: Source) {
 
 object TuningLadders {
     // Dolphin's libretro code re-reads these as the game runs (DolphinLibretro/Main.cpp's IsUpdated
-    // checks), but on the Thor 2x EFB set that way left the picture unchanged, while set at the
-    // start it took: its live path writes g_Config directly, which the config system's own refresh
-    // undoes. They wait for a restart until that's fixed in the core.
+    // checks). Its EFB scale changes then with Genkan's patch (patches/dolphin), measured on the
+    // Thor both ways. VI skip acts only once a game falls behind, which no round has shown yet: its
+    // steps wait for a restart.
     private val dolphin = TuningLadder(
         steps = listOf(
-            TuningStep("efb-2x", mapOf("dolphin_efb_scale" to "2"), live = false),
-            TuningStep("default", emptyMap(), live = false),
+            TuningStep("efb-2x", mapOf("dolphin_efb_scale" to "2")),
+            TuningStep("default", emptyMap()),
             TuningStep("vi-skip", mapOf("dolphin_vi_skip" to "enabled"), risky = true, live = false),
             TuningStep("vi-skip-cpu-80", mapOf("dolphin_vi_skip" to "enabled", "dolphin_cpu_clock_rate" to "0.80"), risky = true, live = false),
         ),
@@ -62,8 +62,8 @@ object TuningLadders {
         defaults = mapOf("dolphin_efb_scale" to "1", "dolphin_vi_skip" to "disabled", "dolphin_cpu_clock_rate" to "1.00"),
     )
 
-    // PPSSPP is prebuilt: whether it changes resolution as the game runs isn't known yet, so its
-    // steps wait for a restart until a round on the device shows they apply live.
+    // PPSSPP's core aborts when its resolution changes as the game runs (measured on the Thor):
+    // its steps wait for a restart.
     private val ppsspp = TuningLadder(
         steps = listOf(
             TuningStep("1920x1088", mapOf("ppsspp_internal_resolution" to "1920x1088"), live = false),
