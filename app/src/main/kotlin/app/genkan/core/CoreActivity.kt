@@ -108,6 +108,9 @@ class CoreActivity : ComponentActivity() {
     private var overlay: OverlayView? = null
     /** The core's ladder step the game runs at (see [TuningLadders]); null for a core with no ladder. */
     @Volatile private var tuningStep: String? = null
+    /** Learns the game's step as it's played (null: off, or no ladder); its kept steps go to [tuningStore]. */
+    @Volatile private var learner: TuningLearner? = null
+    private val tuningStore by lazy { TuningStore(File(filesDir, "tuning")) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,6 +127,7 @@ class CoreActivity : ComponentActivity() {
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
         val ladder = TuningLadders.of(def.id)
         tuningStep = ladder?.let { it.step(intent.getStringExtra(EXTRA_TUNING_STEP))?.id ?: it.defaultId }
+        if (ladder != null && intent.getBooleanExtra(EXTRA_LEARN, false)) learner = TuningLearner(ladder, tuningStep!!)
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
         states = SaveStates(SaveStates.dirFor(File(filesDir, SaveStates.FOLDER), def.id, GameFile.keyFor(romId, rom)), def.id)
@@ -438,15 +442,10 @@ class CoreActivity : ComponentActivity() {
         override fun pictureBounds(): FloatArray? = GenkanTap.pictureBounds()
 
         override fun setTuningStep(step: String): Boolean {
-            val ladder = TuningLadders.of(core.id) ?: return false
-            val next = ladder.step(step) ?: return false
-            if (next.id == tuningStep) return true
-            // Leaving a step the core reads only at start needs a start too.
-            if (!next.live || ladder.step(tuningStep)?.live == false || !::retroView.isInitialized) return false
-            retroView.updateVariables(*ladder.assignment(next.id).map { (key, value) -> Variable(key, value) }.toTypedArray())
-            Log.i(TAG, "Tuning step ${tuningStep} -> ${next.id}, as the game runs")
-            tuningStep = next.id
-            return true
+            val moved = moveToStep(step)
+            // Set from outside (the catalog's step, a debug build): learning starts again from it.
+            if (moved && learner != null) TuningLadders.of(core.id)?.let { learner = TuningLearner(it, tuningStep!!) }
+            return moved
         }
 
         override fun unloadScript() {
@@ -898,6 +897,27 @@ class CoreActivity : ComponentActivity() {
         Log.i(STATS_TAG, "Emulation thread ${Process.myTid()} priority ${given ?: "unchanged"}")
     }
 
+    /** Moves the game to ladder step [step] as it runs; false when the core can only take it at start. */
+    @Synchronized
+    private fun moveToStep(step: String): Boolean {
+        val ladder = TuningLadders.of(core.id) ?: return false
+        val next = ladder.step(step) ?: return false
+        if (next.id == tuningStep) return true
+        // Leaving a step the core reads only at start needs a start too.
+        if (!next.live || ladder.step(tuningStep)?.live == false || !::retroView.isInitialized) return false
+        retroView.updateVariables(*ladder.assignment(next.id).map { (key, value) -> Variable(key, value) }.toTypedArray())
+        Log.i(TAG, "Tuning step ${tuningStep} -> ${next.id}, as the game runs")
+        tuningStep = next.id
+        return true
+    }
+
+    /** A learner's [decision]: the step now, and a kept one remembered for the game's next start. */
+    private fun learned(decision: TuningLearner.Decision) {
+        if (!moveToStep(decision.step)) return
+        Log.i(TAG, "Learning: ${decision.why}" + if (decision.keep) ", kept" else "")
+        if (decision.keep && romId > 0) tuningStore.setOverride(romId, decision.step, "learned: ${decision.why}")
+    }
+
     /** Asks the display to keep to the game's own rate (60 Hz, not the screen's 120), so frames are paced evenly. */
     private fun keepFrameRate() {
         val rate = contentRate.takeIf { it > 0f } ?: return
@@ -945,6 +965,10 @@ class CoreActivity : ComponentActivity() {
                 loading = false
                 gameState(loading = false)
             }
+            learner?.let { l ->
+                if (row == null) l.paused()
+                else l.second(TuningLearner.Second(row.speed, row.busiest?.share, row.gpuBusyPercent, DeviceHeat.hottestCpuC()))?.let(::learned)
+            }
             if (row != null && app.genkan.BuildConfig.DEBUG) {
                 Log.i(STATS_TAG, "${row.line()} | cpu ${DeviceHeat.fastestMhz() ?: "?"} MHz, ${DeviceHeat.hottestCpuC() ?: "?"} °C" + if (stats.behind) " | behind" else "")
             }
@@ -959,6 +983,8 @@ class CoreActivity : ComponentActivity() {
         private const val DEFAULT_RATE = 60f
         const val EXTRA_ROM = "rom"
         const val EXTRA_ROM_ID = "rom_id"
+        /** Whether the player learns the game's step as it's played ([TuningLearner]). */
+        const val EXTRA_LEARN = "learn"
         /** The core's ladder step to start at (see [GameTuning]); absent, its default. */
         const val EXTRA_TUNING_STEP = "tuning_step"
         const val EXTRA_PLATFORM = "platform"

@@ -184,6 +184,10 @@ object GameDetailsFormat {
     fun lookLabel(look: GameLook): String =
         look.own?.let { "Look: ${it.label}" } ?: "Look: console's (${look.console.label})"
 
+    /** The game's own step, on the button that forgets it. */
+    fun tuningLabel(note: GameTuningNote): String =
+        "Reset speed (${if (note.learned) "learned" else "set to"} ${note.label})"
+
     private fun shortTime(at: Long): String = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
 
     private fun sizeSuffix(bytes: Long): String = when {

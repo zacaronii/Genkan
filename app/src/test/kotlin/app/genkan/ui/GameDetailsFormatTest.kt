@@ -215,6 +215,8 @@ class GameDetailsFormatTest {
         assertEquals("Look: console's (Default)", GameDetailsFormat.lookLabel(GameLook(null, ScreenLook.DEFAULT)))
         assertEquals("Look: console's (Sharp)", GameDetailsFormat.lookLabel(GameLook(null, ScreenLook.SHARP)))
         assertEquals("Look: CRT", GameDetailsFormat.lookLabel(GameLook(ScreenLook.CRT, ScreenLook.SHARP)))
+        assertEquals("Reset speed (learned 2×)", GameDetailsFormat.tuningLabel(GameTuningNote("2×", learned = true)))
+        assertEquals("Reset speed (set to 1×)", GameDetailsFormat.tuningLabel(GameTuningNote("1×", learned = false)))
     }
 
     private fun download(state: DownloadState, done: Long = 0, total: Long = 0, error: String? = null) = DownloadEntity(

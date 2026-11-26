@@ -61,6 +61,13 @@ class ScreenLookViewModel @Inject constructor(
         viewModelScope.launch { player.setLowLatency(platform, platform in lowLatencyOff.value) }
     }
 
+    /** Whether the player learns each game's speed step. */
+    val learning: StateFlow<Boolean> = player.learning.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun toggleLearning() {
+        viewModelScope.launch { player.setLearning(!learning.value) }
+    }
+
     /** The device's A is its right button. */
     val aOnRight: StateFlow<Boolean> = player.aOnRight.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -103,6 +110,7 @@ fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
     val picking by viewModel.picking.collectAsStateWithLifecycle()
     val lowLatencyOff by viewModel.lowLatencyOff.collectAsStateWithLifecycle()
     val aOnRight by viewModel.aOnRight.collectAsStateWithLifecycle()
+    val learning by viewModel.learning.collectAsStateWithLifecycle()
     val faceSwapped by viewModel.faceSwapped.collectAsStateWithLifecycle()
     // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
     DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
@@ -111,6 +119,7 @@ fun ScreenLookScreen(viewModel: ScreenLookViewModel) {
         lowLatencyOff = lowLatencyOff, onToggleLowLatency = viewModel::toggleLowLatency,
         aOnRight = aOnRight, onToggleAOnRight = viewModel::toggleAOnRight,
         faceSwapped = faceSwapped, onToggleFaceSwap = viewModel::toggleFaceSwap,
+        learning = learning, onToggleLearning = viewModel::toggleLearning,
     )
 }
 
@@ -134,6 +143,9 @@ fun ScreenLookContent(
     /** The consoles whose A/B and X/Y are swapped, and a press on one's row. */
     faceSwapped: Set<String> = emptySet(),
     onToggleFaceSwap: (String) -> Unit = {},
+    /** Whether the player learns each game's speed step, and a press on that row. */
+    learning: Boolean = true,
+    onToggleLearning: () -> Unit = {},
 ) {
     // The console whose list was opened last: the pad comes back to its row.
     var returnTo by remember { mutableStateOf<String?>(null) }
@@ -226,6 +238,15 @@ fun ScreenLookContent(
                 )
             }
         }
+        Text("Speed", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
+        Text(
+            "The player keeps each game at full speed: when one falls behind it tries a lighter setting, and when one " +
+                "has plenty of room it tries a sharper picture, keeping a change only if the game runs better or as well. " +
+                "What it learns is kept for the game, shown on its details with a button to reset it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+        )
+        ActionRow("Learn each game's speed: " + if (learning) "on" else "off", focused = null, onClick = onToggleLearning)
         HintRow(Hints.form())
     }
 }

@@ -59,4 +59,12 @@ class LowLatencyRowsTest {
         compose.onNodeWithText("Super Famicom: swapped").performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(listOf("snes"), swapped)
     }
+
+    @Test
+    fun `the speed row says whether learning is on, and a press switches it`() {
+        var presses = 0
+        compose.setContent { GenkanTheme { ScreenLookContent(emptyMap(), learning = true, onToggleLearning = { presses++ }) } }
+        compose.onNodeWithText("Learn each game's speed: on").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, presses)
+    }
 }
