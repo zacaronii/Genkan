@@ -27,6 +27,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <memory>
+#include <atomic>
 #include <optional>
 
 #include "log.h"
@@ -35,6 +36,7 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "audiopace.h"
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -187,6 +189,12 @@ private:
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;
+    // Genkan: holds back a core whose sound runs ahead (audiopace.h).
+    AudioPace audioPace;
+    // Genkan: the sound frames the core made since the last step (from whichever thread makes them),
+    // and how many it makes a frame (its sample rate over its fps).
+    std::atomic<size_t> stepAudioFrames{0};
+    double soundPerFrame = 0;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
 };

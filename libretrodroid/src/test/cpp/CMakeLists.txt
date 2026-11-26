@@ -28,3 +28,7 @@ target_include_directories(pointer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../.
 # The game a core names through Genkan's private call (src/main/cpp/gameid.h).
 add_executable(game_id_test game_id_test.cpp)
 target_include_directories(game_id_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+
+# When the frame loop holds a core back by its sound buffer (src/main/cpp/audiopace.h).
+add_executable(audio_pace_test audio_pace_test.cpp)
+target_include_directories(audio_pace_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)

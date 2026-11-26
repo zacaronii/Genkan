@@ -204,8 +204,9 @@ class CoreActivity : ComponentActivity() {
             sticksOnly = def.sticksOnly
             saveRAMState = saveFile.takeIf { it.isFile }?.readBytes()
             shader = look.shader(::readAsset)
-            // Per console (Settings > Playing): low latency unless it was switched off there.
-            preferLowLatencyAudio = intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
+            // Per console (Settings > Playing): low latency unless it was switched off there, or the
+            // core's sound comes in lumps too big for it (CoreDef.lowLatencySound).
+            preferLowLatencyAudio = def.lowLatencySound && intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
             rumbleEventsEnabled = false
         }
         saver = SramSaver(saveFile, loaded = ::gameLoaded, read = { retroView.serializeSRAM(useEmulationThread = false) }, last = data.saveRAMState)
@@ -988,6 +989,7 @@ class CoreActivity : ComponentActivity() {
                     runs = v[0], runNanos = v[1], longestNanos = v[2], p95Nanos = v[3], steps = v[4], contentFpsMilli = v[5],
                     elapsedNanos = now - last, scriptNanos = scriptNanos.getAndSet(0), ringNanos = ringNanos.getAndSet(0),
                     busiest = busy.firstOrNull(), gpuBusyPercent = DeviceHeat.gpuBusyPercent(), gpuMhz = DeviceHeat.gpuMhz(),
+                    paced = v[6], audioFrames = v[7], sampleRateMilli = v[8], dryReads = v[9],
                 ),
             )
             last = now

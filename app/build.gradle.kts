@@ -643,6 +643,18 @@ val memoryMapTest = tasks.register<NativeHostTest>("memoryMapTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/** When the frame loop holds a core back by how far its sound is ahead of the frames asked. */
+val audioPaceTest = tasks.register<NativeHostTest>("audioPaceTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/audiopace.h"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    target.set("audio_pace_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("audio-pace-test"))
+    passed.set(layout.buildDirectory.file("audio-pace-test/passed"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 /** Where a touch leaves a core's pointer: off the screen with the finger, or where it was (a Wii's). */
 val pointerTest = tasks.register<NativeHostTest>("pointerTest") {
     testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
@@ -693,7 +705,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, audioPaceTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->

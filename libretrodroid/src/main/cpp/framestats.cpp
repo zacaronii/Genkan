@@ -20,6 +20,21 @@ void FrameStats::setContentFps(double fps) {
     contentFpsMilli = std::llround(fps * 1000.0);
 }
 
+void FrameStats::setSampleRate(double rate) {
+    std::lock_guard<std::mutex> guard(lock);
+    sampleRateMilli = std::llround(rate * 1000.0);
+}
+
+void FrameStats::recordAudio(int64_t frames) {
+    std::lock_guard<std::mutex> guard(lock);
+    audioFrames += frames;
+}
+
+void FrameStats::recordPaced() {
+    std::lock_guard<std::mutex> guard(lock);
+    paced++;
+}
+
 void FrameStats::recordRun(int64_t nanos) {
     std::lock_guard<std::mutex> guard(lock);
     stepNanos += nanos;
@@ -38,12 +53,20 @@ std::vector<int64_t> FrameStats::take() {
     std::vector<int64_t> period;
     int64_t taken;
     int64_t fps;
+    int64_t held;
+    int64_t sound;
+    int64_t soundRate;
     {
         std::lock_guard<std::mutex> guard(lock);
         period.swap(runs);
         taken = steps;
         steps = 0;
         fps = contentFpsMilli;
+        held = paced;
+        paced = 0;
+        sound = audioFrames;
+        audioFrames = 0;
+        soundRate = sampleRateMilli;
     }
     int64_t total = std::accumulate(period.begin(), period.end(), int64_t{0});
     int64_t longest = period.empty() ? 0 : *std::max_element(period.begin(), period.end());
@@ -53,7 +76,8 @@ std::vector<int64_t> FrameStats::take() {
         std::nth_element(period.begin(), period.begin() + at, period.end());
         p95 = period[at];
     }
-    return {static_cast<int64_t>(period.size()), total, longest, p95, taken, fps};
+    int64_t dryReads = dry.exchange(0, std::memory_order_relaxed);
+    return {static_cast<int64_t>(period.size()), total, longest, p95, taken, fps, held, sound, soundRate, dryReads};
 }
 
 }
