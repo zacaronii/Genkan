@@ -14,9 +14,6 @@ object PlayerMessages {
         else -> "$core stopped with an error"
     }
 
-    /** Shown when a game starts while the media volume can't be heard. */
-    const val MEDIA_VOLUME_OFF = "Media volume is off"
-
     /** Shown when the game can't be heard: its sound stream wouldn't open, or stopped. */
     fun noSound(problem: String): String = "No sound: $problem"
 
@@ -25,9 +22,6 @@ object PlayerMessages {
      * ([label], the step's own): cooler, but not always as fast, which it says.
      */
     fun runningWarm(label: String): String = "Running warm: next start uses $label, cooler but it may run slower"
-
-    /** Whether the media volume is off: at zero, or muted. */
-    fun volumeOff(volume: Int, muted: Boolean): Boolean = volume == 0 || muted
 
     /** An output device as the log names it: its type, for telling speaker, Bluetooth and wired apart. */
     fun outputType(type: Int): String = when (type) {
