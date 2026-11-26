@@ -112,7 +112,8 @@ import javax.inject.Inject
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
  *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform saturn --es core beetle_saturn
- * (plays the console's games with that one of its debug-only cores until the app restarts; no core: the first listed)
+ * (plays the console's games with that one of its debug-only cores until the app restarts; no core: the first listed.
+ *  The PS2's LRPS2 plays only when chosen so: --es platform ps2 --es core lrps2; else ARMSX2 does)
  *   adb shell am broadcast -a app.genkan.debug.DOWNLOAD -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID
  * (downloads one game from the library, as choosing it in the grid does)
  *   adb shell am broadcast -a app.genkan.debug.LAUNCH -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID

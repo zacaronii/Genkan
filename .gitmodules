@@ -28,3 +28,8 @@
 	url = https://github.com/flyinghead/flycast
 	shallow = true
 	update = none
+[submodule "third_party/lrps2"]
+	path = third_party/lrps2
+	url = https://github.com/libretro/parallel-ps2
+	shallow = true
+	update = none

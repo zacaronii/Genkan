@@ -201,6 +201,21 @@ License: GPL-2.0-or-later (its source files' headers; LICENSE at that commit
   commit.
 
 --------------------------------------------------------------------------
+LRPS2, libretro's PCSX2 (GPL-3.0), the PS2 core, in debug builds only
+https://github.com/libretro/parallel-ps2
+Pinned commit: 4d2c5d0904c339fd18252574e010fbf38d1b1929
+License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
+
+  A submodule at third_party/lrps2, which a normal checkout skips
+  (update = none). The buildLrps2 task in app/build.gradle.kts fetches it,
+  applies Genkan's patch in patches/lrps2 (no initial-exec TLS on Android,
+  which can't load the core otherwise; see its README) to a copy, builds it for arm64-v8a with the NDK's CMake toolchain as a libretro core
+  with the OpenGL renderer (-DLIBRETRO=ON -DUSE_VULKAN=OFF, android-33,
+  c++_static, stripped) and bundles it, in debug builds only, as
+  libpcsx2_libretro_android.so. It isn't committed; the source it is built
+  from is the submodule at that commit.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

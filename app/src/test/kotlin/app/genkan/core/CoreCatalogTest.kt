@@ -99,8 +99,8 @@ class CoreCatalogTest {
         } finally {
             CoreCatalog.debugChoice = emptyMap()
         }
-        // Every other console's core is in releases too.
-        CoreCatalog.cores.filter { "saturn" !in it.platforms }.forEach { assertFalse(it.id, it.debugOnly) }
+        // Every other console's core is in releases too, but for the PS2's.
+        CoreCatalog.cores.filter { "saturn" !in it.platforms && "ps2" !in it.platforms }.forEach { assertFalse(it.id, it.debugOnly) }
         assertEquals("mgba", CoreCatalog.forPlatform("gba", debug = false)!!.id)
     }
 
@@ -133,5 +133,38 @@ class CoreCatalogTest {
         assertEquals(0x0C123456L, 0x8C123456L and dc.pointerMask)
         assertEquals(0x0C123456L, 0xAC123456L and dc.pointerMask)
         assertNotNull(TuningLadders.of(dc.tuning))
+    }
+
+    @Test
+    fun `the PS2 stays on ARMSX2 unless a debug build chooses LRPS2`() {
+        try {
+            // Not chosen: no built-in core, so the launcher keeps ARMSX2, in a debug build too.
+            assertNull(CoreCatalog.forPlatform("ps2", debug = true))
+            assertFalse("ps2" in CoreCatalog.platforms)
+            CoreCatalog.debugChoice = mapOf("ps2" to "lrps2")
+            assertEquals("lrps2", CoreCatalog.forPlatform("ps2", debug = true)!!.id)
+            assertNull(CoreCatalog.forPlatform("ps2", debug = false))
+        } finally {
+            CoreCatalog.debugChoice = emptyMap()
+        }
+        // Opting in is the PS2's alone: the Saturn's candidates play without a choice.
+        CoreCatalog.cores.filter { it.optIn }.forEach { assertEquals(setOf("ps2"), it.platforms) }
+    }
+
+    @Test
+    fun `LRPS2 boots with RomM's BIOS in its own folder, draws with the frontend's GL ES and reads the EE's 32 MB`() {
+        val ps2 = CoreCatalog.byId("lrps2")!!
+        assertEquals("libpcsx2_libretro_android.so", ps2.library)
+        assertTrue(ps2.debugOnly)
+        assertEquals(mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"), ps2.firmware)
+        assertEquals("ps2-0230a-20080220.bin", ps2.variables["pcsx2_bios"])
+        assertEquals("Auto", ps2.variables["pcsx2_renderer"])
+        listOf("game.chd", "game.iso", "game.cso", "games.m3u").forEach { assertTrue(it, ps2.takes(it)) }
+        assertFalse(ps2.takes("game.zip"))
+        assertEquals(0L, ps2.ramBase)
+        assertEquals(0x00123450L, 0x20123450L and ps2.pointerMask)
+        assertEquals(0x00123450L, 0x30123450L and ps2.pointerMask)
+        // The pad has stick clicks of its own.
+        assertFalse(BottomCycle.takesStickClicks("ps2"))
     }
 }

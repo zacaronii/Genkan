@@ -411,9 +411,18 @@ abstract class BuildCmakeCore : DefaultTask() {
         logger.lifecycle("Fetching $path at ${commit.get().take(7)}")
         git(root, "submodule", "update", "--init", "--checkout", "--depth", "1", "--", path)
         val wanted = externals.get().ifEmpty {
-            git(source, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$").lines()
-                .map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
+            // git config exits 1 when nothing matches: no .gitmodules, or an empty one (LRPS2's).
+            val listed = ByteArrayOutputStream().also { out ->
+                exec.exec {
+                    commandLine("git", "-C", source.path, "config", "-f", ".gitmodules", "--get-regexp", "\\.path$")
+                    standardOutput = out
+                    isIgnoreExitValue = true
+                }
+            }.toString()
+            listed.lines().map { it.substringAfter(' ') }.filter { it.isNotBlank() && it !in skipExternals.get() }
         }
+        // A source with no submodules of its own has nothing more to fetch.
+        if (wanted.isEmpty()) return
         git(source, *(listOf("submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8", "--") + wanted).toTypedArray())
     }
 
@@ -484,6 +493,31 @@ val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
     cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
     libsDir.set(layout.buildDirectory.dir("generated/flycast/libs"))
     assetsDir.set(layout.buildDirectory.dir("generated/flycast/assets"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+/**
+ * LRPS2 (libretro/parallel-ps2, GPL-3.0), libretro's PCSX2 with native ARM64 recompilers for the EE
+ * and IOP, built from its repository at this commit with the OpenGL ES renderer (libretrodroid gives
+ * cores no Vulkan) and Genkan's patch so Android can load it. In debug builds only, until a round
+ * shows it at full speed. See NOTICE.
+ */
+val lrps2Commit = "4d2c5d0904c339fd18252574e010fbf38d1b1929"
+
+val buildLrps2 = tasks.register<BuildCmakeCore>("buildLrps2") {
+    commit.set(lrps2Commit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/lrps2"))
+    // Android can't load it unpatched (see patches/lrps2/README.md).
+    patches.from(rootProject.fileTree("patches/lrps2") { include("*.patch") })
+    libraryName.set("libpcsx2_libretro_android.so")
+    abi.set("arm64-v8a")
+    cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DUSE_VULKAN=OFF", "-DANDROID_PLATFORM=android-33"))
+    target.set("pcsx2_libretro")
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    libsDir.set(layout.buildDirectory.dir("generated/lrps2/libs"))
+    assetsDir.set(layout.buildDirectory.dir("generated/lrps2/assets"))
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
@@ -670,10 +704,11 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMeikiModels, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(downloadCores, DownloadPinnedFiles::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
-        // The Saturn's candidates, in debug builds only (CoreDef.debugOnly).
+        // The Saturn's candidates and LRPS2, in debug builds only (CoreDef.debugOnly).
         if (variant.buildType == "debug") {
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildYabaSanshiro, BuildLibretroCore::outputDir)
             variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
+            variant.sources.jniLibs?.addGeneratedSourceDirectory(buildLrps2, BuildCmakeCore::libsDir)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)

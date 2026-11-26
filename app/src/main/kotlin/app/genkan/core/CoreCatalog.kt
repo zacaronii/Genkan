@@ -61,6 +61,12 @@ data class CoreDef(
      * console until a round on the device picks one (see [CoreCatalog.debugChoice]).
      */
     val debugOnly: Boolean = false,
+    /**
+     * A debug-only core for a console that already plays elsewhere (the PS2 in ARMSX2): it plays
+     * only once the debug CORE broadcast chooses it, so a debug build otherwise keeps the console
+     * where it was.
+     */
+    val optIn: Boolean = false,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -176,6 +182,27 @@ object CoreCatalog {
             extensions = setOf("chd", "cdi", "gdi", "cue", "m3u"),
         ),
         CoreDef(
+            // libretro's PCSX2 with native ARM64 recompilers, built from source; in debug builds
+            // only, and only when chosen, until a round on the device shows it at full speed. PS2
+            // games otherwise go to ARMSX2.
+            id = "lrps2", displayName = "LRPS2", library = "libpcsx2_libretro_android.so",
+            platforms = setOf("ps2"),
+            variables = mapOf(
+                // The frontend's preferred context: libretrodroid answers OpenGL ES 3, for which the
+                // core's GL renderer asks 3.1. ("OpenGL" asks for desktop GL 3.3 and draws nothing.)
+                "pcsx2_renderer" to "Auto",
+                "pcsx2_bios" to "ps2-0230a-20080220.bin",
+            ),
+            // RomM's PS2 BIOS, in the folder the core looks in.
+            firmware = mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"),
+            // The core gives the EE's 32 MB without a map, from address 0; games also point at it
+            // through the uncached views at 0x20000000 and 0x30000000.
+            pointerMask = 0x01FFFFFFL,
+            extensions = setOf("iso", "chd", "cso", "zso", "ciso", "cue", "elf", "m3u"),
+            debugOnly = true,
+            optIn = true,
+        ),
+        CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
             platforms = setOf("ngc"),
             // Measured on the Thor: a steady 60 fps at the native resolution with the GL renderer
@@ -235,11 +262,11 @@ object CoreCatalog {
     /** The core for RomM's platform [platformSlug]; [debug]: whether debug-only cores count (a debug build). */
     fun forPlatform(platformSlug: String, debug: Boolean = BuildConfig.DEBUG): CoreDef? {
         val candidates = cores.filter { platformSlug in it.platforms && (debug || !it.debugOnly) }
-        return candidates.firstOrNull { it.id == debugChoice[platformSlug] } ?: candidates.firstOrNull()
+        return candidates.firstOrNull { it.id == debugChoice[platformSlug] } ?: candidates.firstOrNull { !it.optIn }
     }
 
     /** A core by its id; null for none. */
     fun byId(id: String?): CoreDef? = cores.firstOrNull { it.id == id }
 
-    val platforms: Set<String> get() = cores.filter { BuildConfig.DEBUG || !it.debugOnly }.flatMap { it.platforms }.toSet()
+    val platforms: Set<String> get() = cores.filter { (BuildConfig.DEBUG || !it.debugOnly) && !it.optIn }.flatMap { it.platforms }.toSet()
 }

@@ -1,0 +1,17 @@
+diff --git a/common/Pcsx2Defs.h b/common/Pcsx2Defs.h
+index c53e35a..2db2008 100644
+--- a/common/Pcsx2Defs.h
++++ b/common/Pcsx2Defs.h
+@@ -110,8 +110,10 @@
+ /* -fPIC default). Used for the emitter write cursors, which are touched */
+ /* multiple times per emitted instruction during recompilation bursts. Safe */
+ /* for a dlopen'd core: glibc reserves static-TLS surplus for exactly this. */
+-/* No-op on MSVC, whose TLS never goes through a resolver call. */
+-#if defined(_MSC_VER)
++/* No-op on MSVC, whose TLS never goes through a resolver call. Also on */
++/* Android: bionic refuses to dlopen a library with initial-exec TLS (it */
++/* keeps no static-TLS surplus), so the core keeps the default model there. */
++#if defined(_MSC_VER) || defined(__ANDROID__)
+ 	#define PCSX2_TLS_INITIAL_EXEC
+ #else
+ 	#define PCSX2_TLS_INITIAL_EXEC __attribute__((tls_model("initial-exec")))
