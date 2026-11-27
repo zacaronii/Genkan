@@ -91,6 +91,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             // A PC Engine CD's 256 KB from 0xD0000: the Super System Card's RAM, then the CD's own from
             // 0x100000, where a CD game keeps what it loads (Yomikata's pce-cd, joined).
             "turbografx-cd" -> MainRam(0xD0000L until 0x110000L, 0xD0000L)
+            // A HuCard game's 8 KB, the console's own RAM at 0x1F0000 (bank 0xF8): all a HuCard has.
+            "tg16" -> MainRam(0x1F0000L until 0x1F2000L, 0x1F0000L)
             else -> null
         }
     }
