@@ -137,6 +137,11 @@ public class LibretroDroid {
     public static native int currentDisk();
     public static native void changeDisk(int index);
 
+    // Genkan: a swap in two steps (libretrodroid.h).
+    public static native boolean ejectDisk();
+
+    public static native boolean insertDisk(int index);
+
     public static native void onMotionEvent(int port, int motionSource, float xAxis, float yAxis);
     public static native void onTouchEvent(float xAxis, float yAxis);
 

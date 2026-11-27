@@ -335,6 +335,67 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    private val _disks = MutableStateFlow<app.genkan.core.DiskSet?>(null)
+    /** The built-in player's game's disks, while it has more than one: the bar's disk chip. */
+    val disks: StateFlow<app.genkan.core.DiskSet?> = _disks.asStateFlow()
+
+    private val _swap = MutableStateFlow<DiskSwapState?>(null)
+    /** A disk swap being shown on the bottom screen. */
+    val swap: StateFlow<DiskSwapState?> = _swap.asStateFlow()
+
+    init {
+        // Asked again now and then: a game's set can change under it (a disc asked for in the core's own menu).
+        viewModelScope.launch {
+            player.game.collectLatest { game ->
+                if (game == null) {
+                    _disks.value = null
+                    return@collectLatest
+                }
+                while (true) {
+                    if (_swap.value == null) _disks.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { player.disks() }
+                    kotlinx.coroutines.delay(DISKS_EVERY_MS)
+                }
+            }
+        }
+    }
+
+    /**
+     * Takes the disk in out and puts the next in (a disk's other side, then the next disk; the next
+     * disc of a set), shown with the game's own media while the drive is empty.
+     */
+    fun swapDisk() {
+        val set = _disks.value ?: return
+        if (_swap.value != null) return
+        val romId = player.game.value?.romId ?: return
+        viewModelScope.launch {
+            val game = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { library.game(romId) }
+            val to = set.next
+            val state = DiskSwapState(
+                key = System.nanoTime(),
+                title = game?.name ?: "",
+                kind = app.genkan.library.MediaKind.forSlug(game?.platformSlug),
+                spec = app.genkan.library.GameCase.specFor(game?.platformSlug),
+                physical = app.genkan.art.RomMArt.of(game?.physicalPath),
+                logo = app.genkan.art.RomMArt.of(game?.logoPath),
+                from = set.label(set.current),
+                to = set.label(to),
+            )
+            val swapped = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                player.swapDisk(to, SwapBeats.emptyMs(state.durationMs))
+            }
+            if (!swapped) {
+                _notice.value = "This game's disk couldn't be changed"
+                kotlinx.coroutines.delay(NOTICE_MS)
+                _notice.value = null
+                return@launch
+            }
+            _swap.value = state
+            _disks.value = set.copy(current = to)
+            kotlinx.coroutines.delay(state.durationMs + SWAP_LINGER_MS)
+            _swap.value = null
+        }
+    }
+
     /** The shown entries' marks, again: a mark changed (here, or in settings). */
     private fun refreshMarks() {
         val result = shownResult ?: return
@@ -458,6 +519,10 @@ class ReaderViewModel @Inject constructor(
         /** Lines scanned between showing their marks, on a full backlog. */
         const val PUBLISH_EVERY = 10
         const val NOTICE_MS = 5_000L
+        /** How often the player is asked for its game's disks. */
+        private const val DISKS_EVERY_MS = 2_000L
+        /** How long the swap's last frame stays, saying which disk is in, before the reader shows again. */
+        private const val SWAP_LINGER_MS = 1_200L
         const val LEAD_MS = 2_500L
         const val MAX_CLIP_MS = 20_000L
     }

@@ -88,6 +88,21 @@ class BuiltInPlayer @Inject constructor() {
         false
     }
 
+    /** The running game's disks, when it has more than one; null otherwise (DiskSet). */
+    fun disks(): DiskSet? = try {
+        val game = _game.value ?: return null
+        DiskSet.of(game.session.disks(), sides = game.core.id == DiskSet.SIDED_CORE)
+    } catch (e: RemoteException) {
+        null
+    }
+
+    /** Swaps the running game to disk [index], the drive left empty for [emptyMs]; false when it can't. */
+    fun swapDisk(index: Int, emptyMs: Int): Boolean = try {
+        _game.value?.session?.swapDisk(index, emptyMs) ?: false
+    } catch (e: RemoteException) {
+        false
+    }
+
     /** The script feature level the player's runtime gives; 0 without a game. */
     fun scriptLevel(): Int = try {
         _game.value?.session?.scriptLevel() ?: 0

@@ -330,6 +330,32 @@ class ScreenshotTest {
         }
     }
 
+    private fun swapState(kind: app.genkan.library.MediaKind, slug: String, from: String, to: String) = DiskSwapState(
+        key = 1, title = "A Game", kind = kind, spec = app.genkan.library.GameCase.specFor(slug),
+        physical = null, logo = null, from = from, to = to,
+    )
+
+    /** A Disk System game's disk lifted out of the drive, side A going out (made-up title, no server art). */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun diskSwapOut() = shoot("disk_swap_out", BOTTOM_PIXELS) {
+        DiskSwapOverlay(swapState(app.genkan.library.MediaKind.DISK_CARD, "fds", "Disk 1, side A", "Disk 1, side B"), staticProgress = 0.22f)
+    }
+
+    /** The other side sliding in from the right. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun diskSwapIn() = shoot("disk_swap_in", BOTTOM_PIXELS) {
+        DiskSwapOverlay(swapState(app.genkan.library.MediaKind.DISK_CARD, "fds", "Disk 1, side A", "Disk 1, side B"), staticProgress = 0.5f)
+    }
+
+    /** A set's next disc in and spinning, and which one it is. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun discSwapDone() = shoot("disc_swap_done", BOTTOM_PIXELS) {
+        DiskSwapOverlay(swapState(app.genkan.library.MediaKind.DISC, "dc", "Disc 1 of 3", "Disc 2 of 3"), staticProgress = 1f)
+    }
+
     /** A choice a layout reads (made-up answers), the cursor on the second, under the backlog. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)

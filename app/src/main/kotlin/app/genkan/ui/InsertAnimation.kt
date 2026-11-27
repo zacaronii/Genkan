@@ -343,3 +343,140 @@ private fun DrawScope.drawLed(at: Offset, on: Float, density: Float) {
 }
 
 private fun lerp(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/**
+ * A disk swap shown on the bottom screen: [from] is the disk or side that comes out, [to] the one
+ * that goes in, drawn with the game's own media as the insert animation draws it ([physical], [logo]).
+ * [key] tells one swap from the next.
+ */
+@Immutable
+data class DiskSwapState(
+    val key: Long,
+    val title: String,
+    val kind: MediaKind,
+    val spec: CaseSpec,
+    val physical: Any?,
+    val logo: Any?,
+    val from: String,
+    val to: String,
+    val durationMs: Long = SwapBeats.DURATION_MS,
+)
+
+/**
+ * The beats of a swap, as shares of its length: the insert animation run backwards takes the
+ * media out of the machine and it slides away; the next slides in and the insert animation runs
+ * forwards from where the media hovers. The drive is empty from the start until [IN_SEAT] (the core
+ * is told the next disk then: [emptyMs]).
+ */
+internal object SwapBeats {
+    const val DURATION_MS = 2_000L
+    /** Out of the machine and hovering. */
+    const val OUT_LIFTED = 0.25f
+    /** Gone off to the side. */
+    const val OUT_GONE = 0.42f
+    /** The next one in over the machine. */
+    const val IN_OVER = 0.58f
+    /** It starts going in: the core gets it. */
+    const val IN_SEAT = 0.6f
+    /** Seated (and clicked, or spinning). */
+    const val IN_DONE = 0.85f
+
+    /** How long the drive stays empty, for a swap of [durationMs]. */
+    fun emptyMs(durationMs: Long): Int = (IN_SEAT * durationMs).toInt()
+
+    /** Where the insert animation's media and machine are at swap progress [p], 0 to 1. */
+    fun insertProgress(p: Float): Float = when {
+        p < OUT_LIFTED -> 1f - (1f - InsertBeats.LIFT_END) * InsertBeats.phase(p, 0f, OUT_LIFTED)
+        p < IN_SEAT -> InsertBeats.LIFT_END
+        else -> InsertBeats.LIFT_END + (1f - InsertBeats.LIFT_END) * InsertBeats.phase(p, IN_SEAT, IN_DONE)
+    }
+
+    /** Sideways, as a share of the screen's width: out to the left, in from the right. */
+    fun sideways(p: Float): Float = when {
+        p < OUT_LIFTED -> 0f
+        p < OUT_GONE -> -InsertBeats.eased(p, OUT_LIFTED, OUT_GONE)
+        p < IN_OVER -> 1f - InsertBeats.eased(p, OUT_GONE, IN_OVER)
+        else -> 0f
+    }
+
+    /** Whether the media drawn at [p] is the one going in. */
+    fun incoming(p: Float): Boolean = p >= OUT_GONE
+}
+
+/**
+ * The swap over the bottom screen: a machine for the game's media, the disk or disc in it lifted
+ * out and slid away, the next slid in and put in (a cartridge-like disk card clicks, a disc spins
+ * up), then which one is in now. Its progress is read only in graphics layers. [staticProgress]
+ * fixes it, for screenshots.
+ */
+@Composable
+fun DiskSwapOverlay(state: DiskSwapState, staticProgress: Float? = null) {
+    val progress = remember(state.key) { Animatable(staticProgress ?: 0f) }
+    LaunchedEffect(state.key, staticProgress) {
+        if (staticProgress != null) progress.snapTo(staticProgress)
+        else progress.animateTo(1f, tween(state.durationMs.toInt(), easing = LinearEasing))
+    }
+    val p = remember(progress) { { progress.value } }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val heightPx = with(density) { maxHeight.toPx() }
+        val widthPx = with(density) { maxWidth.toPx() }
+        val scene = remember(state.kind, state.spec) { sceneFor(state.kind, state.spec) }
+        val machineY = heightPx * 0.58f
+        val hoverY = heightPx * 0.24f
+        val seatedY = machineY + with(density) { scene.seatOffset.toPx() }
+        val clickPx = with(density) { 6.dp.toPx() }
+
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0.88f * InsertBeats.phase(p(), 0f, 0.08f) }.background(Color.Black))
+        val machine = Modifier.graphicsLayer {
+            translationY = machineY - size.height / 2f
+            alpha = InsertBeats.phase(p(), 0f, 0.08f)
+        }
+        Box(Modifier.align(Alignment.TopCenter).size(scene.bodyWidth, scene.bodyHeight).then(machine)) {
+            Canvas(Modifier.fillMaxSize()) { drawMachineBack(state.kind, scene, density.density) }
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .size(scene.media.width, scene.media.height)
+                .graphicsLayer {
+                    val now = p()
+                    val inserted = SwapBeats.insertProgress(now)
+                    val seat = InsertBeats.eased(inserted, InsertBeats.LIFT_END, InsertBeats.SEAT_END)
+                    val y = hoverY + (seatedY - hoverY) * seat
+                    translationY = y - size.height / 2f + clickPx * InsertBeats.click(inserted) * if (state.kind.isDisc()) 0f else 1f
+                    translationX = SwapBeats.sideways(now) * widthPx
+                    alpha = InsertBeats.phase(now, 0f, 0.08f)
+                    if (state.kind.isDisc()) rotationZ = InsertBeats.spin(inserted)
+                },
+        ) {
+            MediaArt(state.kind, state.physical, state.logo, state.title, Color(state.spec.color), scene.media.outline)
+        }
+        Box(Modifier.align(Alignment.TopCenter).size(scene.bodyWidth, scene.bodyHeight).then(machine)) {
+            Canvas(Modifier.fillMaxSize()) { drawMachineFront(state.kind, scene, SwapBeats.insertProgress(p()), density.density) }
+        }
+
+        // Which one is coming out, then which is in.
+        Text(
+            state.from,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color(0xFFBDBDBD),
+            maxLines = 1,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp)
+                .graphicsLayer { alpha = InsertBeats.phase(p(), 0.02f, 0.1f) * (1f - InsertBeats.phase(p(), SwapBeats.OUT_LIFTED, SwapBeats.OUT_GONE)) },
+        )
+        Text(
+            "${state.to} in",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = Color(0xFFEDEDED),
+            maxLines = 1,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp)
+                .graphicsLayer { alpha = InsertBeats.phase(p(), SwapBeats.IN_DONE, 0.95f) },
+        )
+    }
+}

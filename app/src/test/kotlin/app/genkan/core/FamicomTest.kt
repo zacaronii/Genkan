@@ -54,6 +54,10 @@ class FamicomTest {
         assertEquals("FC-5F960C81", CartridgeId.of("famicom", nes)!!.id)
         assertEquals(CartridgeId("FDS-01TST", "d760ca15", "FDS-01TST-02"), CartridgeId.of("fds", fds))
         assertEquals("FDS-01TST-02", ScriptEvents.buildId("fds", null, CartridgeId.of("fds", fds)))
+        // Its sides, for a swap: two, with or without the fwNES header.
+        assertEquals(2, FdsDisk.sides(fds))
+        assertEquals(2, FdsDisk.sides(File(folder.root, "bare.fds").apply { writeBytes(side() + side()) }))
+        assertEquals(0, FdsDisk.sides(File(folder.root, "missing.fds")))
         assertEquals("5f960c81", ScriptEvents.buildId("nes", null, CartridgeId.of("nes", nes)))
     }
 }

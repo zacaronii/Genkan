@@ -113,6 +113,20 @@ int LibretroDroid::currentDisk() {
            : 0;
 }
 
+bool LibretroDroid::ejectDisk() {
+    auto control = Environment::getInstance().getRetroDiskControlCallback();
+    return control != nullptr && control->set_eject_state(true);
+}
+
+bool LibretroDroid::insertDisk(unsigned int index) {
+    auto control = Environment::getInstance().getRetroDiskControlCallback();
+    if (control == nullptr || index >= control->get_num_images()) return false;
+    // The tray must be open to change what's in it; a core may close it itself.
+    control->set_eject_state(true);
+    if (!control->set_image_index(index)) return false;
+    return control->set_eject_state(false);
+}
+
 void LibretroDroid::changeDisk(unsigned int index) {
     if (Environment::getInstance().getRetroDiskControlCallback() == nullptr) {
         LOGE("Cannot swap disk. This platform does not support it.");
