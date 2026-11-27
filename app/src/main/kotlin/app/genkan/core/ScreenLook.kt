@@ -88,6 +88,10 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
             "nes" to SHARP,
             "famicom" to SHARP,
             "fds" to SHARP,
+            // The Mega Drive's, likewise.
+            "genesis" to SHARP,
+            "genesis-slash-megadrive" to SHARP,
+            "megadrive" to SHARP,
             "snes" to SHARP,
             "sfam" to SHARP,
             // The PC Engine's pixel art, as the Super Famicom's.
@@ -115,7 +119,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          */
         fun suiting(platform: String?): Set<ScreenLook>? = when (platform) {
             // Consoles for a television: plain, scanlines, or smoothed.
-            "nes", "famicom", "fds", "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "n64", "dc", "ps2", "ngc", "wii" ->
+            "nes", "famicom", "fds", "genesis", "genesis-slash-megadrive", "megadrive", "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "n64", "dc", "ps2", "ngc", "wii" ->
                 family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
             "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
             "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)

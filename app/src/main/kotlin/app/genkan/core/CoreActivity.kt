@@ -1070,7 +1070,7 @@ enum class BottomCycle {
 
     companion object {
         /** Consoles whose own pad has no stick clicks; a PlayStation's (DualShock) has. */
-        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc", "n64", "nes", "famicom", "fds")
+        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc", "n64", "nes", "famicom", "fds", "genesis", "genesis-slash-megadrive", "megadrive")
 
         /** Whether the stick clicks step the bottom screen for [platform], rather than going to the game. */
         fun takesStickClicks(platform: String): Boolean = platform in NO_STICK_CLICKS

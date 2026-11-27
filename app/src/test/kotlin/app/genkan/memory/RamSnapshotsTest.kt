@@ -47,6 +47,8 @@ class RamSnapshotsTest {
         assertEquals(16L * 1024 * 1024, size("dc"))
         assertEquals(0x06000000L, MainRam.of("saturn")!!.baseAddress)
         assertEquals(1L * 1024 * 1024, size("saturn"))
+        assertEquals(0xFF0000L, MainRam.of("genesis")!!.baseAddress)
+        assertEquals(64L * 1024, size("genesis"))
         assertEquals(0x80000000L, MainRam.of("n64")!!.baseAddress)
         assertEquals(8L * 1024 * 1024, size("n64"))
         // A PC Engine CD's card RAM and then the CD's, joined, under Yomikata's name for it.

@@ -185,6 +185,19 @@ object CoreCatalog {
             extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
         ),
         CoreDef(
+            // Genesis Plus GX, Lemuroid's build: Mega Drive cartridges (RomM's genesis and its other names).
+            id = "genesis_plus_gx", displayName = "Genesis Plus GX", library = "libgenesis_plus_gx_libretro_android.so",
+            platforms = setOf("genesis", "genesis-slash-megadrive", "megadrive"),
+            // No memory map: its system RAM is the 68000's 64 KB of work RAM, as 16-bit words in the
+            // host's order. Read at the console's address and in its order, as Yomikata's harness does;
+            // its addresses are 24-bit, the RAM mirrored up to 0xFFFFFF.
+            ramStretches = listOf(RamStretch(0xFF0000L, 0L, 0x10000L)),
+            ramWordSize = 2,
+            pointerMask = 0xFFFFFFL,
+            bigEndian = true,
+            extensions = setOf("md", "gen", "smd", "bin"),
+        ),
+        CoreDef(
             // FCEUmm, Lemuroid's build: Famicom cartridges, and Famicom Disk System disks, which boot
             // through the Disk System's BIOS from RomM's FDS firmware.
             id = "fceumm", displayName = "FCEUmm", library = "libfceumm_libretro_android.so",

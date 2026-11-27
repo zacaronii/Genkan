@@ -6,8 +6,9 @@ import java.io.File
  * A cartridge's image as Yomikata's harness gives a script at 0x01000000 on, for its build check
  * (docs/script-api.md there): a Game Boy's file whole, byte for byte; a Famicom's past its 16-byte
  * iNES header and the trainer it may say is there (the program, 8 KB banks, then the CHR; a file with
- * no header as it is); a Disk System disk past its fwNES header, side after side. Null for a console
- * without one, or a file too large to be one.
+ * no header as it is); a Disk System disk past its fwNES header, side after side; a Mega Drive's ROM
+ * as the console sees it (an SMD dump put back in order). Null for a console without one, or a file
+ * too large to be one.
  */
 object CartridgeImage {
 
@@ -31,10 +32,11 @@ object CartridgeImage {
             bytes
         }
         "fds" -> if (bytes.startsWith(FWNES)) bytes.copyOfRange(minOf(bytes.size, HEADER), bytes.size) else bytes
+        "genesis", "genesis-slash-megadrive", "megadrive" -> MegaDriveCartridge.unpack(bytes)
         else -> null
     }?.takeIf { it.isNotEmpty() }
 
-    private val PLATFORMS = setOf("gb", "gbc", "nes", "famicom", "fds")
+    private val PLATFORMS = setOf("gb", "gbc", "nes", "famicom", "fds", "genesis", "genesis-slash-megadrive", "megadrive")
 
     private fun ByteArray.startsWith(prefix: ByteArray) = size >= HEADER && copyOf(prefix.size).contentEquals(prefix)
 }
