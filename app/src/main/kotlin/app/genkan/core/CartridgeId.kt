@@ -8,7 +8,7 @@ import java.io.File
  * A PC Engine CD's is read so too, from its disc's boot block ([PceCdDisc]), and a HuCard's from
  * its ROM ([PceHuCard]), and a Famicom's from its PRG and CHR ([FamicomCartridge]). An N64
  * cartridge's build is its id and version instead ([N64Cartridge]), in [build], as a Disk System
- * disk's is ([FdsDisk]).
+ * disk's is ([FdsDisk]), and a Mega Drive cartridge's its serial and revision ([MegaDriveCartridge]).
  */
 data class CartridgeId(val id: String, val headerCrc32: String, val build: String? = null) {
     /** As the player's process hands it over: the id, the CRC-32 and the build when there is one, by spaces. */
@@ -34,6 +34,7 @@ data class CartridgeId(val id: String, val headerCrc32: String, val build: Strin
             "n64" -> N64Cartridge.of(file)
             "nes", "famicom" -> FamicomCartridge.of(file)
             "fds" -> FdsDisk.of(file)
+            "genesis", "genesis-slash-megadrive", "megadrive" -> MegaDriveCartridge.of(file)
             else -> null
         }
     }

@@ -117,10 +117,25 @@ class CoreCatalogTest {
         assertEquals(0x06001234L, 0x26001234L and saturn.pointerMask)
         assertEquals(0x00201234L, 0x20201234L and saturn.pointerMask)
         assertEquals(0L, saturn.ramBase)
-        // No other core but the N64's cuts its RAM up or keeps it in words.
+        // No other core but the N64's and the Mega Drive's cuts its RAM up or keeps it in words.
         val n64 = CoreCatalog.forPlatform("n64")!!
-        CoreCatalog.cores.filter { it !== saturn && it !== n64 }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && it.ramWordSize == 0) }
+        val md = CoreCatalog.forPlatform("genesis")!!
+        CoreCatalog.cores.filter { it !== saturn && it !== n64 && it !== md }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && it.ramWordSize == 0) }
         assertTrue(n64.ramStretches.isEmpty())
+    }
+
+    @Test
+    fun `a Mega Drive's work RAM reads at 0xFF0000 in its order, through 24-bit pointers`() {
+        val md = CoreCatalog.forPlatform("genesis")!!
+        assertEquals("genesis_plus_gx", md.id)
+        assertEquals(md, CoreCatalog.forPlatform("megadrive"))
+        assertEquals(md, CoreCatalog.forPlatform("genesis-slash-megadrive"))
+        // The core's system RAM is the 64 KB, as 16-bit words in the host's order.
+        assertEquals(listOf(RamStretch(0xFF0000L, 0L, 0x10000L)), md.ramStretches)
+        assertEquals(2, md.ramWordSize)
+        assertTrue(md.bigEndian)
+        assertEquals(0xFF1234L, 0xFFFF1234L and md.pointerMask)
+        listOf("game.md", "game.gen", "game.smd", "game.bin").forEach { assertTrue(it, md.takes(it)) }
     }
 
     @Test

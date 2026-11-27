@@ -84,6 +84,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             "saturn" -> MainRam(0x06000000L until 0x06100000L, 0x06000000L)
             // A Famicom's 2 KB of work RAM at 0x0000 (the same again up to 0x1FFF), a Disk System's too.
             "nes", "famicom", "fds" -> MainRam(0x0L until 0x800L, 0x0L)
+            // A Mega Drive's 64 KB of work RAM at 0xFF0000, big-endian.
+            "genesis", "genesis-slash-megadrive", "megadrive" -> MainRam(0xFF0000L until 0x1000000L, 0xFF0000L)
             // An N64's RDRAM, 8 MB at 0x80000000 (4 used without the Expansion Pak), big-endian.
             "n64" -> MainRam(0x80000000L until 0x80800000L, 0x80000000L)
             // A PC Engine CD's 256 KB from 0xD0000: the Super System Card's RAM, then the CD's own from
