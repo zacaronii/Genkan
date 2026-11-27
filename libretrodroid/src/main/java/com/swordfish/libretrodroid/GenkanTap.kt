@@ -85,6 +85,12 @@ object GenkanTap {
     @JvmStatic external fun setSystemRamStretches(stretches: LongArray, wordSize: Int)
 
     /**
+     * A cartridge's image as Yomikata's harness gives it, read at 0x01000000 on (genkantap.h), for a
+     * script's build check; null, none. Set before the game loads.
+     */
+    @JvmStatic external fun setCartridgeImage(image: ByteArray?)
+
+    /**
      * The game the core named, "serial crc" (a PS2 core's disc serial and its ELF's CRC, as PINE
      * reports them), or null until it does.
      */

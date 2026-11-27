@@ -34,7 +34,20 @@ data class SnapshotRegion(val name: String, val range: LongRange, val baseAddres
             "gb", "gbc" -> listOf(SnapshotRegion("io", 0xFF00L until 0x10000L, 0xFF00L))
             // A PC Engine CD's own 8 KB at 0x1F0000, beside the card's and the CD's RAM (Yomikata's wram).
             "turbografx-cd" -> listOf(SnapshotRegion("wram", 0x1F0000L until 0x1F2000L, 0x1F0000L))
+            // A Famicom cartridge's work RAM at 0x6000-0x7FFF, and the first 8 KB of a Disk System's 32
+            // (all fceumm gives), which fceumm maps in 1 KB pages (Yomikata's wram).
+            "nes", "famicom", "fds" -> listOf(SnapshotRegion("wram", 0x6000L until 0x8000L, 0x6000L))
             else -> emptyList()
+        }
+
+        /**
+         * Video memory a core gives out only through its memory map, at an address of its own, for a
+         * snapshot's `vram`: a Famicom's two nametables (the screen's tiles, 2 KB), which fceumm puts
+         * at 0x80002000 (Yomikata's harness takes them there).
+         */
+        fun mappedVideo(platform: String?): MainRam? = when (platform) {
+            "nes", "famicom", "fds" -> MainRam(0x80002000L until 0x80002800L, 0x80002000L)
+            else -> null
         }
 
         /** Every region's name, for a snapshot's files. */
@@ -69,6 +82,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             // A Saturn's high work RAM, 1 MB at 0x06000000, where games keep their data (the low 1 MB
             // at 0x00200000 reads too, but isn't in a snapshot), in the console's big-endian order.
             "saturn" -> MainRam(0x06000000L until 0x06100000L, 0x06000000L)
+            // A Famicom's 2 KB of work RAM at 0x0000 (the same again up to 0x1FFF), a Disk System's too.
+            "nes", "famicom", "fds" -> MainRam(0x0L until 0x800L, 0x0L)
             // An N64's RDRAM, 8 MB at 0x80000000 (4 used without the Expansion Pak), big-endian.
             "n64" -> MainRam(0x80000000L until 0x80800000L, 0x80000000L)
             // A PC Engine CD's 256 KB from 0xD0000: the Super System Card's RAM, then the CD's own from
@@ -259,7 +274,8 @@ class RamSnapshots @Inject constructor(@ApplicationContext private val context: 
         if (regions.length() > 0) meta.put("regions", regions)
         // Nothing read the screen: said so, rather than that no text was on it.
         if (text.isBlank()) meta.put(if (ocrUnavailable) "ocr_unavailable" else "no_text", true)
-        (if (moment != null) moment.vram else extras?.vram())?.let { video ->
+        // The core's video memory; where it gives none as such, what its map puts at an address of its own.
+        ((if (moment != null) moment.vram else extras?.vram()) ?: SnapshotRegion.mappedVideo(game.platform)?.let { readRam(memory, it) })?.let { video ->
             GZIPOutputStream(File(dir, "$name.vram.gz").outputStream()).use { it.write(video) }
             val format = vramFormat(game.platform!!)
             val described = JSONObject().put("bytes", video.size).put("format", format)

@@ -84,6 +84,10 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          */
         private val DEFAULTS = mapOf(
             "psx" to SHARP,
+            // The Famicom's pixel art, as the Super Famicom's.
+            "nes" to SHARP,
+            "famicom" to SHARP,
+            "fds" to SHARP,
             "snes" to SHARP,
             "sfam" to SHARP,
             // The PC Engine's pixel art, as the Super Famicom's.
@@ -111,7 +115,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          */
         fun suiting(platform: String?): Set<ScreenLook>? = when (platform) {
             // Consoles for a television: plain, scanlines, or smoothed.
-            "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "n64", "dc", "ps2", "ngc", "wii" ->
+            "nes", "famicom", "fds", "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "n64", "dc", "ps2", "ngc", "wii" ->
                 family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
             "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
             "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)

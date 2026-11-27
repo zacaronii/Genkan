@@ -91,8 +91,9 @@ class LowLatencyRowsTest {
 
     @Test
     fun `every console the built-in player runs has a row, once`() {
-        // sfam is RomM's other name for the Super Famicom, which the snes row covers.
-        val aliases = setOf("sfam")
+        // sfam is RomM's other name for the Super Famicom, which the snes row covers; famicom the
+        // Famicom's, which the nes row does.
+        val aliases = setOf("sfam", "famicom")
         assertEquals(app.genkan.core.CoreCatalog.platforms - aliases, LOOK_CONSOLES.map { it.first }.toSet())
         assertEquals(LOOK_CONSOLES.size, LOOK_CONSOLES.map { it.first }.toSet().size)
         // Each one offers looks to pick from.

@@ -56,6 +56,7 @@ void GenkanTap::clear() {
     {
         std::lock_guard<std::mutex> lock(memoryLock);
         memory.clear();
+        cartridge.clear();
         systemRamData = nullptr;
         systemRamSize = nullptr;
     }
@@ -68,8 +69,20 @@ void GenkanTap::clear() {
     ringCount = 0;
 }
 
+void GenkanTap::setCartridgeImage(std::vector<uint8_t> image) {
+    std::lock_guard<std::mutex> lock(memoryLock);
+    cartridge = std::move(image);
+}
+
 std::vector<GenkanTap::Region> GenkanTap::regions() {
     std::lock_guard<std::mutex> lock(memoryLock);
+    std::vector<Region> out = coreRegions();
+    // The cartridge's image, whole, at an address of its own past what the console has (Yomikata's).
+    if (!cartridge.empty()) out.push_back(Region { CARTRIDGE_IMAGE_AT, cartridge.size(), cartridge.data(), false });
+    return out;
+}
+
+std::vector<GenkanTap::Region> GenkanTap::coreRegions() {
     // A memory map, when the core gave one, says more than the bare system RAM.
     if (!memory.empty() || systemRamData == nullptr) return memory;
     auto *data = static_cast<uint8_t *>(systemRamData(RETRO_MEMORY_SYSTEM_RAM));

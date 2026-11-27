@@ -17,6 +17,8 @@ class ScreenLookTest {
     fun `each console starts with its own default`() {
         assertEquals(ScreenLook.SHARP, ScreenLook.defaultFor("psx"))
         assertEquals(ScreenLook.SHARP, ScreenLook.defaultFor("nds"))
+        // The Famicom's pixel art, as the Super Famicom's and the PC Engine's.
+        listOf("nes", "famicom", "fds").forEach { assertEquals(it, ScreenLook.SHARP, ScreenLook.defaultFor(it)) }
         assertEquals(ScreenLook.LCD, ScreenLook.defaultFor("gb"))
         assertEquals(ScreenLook.LCD, ScreenLook.defaultFor("gbc"))
         assertEquals(ScreenLook.LCD, ScreenLook.defaultFor("gba"))

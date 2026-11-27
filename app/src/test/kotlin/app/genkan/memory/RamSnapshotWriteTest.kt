@@ -8,6 +8,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -161,6 +162,14 @@ class RamSnapshotWriteTest {
         assertEquals(256, SnapshotRegion.of("gb").single().range.count())
         assertEquals(8 * 1024, SnapshotRegion.of("turbografx-cd").single().range.count())
         assertEquals(listOf("lwram", "io", "wram"), SnapshotRegion.NAMES)
+        // A Famicom's and a Disk System's work RAM at 0x6000 (fceumm's 1 KB pages, read a part at a
+        // time), and their nametables as video memory, where fceumm's map puts them.
+        listOf("nes", "famicom", "fds").forEach {
+            assertEquals(listOf(SnapshotRegion("wram", 0x6000L until 0x8000L, 0x6000L)), SnapshotRegion.of(it))
+            assertEquals(MainRam(0x80002000L until 0x80002800L, 0x80002000L), SnapshotRegion.mappedVideo(it))
+            assertEquals(MainRam(0x0L until 0x800L, 0x0L), MainRam.of(it))
+        }
+        assertNull(SnapshotRegion.mappedVideo("snes"))
         listOf("psx", "psp", "snes", "gba", "nds", "ngc", "wii", "dc", "tg16", "ps2").forEach { assertEquals(it, emptyList<SnapshotRegion>(), SnapshotRegion.of(it)) }
         assertTrue(snapshots.takeNow(memory, game, "SHVC-ZQ", "あいうえお", "test", extras(ByteArray(128 * 1024), ByteArray(64 * 1024)), "taken on demand"))
         val meta = snapshots.pending().single()
