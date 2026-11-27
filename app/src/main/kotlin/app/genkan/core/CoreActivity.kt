@@ -61,6 +61,9 @@ class CoreActivity : ComponentActivity() {
     private lateinit var notice: TextView
     private lateinit var root: FrameLayout
     @Volatile private var quitting = false
+    /** A Disk System game's sides, and the one in (swapFdsSide); 0 for any other game. */
+    @Volatile private var fdsSides = 0
+    @Volatile private var fdsSide = 0
     /** The game couldn't be played: its reason is on screen until the player closes. */
     @Volatile private var failed = false
     private var deviceCallback: AudioDeviceCallback? = null
@@ -181,6 +184,8 @@ class CoreActivity : ComponentActivity() {
     private fun play(def: CoreDef, rom: File, game: File) {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
         cartridge = CartridgeId.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game)
+        // A Disk System game's sides, which FCEUmm changes by its own buttons, not libretro's disk control.
+        fdsSides = if (intent.getStringExtra(EXTRA_PLATFORM) == "fds") FdsDisk.sides(game) else 0
         cartridge?.let { Log.i(TAG, "Game id from its file: ${it.id}, build ${it.build ?: it.headerCrc32}") }
         GenkanTap.setCartridgeImage(CartridgeImage.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game))
         // The process may have played a game before this one: its sound problem isn't this one's.
@@ -463,6 +468,28 @@ class CoreActivity : ComponentActivity() {
             // Dolphin plugs the new controller into its ports as the game runs.
             retroView.updateVariables(Variable(WiiController.OPTION, controller))
             Log.i(TAG, "Wii controller: $controller")
+            return true
+        }
+
+        override fun disks(): IntArray {
+            if (!gameLoaded()) return IntArray(0)
+            if (fdsSides > 1) return intArrayOf(fdsSides, fdsSide)
+            val count = retroView.getAvailableDisks()
+            return if (count > 1) intArrayOf(count, retroView.getCurrentDisk()) else IntArray(0)
+        }
+
+        override fun swapDisk(index: Int, emptyMs: Int): Boolean {
+            if (!gameLoaded()) return false
+            if (fdsSides > 1) return swapFdsSide(index, emptyMs)
+            if (index !in 0 until retroView.getAvailableDisks()) return false
+            // The drive stays open a while, as a hand takes one disk out and puts the next in: a game
+            // that waits to see it empty (a Disk System one, before the other side) sees that.
+            if (!retroView.ejectDisk()) return false
+            lifecycleScope.launch(Dispatchers.Default) {
+                delay(emptyMs.coerceIn(0, MAX_DISK_OUT_MS).toLong())
+                val inserted = retroView.insertDisk(index)
+                Log.i(TAG, "Disk ${index + 1}: ${if (inserted) "in" else "not taken by the core"}")
+            }
             return true
         }
 
@@ -810,6 +837,34 @@ class CoreActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * A Disk System game's side changed as FCEUmm has it done, by its own buttons on the first pad
+     * (libretro-fceumm's input: R takes the disk out or puts it in, L turns to the next side while
+     * it's out): out, the drive left empty for [emptyMs], turned to side [index], in. The side in is
+     * kept here, from disk 1 side A as the game starts.
+     */
+    private fun swapFdsSide(index: Int, emptyMs: Int): Boolean {
+        if (index !in 0 until fdsSides) return false
+        val turns = Math.floorMod(index - fdsSide, fdsSides)
+        fdsSide = index
+        lifecycleScope.launch {
+            pressForGame(KeyEvent.KEYCODE_BUTTON_R1)
+            delay(emptyMs.coerceIn(0, MAX_DISK_OUT_MS).toLong())
+            repeat(turns) { pressForGame(KeyEvent.KEYCODE_BUTTON_L1) }
+            pressForGame(KeyEvent.KEYCODE_BUTTON_R1)
+            Log.i(TAG, "Disk System: side ${index + 1} of $fdsSides in")
+        }
+        return true
+    }
+
+    /** A press of [keyCode] on the first pad, held a few frames so the core sees it, and let go. */
+    private suspend fun pressForGame(keyCode: Int) {
+        retroView.sendKeyEvent(KeyEvent.ACTION_DOWN, keyCode, 0)
+        delay(SELECT_TAP_MS)
+        retroView.sendKeyEvent(KeyEvent.ACTION_UP, keyCode, 0)
+        delay(SELECT_TAP_MS)
+    }
+
     /** Select let go with no shortcut used: the game gets its press, held for a few frames so it sees it. */
     private fun tapSelect(event: KeyEvent) {
         if (!gameLoaded()) return
@@ -1048,6 +1103,8 @@ class CoreActivity : ComponentActivity() {
         private const val SOUND_EVERY_MS = 1_000L
         private const val MAX_AUDIO_SAMPLES = 48_000
         private const val SAVE_EVERY_MS = 30_000L
+        /** The longest a swap leaves the drive empty. */
+        private const val MAX_DISK_OUT_MS = 5_000
         /** How long a lone Select press is held for the game: a few frames, so a core polling once a frame sees it. */
         private const val SELECT_TAP_MS = 80L
         /** A kept frame is enlarged to at least this wide for the reader's OCR. */

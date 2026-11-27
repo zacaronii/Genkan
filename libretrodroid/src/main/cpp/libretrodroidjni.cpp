@@ -68,6 +68,14 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_currentDis
     return LibretroDroid::getInstance().currentDisk();
 }
 
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ejectDisk(JNIEnv *, jclass) {
+    return LibretroDroid::getInstance().ejectDisk();
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_insertDisk(JNIEnv *, jclass, jint index) {
+    return index >= 0 && LibretroDroid::getInstance().insertDisk(static_cast<unsigned int>(index));
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_changeDisk(
     JNIEnv* env,
     jclass obj,

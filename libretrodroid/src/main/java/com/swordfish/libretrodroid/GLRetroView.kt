@@ -251,6 +251,16 @@ class GLRetroView(
         runOnEmulationThread(useEmulationThread) { LibretroDroid.changeDisk(index) }
     }
 
+    /** Genkan: opens the drive, for a swap in two steps; false when the core has no disks to change. */
+    fun ejectDisk(useEmulationThread: Boolean = true): Boolean {
+        return runOnEmulationThread(useEmulationThread) { LibretroDroid.ejectDisk() }
+    }
+
+    /** Genkan: puts disk [index] in and closes the drive. */
+    fun insertDisk(index: Int, useEmulationThread: Boolean = true): Boolean {
+        return runOnEmulationThread(useEmulationThread) { LibretroDroid.insertDisk(index) }
+    }
+
     private fun getGLESVersion(context: Context): Int {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         return if (activityManager.deviceConfigurationInfo.reqGlEsVersion >= 0x30000) {

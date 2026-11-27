@@ -67,4 +67,8 @@ interface ICoreSession {
     boolean setTuningStep(String step) = 21;
     /** Plugs Wii controller [choice] (WiiController: nunchuk, classic, sideways) into the running Wii game; false for another console. */
     boolean setWiiController(String choice) = 22;
+    /** The game's disks as [count, current] (DiskSet), when it has more than one; empty otherwise. */
+    int[] disks() = 23;
+    /** Swaps to disk [index]: opens the drive now and puts it in [emptyMs] later; false when it can't. */
+    boolean swapDisk(int index, int emptyMs) = 24;
 }

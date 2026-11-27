@@ -123,6 +123,10 @@ public:
     int availableDisks();
     int currentDisk();
     void changeDisk(unsigned int index);
+    // Genkan: a disk swap in two steps, so the game sees the drive empty between them (a Disk
+    // System game waits for the disk to come out before it takes the other side).
+    bool ejectDisk();
+    bool insertDisk(unsigned int index);
 
     void setRumbleEnabled(bool enabled);
     bool isRumbleEnabled() const;

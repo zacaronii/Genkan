@@ -18,6 +18,15 @@ object FdsDisk {
     private val BLOCK1 = "\u0001*NINTENDO-HVC*".toByteArray(Charsets.ISO_8859_1)
     private const val HEADER = 16
     private const val BLOCK = 0x38
+    private const val SIDE = 65_500L
+
+    /** How many disk sides [file] holds (65,500 bytes each, past any fwNES header); 0 when it can't be read. */
+    fun sides(file: File): Int = runCatching {
+        val head = ByteArray(4)
+        file.inputStream().use { it.read(head) }
+        val body = file.length() - if (head.contentEquals(FWNES)) HEADER else 0
+        (body / SIDE).toInt()
+    }.getOrDefault(0)
 
     /** [file]'s id, or null when it isn't a Disk System image or can't be read. */
     fun of(file: File): CartridgeId? = runCatching {

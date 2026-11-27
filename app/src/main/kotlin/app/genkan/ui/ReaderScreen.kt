@@ -98,6 +98,8 @@ fun ReaderScreen(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val scriptActive by viewModel.builtIn.scriptActive.collectAsStateWithLifecycle()
     val playing by viewModel.builtIn.playing.collectAsStateWithLifecycle()
+    val disks by viewModel.disks.collectAsStateWithLifecycle()
+    val swap by viewModel.swap.collectAsStateWithLifecycle()
     val sampling by viewModel.builtIn.sampling.collectAsStateWithLifecycle(false)
     val azahar by viewModel.azahar.status.collectAsStateWithLifecycle()
     val armsx by viewModel.armsx.status.collectAsStateWithLifecycle()
@@ -213,6 +215,8 @@ fun ReaderScreen(
                     Chip(if (ocrOn) "OCR on" else "OCR") { viewModel.toggleOcr(onAskCaptureConsent) }
                     // A snapshot now, for Yomikata (a line typing out, or waiting for a press).
                     if (playing && sampling) Chip("Snapshot") { viewModel.snapshotNow() }
+                    // The disk or side in, for a game with more than one; a press puts the next in.
+                    disks?.takeIf { playing }?.let { set -> Chip("Disk ${set.short(set.current)}") { viewModel.swapDisk() } }
                     if (menuItems.isNotEmpty()) {
                         ReaderMenuButton(menuOpen, attention = menuItems.any { it.attention }) { menuOpen = !menuOpen }
                     }
@@ -249,6 +253,7 @@ fun ReaderScreen(
                     }
                 }
             }
+            swap?.let { DiskSwapOverlay(it) }
             lookup?.let { current ->
                 LookupPanel(
                     current,
