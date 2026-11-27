@@ -4,7 +4,8 @@ import java.io.File
 
 /**
  * A cartridge's id for the Yomikata catalog and its build, both read from the header in its file
- * ([SnesCartridge], [GbaCartridge]): the build is the header's CRC-32, as 8 lower-case hex digits.
+ * ([SnesCartridge], [GbaCartridge], [GameBoyCartridge]): the build is the header's CRC-32, as 8
+ * lower-case hex digits.
  * A PC Engine CD's is read so too, from its disc's boot block ([PceCdDisc]), and a HuCard's from
  * its ROM ([PceHuCard]), and a Famicom's from its PRG and CHR ([FamicomCartridge]). An N64
  * cartridge's build is its id and version instead ([N64Cartridge]), in [build], as a Disk System
@@ -29,6 +30,7 @@ data class CartridgeId(val id: String, val headerCrc32: String, val build: Strin
         fun of(platform: String, file: File): CartridgeId? = when (platform) {
             "snes", "sfam" -> SnesCartridge.of(file)
             "gba" -> GbaCartridge.of(file)
+            "gb", "gbc" -> GameBoyCartridge.of(file)
             "turbografx-cd" -> PceCdDisc.of(file)
             "tg16" -> PceHuCard.of(file)
             "n64" -> N64Cartridge.of(file)
