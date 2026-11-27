@@ -154,10 +154,11 @@ object Hints {
      * Settings. On the group list A opens the group and B leaves; on a group's rows A runs the
      * focused row ([rowAction], as its switch or button says) and B goes back to the groups.
      */
-    fun settings(onRows: Boolean, rowAction: String?, groupOpens: Boolean = true): List<ButtonHint> =
+    fun settings(onRows: Boolean, rowAction: String?, groupOpens: Boolean = true, help: Boolean = false): List<ButtonHint> =
         if (onRows) {
             listOfNotNull(
                 rowAction?.let { ButtonHint(PadButton.A, it) },
+                ButtonHint(PadButton.Y, "Help").takeIf { help },
                 ButtonHint(PadButton.B, "Groups"),
                 ButtonHint(PadButton.START, "Library"),
             )
@@ -168,6 +169,16 @@ object Hints {
                 ButtonHint(listOf(PadButton.B, PadButton.START), "Library"),
             )
         }
+
+    /** The licences page: the D-pad scrolls, the shoulders a screenful. */
+    fun notice(): List<ButtonHint> = listOf(
+        ButtonHint(listOf(PadButton.L1, PadButton.R1), "Page"),
+        ButtonHint(PadButton.B, "Back"),
+        ButtonHint(PadButton.START, "Library"),
+    )
+
+    /** A settings row's help, open: B (or Y, or A) closes it. */
+    fun settingsHelp(): List<ButtonHint> = listOf(ButtonHint(PadButton.B, "Close"))
 
     /** A settings page of fields and buttons: the D-pad moves between them, A presses the focused one. */
     fun form(): List<ButtonHint> = listOf(

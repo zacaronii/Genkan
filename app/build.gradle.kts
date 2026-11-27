@@ -133,6 +133,18 @@ dependencies {
  * checked against their SHA-256, and copied into [subdir] of a generated source folder. Bump a
  * revision only after checking the new files on the Thor.
  */
+/** NOTICE, the third-party notices, as an asset (licences/NOTICE.txt) for Settings › About › Licences. */
+abstract class NoticeAsset : DefaultTask() {
+    @get:InputFile @get:PathSensitive(PathSensitivity.NONE) abstract val notice: RegularFileProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile.resolve("licences").apply { deleteRecursively(); mkdirs() }
+        notice.get().asFile.copyTo(out.resolve("NOTICE.txt"), overwrite = true)
+    }
+}
+
 abstract class DownloadPinnedFiles : DefaultTask() {
     /** Each entry is "url sha256 fileName". */
     @get:Input abstract val files: ListProperty<String>
@@ -589,6 +601,11 @@ val downloadMeikiModels = tasks.register<DownloadPinnedFiles>("downloadMeikiMode
     outputDir.set(layout.buildDirectory.dir("generated/meiki"))
 }
 
+val noticeAsset = tasks.register<NoticeAsset>("noticeAsset") {
+    notice.set(rootProject.layout.projectDirectory.file("NOTICE"))
+    outputDir.set(layout.buildDirectory.dir("generated/notice"))
+}
+
 /**
  * Libretro cores for the built-in player, as native libraries, from Lemuroid's prebuilt cores
  * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0, PPSSPP GPL-2.0, Beetle PCE Fast
@@ -814,6 +831,7 @@ androidComponents {
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(noticeAsset, NoticeAsset::outputDir)
         // The PC hook kit (tools/hookbridge/kit.sh, which needs MinGW): packed when it's been
         // built; without it, Genkan just has no kit to install.
         val hookKit = rootProject.file("tools/hookbridge/build/assets")

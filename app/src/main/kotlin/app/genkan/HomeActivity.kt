@@ -63,6 +63,7 @@ import app.genkan.ui.SetupScreen
 import app.genkan.ui.BottomBack
 import app.genkan.ui.ConsoleScreen
 import app.genkan.ui.HeadphonesScreen
+import app.genkan.ui.NoticeScreen
 import app.genkan.ui.ConsoleViewModel
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -72,7 +73,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -148,6 +149,7 @@ class HomeActivity : ComponentActivity() {
                         ConsoleScreen(consoleViewModel, state, onAction = ::run)
                     }
                     Screen.HEADPHONES -> HeadphonesScreen(headphonesViewModel)
+                    Screen.NOTICE -> NoticeScreen()
                 }
             }
         }
@@ -281,7 +283,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE -> when (pad) {
                 // B closes the keyboard first, or a console's list of looks, and only then the page.
                 PadKey.B -> if (!hideKeyboard() && !(screen == Screen.CONSOLE && consoleViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -331,6 +333,7 @@ class HomeActivity : ComponentActivity() {
                 viewModel.playerSettings.setLearning(!viewModel.playerSettings.learning.first())
             }
             SetupAction.HEADPHONES -> appViewModel.openPage(Screen.HEADPHONES)
+            SetupAction.NOTICE -> appViewModel.openPage(Screen.NOTICE)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )
