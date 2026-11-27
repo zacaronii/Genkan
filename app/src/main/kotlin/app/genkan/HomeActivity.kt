@@ -43,6 +43,8 @@ import app.genkan.ui.ReadingLogScreen
 import app.genkan.ui.ReadingLogViewModel
 import app.genkan.memory.SampleInbox
 import app.genkan.ui.YomikataSettingsScreen
+import app.genkan.ui.AnkiServerScreen
+import app.genkan.ui.YomikataServersScreen
 import app.genkan.ui.YomikataSettingsViewModel
 import app.genkan.ui.WordsSettingsScreen
 import app.genkan.ui.WordsSettingsViewModel
@@ -70,7 +72,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -138,6 +140,8 @@ class HomeActivity : ComponentActivity() {
                     Screen.ANKI -> AnkiSettingsScreen(ankiSettingsViewModel)
                     Screen.READING_LOG -> ReadingLogScreen(readingLogViewModel)
                     Screen.YOMIKATA -> YomikataSettingsScreen(yomikataSettingsViewModel)
+                    Screen.YOMIKATA_SERVERS -> YomikataServersScreen(yomikataSettingsViewModel)
+                    Screen.ANKI_SERVER -> AnkiServerScreen(ankiSettingsViewModel)
                     Screen.WORDS -> WordsSettingsScreen(wordsSettingsViewModel)
                     Screen.CONSOLE -> {
                         val state by viewModel.state.collectAsStateWithLifecycle()
@@ -259,7 +263,11 @@ class HomeActivity : ComponentActivity() {
                 val insertKey = InsertKey.decide(libraryViewModel.insert.value != null, pad != null, event.repeatCount)
                 if (insertKey == InsertKey.SKIP) libraryViewModel.skipInsert()
                 else if (insertKey == InsertKey.CONSUME) Unit
-                else if (pad == PadKey.START) appViewModel.openSettings()
+                else if (pad == PadKey.START) {
+                    // The status card's servers, checked as Settings opens.
+                    viewModel.checkServers()
+                    appViewModel.openSettings()
+                }
                 else if (pad == null || !libraryViewModel.onKey(pad, event.repeatCount)) return super.dispatchKeyEvent(event)
             }
             // B steps from a group's rows back to the group list, and only then out of settings.
@@ -273,7 +281,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES -> when (pad) {
                 // B closes the keyboard first, or a console's list of looks, and only then the page.
                 PadKey.B -> if (!hideKeyboard() && !(screen == Screen.CONSOLE && consoleViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -312,6 +320,8 @@ class HomeActivity : ComponentActivity() {
             SetupAction.ANKI -> appViewModel.openPage(Screen.ANKI)
             SetupAction.READING_LOG -> appViewModel.openPage(Screen.READING_LOG)
             SetupAction.YOMIKATA -> appViewModel.openPage(Screen.YOMIKATA)
+            SetupAction.YOMIKATA_SERVERS -> appViewModel.openPage(Screen.YOMIKATA_SERVERS)
+            SetupAction.ANKI_SERVER -> appViewModel.openPage(Screen.ANKI_SERVER)
             SetupAction.WORDS -> appViewModel.openPage(Screen.WORDS)
             SetupAction.CONSOLE -> viewModel.focusedConsole()?.let {
                 consoleViewModel.show(it)

@@ -36,7 +36,20 @@ class SettingsGroupsTest {
         )
         assertEquals(listOf(SettingsInfo.STATUS), groups.first().info)
         val connections = groups.single { it.id == "connections" }.rows.flatMap { it.actions }
-        assertEquals(setOf(SetupAction.SYNC_LIBRARY, SetupAction.YOMIKATA, SetupAction.SIGN_OUT), connections.toSet())
+        assertEquals(
+            setOf(SetupAction.SYNC_LIBRARY, SetupAction.YOMIKATA_SERVERS, SetupAction.ANKI_SERVER, SetupAction.READING_LOG, SetupAction.SIGN_OUT),
+            connections.toSet(),
+        )
+    }
+
+    @Test
+    fun `the servers moved to Connections, and what was left of their pages stayed in its group`() {
+        fun actionsOf(id: String) = groups.single { it.id == id }.rows.flatMap { it.actions }.toSet()
+        // Yomikata's catalog and inbox, AnkiConnect (with the word-audio source) and kechimochi: Connections.
+        assertTrue(actionsOf("connections").containsAll(setOf(SetupAction.YOMIKATA_SERVERS, SetupAction.ANKI_SERVER, SetupAction.READING_LOG)))
+        // The memory samples are reading; the deck, note type and word marks are Anki's.
+        assertTrue(SetupAction.YOMIKATA in actionsOf("reading"))
+        assertEquals(setOf(SetupAction.ANKI), actionsOf("anki"))
     }
 
     @Test

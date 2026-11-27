@@ -81,7 +81,8 @@ fun ReadingLogScreen(viewModel: ReadingLogViewModel) {
             .padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Reading log", style = MaterialTheme.typography.displaySmall, color = colors.primary)
+        // Named for the server, as its row in Settings › Connections is.
+        Text("kechimochi", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "Genkan counts reading time and characters (kana and kanji, each line once) per game. " +
                 "With a mochibridge address (and its API token, if it has one), each session is logged in kechimochi " +

@@ -68,6 +68,14 @@ class StatusCardTest {
     }
 
     @Test
+    fun `AnkiConnect's line is what Settings found when it asked, else the last send`() {
+        assertEquals("Reachable (AnkiConnect 6)", line(state().copy(ankiReach = AnkiReach.Reachable(6)), "AnkiConnect").value)
+        assertTrue(line(state(anki = AnkiStatus.Sent(5)).copy(ankiReach = AnkiReach.Unreachable("refused")), "AnkiConnect").attention)
+        assertEquals("No server set", line(state().copy(ankiReach = AnkiReach.NotSet), "AnkiConnect").value)
+        assertEquals("Reachable, 5 cards sent", line(state(anki = AnkiStatus.Sent(5)), "AnkiConnect").value)
+    }
+
+    @Test
     fun `ages read in minutes, hours, then days`() {
         assertEquals("just now", age(30_000))
         assertEquals("12 min ago", age(12 * 60_000L))
