@@ -32,3 +32,6 @@
 [submodule "third_party/libchdr"]
 	path = third_party/libchdr
 	url = https://github.com/flyinghead/libchdr.git
+[submodule "third_party/genesis-plus-gx"]
+	path = third_party/genesis-plus-gx
+	url = https://github.com/libretro/Genesis-Plus-GX
