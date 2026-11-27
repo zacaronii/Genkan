@@ -26,8 +26,12 @@ data class CoreDef(
      * stretches (a Saturn's work RAM): each, at the address the console sees it at.
      */
     val ramStretches: List<RamStretch> = emptyList(),
-    /** The core keeps that RAM as 16-bit words in the host's order: reads swap each byte pair back. */
-    val ramWords: Boolean = false,
+    /**
+     * The core keeps its memory (that RAM, or the blocks of its memory map) as words of this many
+     * bytes in the host's order, where the console has them big-endian: 2, reads swap each byte pair
+     * back (a Saturn's); 4, they reverse each word's four bytes (an N64's). 0: as it is.
+     */
+    val ramWordSize: Int = 0,
     /**
      * Snapshots and the text search read the core's blocks whole where its map leaves gaps in them
      * (a PC Engine CD's card RAM), as Yomikata's harness does; scripts keep to the map.
@@ -174,11 +178,25 @@ object CoreCatalog {
             // words in the host's order. Read at the console's addresses and in its order, as
             // Yomikata's harness does; games point at both past the cache too, at 0x20000000 on.
             ramStretches = listOf(RamStretch(0x06000000L, 0x100000L, 0x100000L), RamStretch(0x00200000L, 0L, 0x100000L)),
-            ramWords = true,
+            ramWordSize = 2,
             pointerMask = 0xDFFFFFFFL,
             bigEndian = true,
             // Not zip, which the core reads as an arcade board's: a zipped disc is unpacked first.
             extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
+        ),
+        CoreDef(
+            // Mupen64Plus-Next with GLideN64 on OpenGL ES 3, Lemuroid's build.
+            id = "mupen64plus_next", displayName = "Mupen64Plus-Next", library = "libmupen64plus_next_gles3_libretro_android.so",
+            platforms = setOf("n64"),
+            // Its memory map gives the RDRAM (8 MB, with the Expansion Pak's 4) at 0x80000000, the RSP's
+            // memory and the cartridge, all as 32-bit words in the host's order: read in the console's
+            // order, as Yomikata's harness does. Games point at the RDRAM past the cache too, at 0xA0000000.
+            ramWordSize = 4,
+            pointerMask = 0x9FFFFFFFL,
+            bigEndian = true,
+            // Its analog stick is the console's own: never also the D-pad.
+            sticksOnly = true,
+            extensions = setOf("n64", "v64", "z64"),
         ),
         CoreDef(
             id = "flycast", displayName = "Flycast", library = "libflycast_libretro_android.so",

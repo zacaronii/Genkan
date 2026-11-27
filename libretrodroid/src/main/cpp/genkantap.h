@@ -38,8 +38,9 @@ public:
         // reach [host]; zero for plain memory from start for length bytes.
         uint64_t select = 0;
         uint64_t disconnect = 0;
-        // Kept as 16-bit words in the host's order (memorymap.h): reads swap each byte pair back.
-        bool words = false;
+        // Kept as words of this many bytes (2 or 4) in the host's order (memorymap.h): reads put each
+        // word's bytes back in the console's order. 0: plain bytes.
+        unsigned wordSize = 0;
     };
 
     /** A stretch of the core's system RAM the console sees at an address of its own. */
@@ -64,11 +65,12 @@ public:
     void setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned));
     /**
      * A core whose system RAM is more than one of the console's stretches (mednafen_saturn's: the low
-     * 1 MB of work RAM, then the high): each at the console's address, and whether the core keeps them
-     * as 16-bit words in the host's order. Empty, the system RAM is one region from 0. Set before the
-     * game loads, for the game.
+     * 1 MB of work RAM, then the high): each at the console's address. And the size of the words the
+     * core keeps its memory in, in the host's order (2 or 4; 0 for plain bytes), for these and for the
+     * blocks of a memory map it gives (mupen64plus_next's). Empty, the system RAM is one region from 0.
+     * Set before the game loads, for the game.
      */
-    void setSystemRamStretches(std::vector<Stretch> stretches, bool words);
+    void setSystemRamStretches(std::vector<Stretch> stretches, unsigned wordSize);
     void clear();
     std::vector<Region> regions();
     /**
@@ -128,7 +130,8 @@ private:
     void *(*systemRamData)(unsigned) = nullptr;
     size_t (*systemRamSize)(unsigned) = nullptr;
     std::vector<Stretch> stretches;
-    bool stretchWords = false;
+    // The words the core keeps its memory in, map and system RAM alike (setSystemRamStretches).
+    unsigned wordSize = 0;
 
     std::mutex audioLock;
     std::vector<int16_t> ring;

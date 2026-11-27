@@ -47,6 +47,7 @@ private val ALL_LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "nds" to "Nintendo DS",
     "psx" to "PlayStation",
     "saturn" to "Saturn",
+    "n64" to "Nintendo 64",
     "dc" to "Dreamcast",
     "ps2" to "PlayStation 2",
     "ngc" to "GameCube",

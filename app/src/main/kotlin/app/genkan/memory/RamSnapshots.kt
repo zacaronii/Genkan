@@ -69,6 +69,8 @@ data class MainRam(val range: LongRange, val baseAddress: Long) {
             // A Saturn's high work RAM, 1 MB at 0x06000000, where games keep their data (the low 1 MB
             // at 0x00200000 reads too, but isn't in a snapshot), in the console's big-endian order.
             "saturn" -> MainRam(0x06000000L until 0x06100000L, 0x06000000L)
+            // An N64's RDRAM, 8 MB at 0x80000000 (4 used without the Expansion Pak), big-endian.
+            "n64" -> MainRam(0x80000000L until 0x80800000L, 0x80000000L)
             // A PC Engine CD's 256 KB from 0xD0000: the Super System Card's RAM, then the CD's own from
             // 0x100000, where a CD game keeps what it loads (Yomikata's pce-cd, joined).
             "turbografx-cd" -> MainRam(0xD0000L until 0x110000L, 0xD0000L)

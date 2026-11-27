@@ -111,7 +111,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
          */
         fun suiting(platform: String?): Set<ScreenLook>? = when (platform) {
             // Consoles for a television: plain, scanlines, or smoothed.
-            "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "dc", "ps2", "ngc", "wii" ->
+            "psx", "snes", "sfam", "tg16", "turbografx-cd", "saturn", "n64", "dc", "ps2", "ngc", "wii" ->
                 family(Family.PLAIN) + family(Family.CRT) + family(Family.SMOOTHING)
             "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
             "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)

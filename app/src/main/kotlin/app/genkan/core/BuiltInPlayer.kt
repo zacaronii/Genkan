@@ -188,8 +188,7 @@ class BuiltInPlayer @Inject constructor() {
         } catch (e: RemoteException) {
             null
         } ?: return null
-        val (id, crc) = raw.split(' ').takeIf { it.size == 2 } ?: return null
-        return CartridgeId(id, crc)
+        return CartridgeId.parse(raw)
     }
 
     fun memory(): MemorySource? {
