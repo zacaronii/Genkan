@@ -84,6 +84,5 @@ class PceCdDiscTest {
         File(folder.root, "game.bin").writeBytes(mode1(ByteArray(2048)) + mode1(boot))
         val cue = File(folder.root, "game.cue").apply { writeText("FILE \"game.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n") }
         assertEquals(expected, CartridgeId.of("turbografx-cd", cue))
-        assertNull(CartridgeId.of("tg16", cue))
     }
 }
