@@ -72,6 +72,12 @@ public:
      */
     void setSystemRamStretches(std::vector<Stretch> stretches, unsigned wordSize);
     /**
+     * The size of the words the core keeps its video RAM in, in the host's order (2: Genesis Plus
+     * GX's VDP); 0 for plain bytes. Reads give it in the console's order, as Yomikata's harness does.
+     * Set before the game loads.
+     */
+    void setVideoRamWordSize(unsigned wordSize);
+    /**
      * A cartridge's image as Yomikata's harness gives it (a Game Boy's file whole, a Famicom's past
      * its header), read at [CARTRIDGE_IMAGE_AT] on, where the console has nothing: a script checks its
      * build against it. Set before the game loads; empty, none.
@@ -139,6 +145,8 @@ private:
     std::vector<Stretch> stretches;
     // The words the core keeps its memory in, map and system RAM alike (setSystemRamStretches).
     unsigned wordSize = 0;
+    // The video RAM's word size (setVideoRamWordSize).
+    unsigned videoRamWordSize = 0;
     // The cartridge's image (setCartridgeImage).
     std::vector<uint8_t> cartridge;
     // The core's own regions (its map, or its system RAM), under memoryLock.

@@ -204,6 +204,7 @@ class CoreActivity : ComponentActivity() {
         GenkanTap.setSplitScreens(def.splitScreens)
         GenkanTap.setKeepPointer(def.keepPointer)
         GenkanTap.setSystemRamStretches(def.ramStretches.flatMap { listOf(it.address, it.offset, it.length) }.toLongArray(), def.ramWordSize)
+        GenkanTap.setVideoRamWordSize(def.videoRamWordSize)
         GenkanTap.setReadsWhole(def.readsWhole)
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.

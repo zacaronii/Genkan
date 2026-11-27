@@ -153,6 +153,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamSt
     GenkanTap::getInstance().setSystemRamStretches(std::move(out), wordSize == 2 || wordSize == 4 ? static_cast<unsigned>(wordSize) : 0);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setVideoRamWordSize(JNIEnv *, jclass, jint wordSize) {
+    GenkanTap::getInstance().setVideoRamWordSize(wordSize == 2 || wordSize == 4 ? static_cast<unsigned>(wordSize) : 0);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setReadsWhole(JNIEnv *, jclass, jboolean whole) {
     GenkanTap::getInstance().setReadsWhole(whole == JNI_TRUE);
 }

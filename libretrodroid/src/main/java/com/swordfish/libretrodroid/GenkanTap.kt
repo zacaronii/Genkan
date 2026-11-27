@@ -40,7 +40,13 @@ object GenkanTap {
     /** The size of the core's video RAM, 0 when it gives none. */
     @JvmStatic external fun videoRamSize(): Long
 
-    /** [size] bytes of video RAM from [offset] into [out]; false past its end. */
+    /**
+     * The size of the words the core keeps its video RAM in, in the host's order (2 or 4; 0 for plain
+     * bytes): reads give it in the console's order. Before the game loads.
+     */
+    @JvmStatic external fun setVideoRamWordSize(wordSize: Int)
+
+    /** [size] bytes of video RAM from [offset] into [out], in the console's order; false past its end. */
     @JvmStatic external fun readVideoRam(offset: Long, out: ByteArray, size: Int): Boolean
 
     /** The core's sample rate, 0 before a game is loaded. */

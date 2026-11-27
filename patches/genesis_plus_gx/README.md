@@ -22,8 +22,9 @@ game's snapshot holds its 64 KB of video RAM as other consoles' do (a `vram` par
 `RamSnapshots.partsOf`).
 
 The VDP keeps its RAM as 16-bit words in the host's byte order, which on the Thor (little-endian)
-is swapped against the console's own big-endian words. It is handed over as it is: a reader of the
-`vram` part swaps each pair of bytes to see it as the console does.
+is swapped against the console's own big-endian words. The patch hands it over as it is; Genkan
+reads it back in the console's order (`CoreDef.videoRamWordSize`, as for the work RAM), so a
+snapshot's `vram` part and a script's `vram` region are what Yomikata's harness gives.
 
 It is offered upstream from Yomikata's copy once tested on both sides. Drop it if Genesis Plus GX
 takes it, or gains the same answer otherwise.
