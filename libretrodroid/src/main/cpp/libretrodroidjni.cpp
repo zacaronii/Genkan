@@ -27,6 +27,7 @@
 #include <optional>
 
 #include "libretrodroid.h"
+#include "vulkanbridge.h"
 #include "log.h"
 #include "core.h"
 #include "audio.h"
@@ -316,6 +317,11 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onSurfaceC
     jclass obj
 ) {
     LibretroDroid::getInstance().onSurfaceCreated();
+    // Genkan: a Vulkan core's device that couldn't be made comes back as ERROR_VULKAN.
+    if (VulkanBridge::getInstance().hasFailed()) {
+        LOGE("Vulkan failed: %s", VulkanBridge::getInstance().failureReason().c_str());
+        JavaUtils::throwRetroException(env, ERROR_VULKAN);
+    }
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onMotionEvent(
@@ -539,6 +545,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
     jobject glRetroView
 ) {
     LibretroDroid::getInstance().step();
+    // Genkan: a Vulkan failure in the frame (a lost device) comes back as ERROR_VULKAN, and no
+    // frame runs after it: the player starts the game again on GL.
+    if (VulkanBridge::getInstance().hasFailed()) {
+        LOGE("Vulkan failed: %s", VulkanBridge::getInstance().failureReason().c_str());
+        JavaUtils::throwRetroException(env, ERROR_VULKAN);
+        return;
+    }
 
     if (LibretroDroid::getInstance().requiresVideoRefresh()) {
         LibretroDroid::getInstance().clearRequiresVideoRefresh();
@@ -554,6 +567,22 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
             env->CallVoidMethod(glRetroView, sendRumbleStrengthMethodID, port, weak, strong);
         });
     }
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_offerVulkan(
+    JNIEnv* env,
+    jclass obj,
+    jboolean offered,
+    jint forcedFailure
+) {
+    VulkanBridge::getInstance().offer(offered, static_cast<VulkanBridge::Forced>(forcedFailure));
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_usesVulkan(
+    JNIEnv* env,
+    jclass obj
+) {
+    return VulkanBridge::getInstance().hasContext();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRumbleEnabled(

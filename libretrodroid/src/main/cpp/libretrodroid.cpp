@@ -25,6 +25,7 @@
 #include <vector>
 #include <unordered_set>
 
+#include "vulkanbridge.h"
 #include "libretrodroid.h"
 #include "genkantap.h"
 #include "framestats.h"
@@ -235,6 +236,15 @@ void LibretroDroid::onSurfaceCreated() {
 
     video = std::unique_ptr<Video>(newVideo);
 
+    // Genkan: a core given Vulkan has its device made now, before its context reset, as RetroArch
+    // does; a new GL context makes the GL side of its frames again. A device that can't be made
+    // ends the game (the JNI call reports the bridge's failure), and the player starts it again on GL.
+    auto &vulkan = VulkanBridge::getInstance();
+    if (vulkan.isAccepted()) {
+        vulkan.onGlContextCreated();
+        if (!vulkan.createContext()) return;
+    }
+
     if (Environment::getInstance().getHwContextReset() != nullptr) {
         Environment::getInstance().getHwContextReset()();
     }
@@ -434,6 +444,8 @@ void LibretroDroid::destroy() {
     GenkanTap::getInstance().clear();
     core->retro_unload_game();
     core->retro_deinit();
+    // Genkan: the core's Vulkan device goes after the core (vulkanbridge.h).
+    VulkanBridge::getInstance().destroy();
 
     video = nullptr;
     core = nullptr;
@@ -498,6 +510,7 @@ void LibretroDroid::step() {
         );
     }
     FrameStats::getInstance().recordStep();
+
 
     // Genkan: a core drawn in its video callback is drawn again when the step gave no frame.
     if (video && drawsAfterStep(video->rendersInVideoCallback(), videoCallbackThisStep)) {
@@ -591,6 +604,13 @@ void LibretroDroid::handleVideoRefresh(
             tap.keepFrame(data, width, height, pitch, static_cast<retro_pixel_format>(Environment::getInstance().getPixelFormat()));
         }
         video->onNewFrame(data, width, height, pitch);
+
+        // Genkan: a Vulkan core's frame is copied into the framebuffer the GL path draws from, once
+        // it has grown to the frame's size (vulkanbridge.h). A failure ends the game after the run.
+        auto &vulkan = VulkanBridge::getInstance();
+        if (data == RETRO_HW_FRAME_BUFFER_VALID && vulkan.isAccepted()) {
+            vulkan.present(width, height, (GLuint) video->getCurrentFramebuffer(), Environment::getInstance().isBottomLeftOrigin());
+        }
 
         if (video->rendersInVideoCallback()) {
             video->renderFrame();

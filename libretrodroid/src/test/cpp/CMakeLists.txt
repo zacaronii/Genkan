@@ -41,3 +41,7 @@ add_executable(disc_sector_test disc_sector_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}
 target_include_directories(disc_sector_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
 target_link_libraries(disc_sector_test PRIVATE chdr-static)
 target_compile_definitions(disc_sector_test PRIVATE DISC_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/pce-cd-test.chd")
+
+# The frontend's side of libretro's Vulkan handover: slots, semaphores, command buffers (src/main/cpp/vulkanhandover.h).
+add_executable(vulkan_handover_test vulkan_handover_test.cpp)
+target_include_directories(vulkan_handover_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)

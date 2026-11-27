@@ -1,6 +1,7 @@
 // The reader's side of the built-in player, called from the player's process.
 package app.genkan.core;
 
+import android.content.Intent;
 import app.genkan.core.ICoreSession;
 
 interface ICoreHost {
@@ -26,4 +27,6 @@ interface ICoreHost {
     oneway void scriptEvents(in String[] events) = 9;
     /** A savestate was loaded: the script was told, and forgot what was on screen. */
     oneway void scriptStateLoaded() = 10;
+    /** Starts the player again with [intent] once this process has ended (a game going back to GL after Vulkan failed). */
+    oneway void relaunch(in Intent intent) = 11;
 }

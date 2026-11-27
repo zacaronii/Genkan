@@ -33,6 +33,7 @@
 #include "vfs/vfsinterfacenegotiation.h"
 #include "vfs/vfs.h"
 #include "microphone/microphoneinterface.h"
+#include "vulkanbridge.h"
 
 void Environment::initialize(
     const std::string &requiredSystemDirectory,
@@ -149,6 +150,13 @@ bool Environment::environment_handle_set_controller_info(const struct retro_cont
 }
 
 bool Environment::environment_handle_set_hw_render(struct retro_hw_render_callback* hw_render_callback) {
+    // Genkan: Vulkan only for a core it was offered to, on a device that passed the probe; else the
+    // core goes on to the next context it asks for (vulkanbridge.h).
+    if (hw_render_callback->context_type == RETRO_HW_CONTEXT_VULKAN) {
+        auto &vulkan = libretrodroid::VulkanBridge::getInstance();
+        if (!vulkan.isOffered() || !vulkan.probe()) return false;
+        vulkan.accept();
+    }
     useHWAcceleration = true;
     useDepth = hw_render_callback->depth;
     useStencil = hw_render_callback->stencil;
@@ -259,7 +267,38 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: {
             LOGD("Called RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER");
-            *((unsigned*) data) = retro_hw_context_type::RETRO_HW_CONTEXT_OPENGLES3;
+            // Genkan: Vulkan where it was offered and the device can share its frames with GL.
+            auto &vulkan = libretrodroid::VulkanBridge::getInstance();
+            bool useVulkan = vulkan.isOffered() && vulkan.probe();
+            *((unsigned*) data) = useVulkan ? RETRO_HW_CONTEXT_VULKAN : retro_hw_context_type::RETRO_HW_CONTEXT_OPENGLES3;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT: {
+            // Genkan: the negotiation's second version, to a core offered Vulkan; none to any other.
+            auto *support = static_cast<struct retro_hw_render_context_negotiation_interface*>(data);
+            if (!libretrodroid::VulkanBridge::getInstance().isOffered()
+                    || support->interface_type != RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN) {
+                return false;
+            }
+            support->interface_version = 2;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: {
+            auto *negotiation = static_cast<const struct retro_hw_render_context_negotiation_interface*>(data);
+            auto &vulkan = libretrodroid::VulkanBridge::getInstance();
+            if (!vulkan.isAccepted() || negotiation->interface_type != RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN) {
+                return false;
+            }
+            vulkan.setNegotiation(reinterpret_cast<const struct retro_hw_render_context_negotiation_interface_vulkan*>(negotiation));
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: {
+            auto *vulkanInterface = libretrodroid::VulkanBridge::getInstance().interface();
+            if (vulkanInterface == nullptr) return false;
+            *static_cast<const struct retro_hw_render_interface**>(data) = reinterpret_cast<const struct retro_hw_render_interface*>(vulkanInterface);
             return true;
         }
 

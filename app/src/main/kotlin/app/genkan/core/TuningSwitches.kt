@@ -15,9 +15,15 @@ data class TuningSwitches(
     val gameState: Boolean = true,
     /** The emulation (GL) thread at display priority. */
     val priority: Boolean = true,
+    /**
+     * A Vulkan failure to force on a core offered Vulkan, to see the way back to GL: 0 none, 1 the
+     * probe (GL in the same load), 2 the device and 3 a lost device (the game started again on GL).
+     */
+    val vulkanFailure: Int = 0,
 ) {
     fun toJson(): String =
-        JSONObject().put("hints", hints).put("frame_rate", frameRate).put("game_state", gameState).put("priority", priority).toString()
+        JSONObject().put("hints", hints).put("frame_rate", frameRate).put("game_state", gameState).put("priority", priority)
+            .put("vulkan_failure", vulkanFailure).toString()
 
     companion object {
         const val FILE = "tuning-switches.json"
@@ -29,6 +35,7 @@ data class TuningSwitches(
             val o = JSONObject(json)
             return TuningSwitches(
                 o.optBoolean("hints", true), o.optBoolean("frame_rate", true), o.optBoolean("game_state", true), o.optBoolean("priority", true),
+                o.optInt("vulkan_failure", 0).coerceIn(0, 3),
             )
         }
     }

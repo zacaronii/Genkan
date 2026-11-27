@@ -38,6 +38,10 @@ class CoreHostService : Service() {
             player.scriptStateLoaded()
         }
 
+        override fun relaunch(intent: Intent) {
+            player.relaunchWhenGone(applicationContext, intent)
+        }
+
         override fun overlayTap(text: String, offset: Int) {
             player.overlayTapped(text, offset)
         }

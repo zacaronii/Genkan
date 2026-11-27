@@ -211,6 +211,9 @@ class CoreCatalogTest {
         val ladder = TuningLadders.of(ps2.tuning)!!
         assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), ladder.assignment("default"))
         assertEquals("Auto", ladder.assignment("gl")["pcsx2_renderer"])
+        // Only LRPS2 is ever offered Vulkan.
+        assertTrue(ps2.vulkan)
+        assertEquals(listOf("lrps2"), CoreCatalog.cores.filter { it.vulkan }.map { it.id })
         listOf("game.chd", "game.iso", "game.cso", "games.m3u").forEach { assertTrue(it, ps2.takes(it)) }
         assertFalse(ps2.takes("game.zip"))
         assertEquals(0L, ps2.ramBase)
