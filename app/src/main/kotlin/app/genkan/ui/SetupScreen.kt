@@ -14,6 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -25,19 +30,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.first
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.genkan.anki.AnkiStatus
 import app.genkan.dictionary.DictionaryEntity
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
 import app.genkan.privileged.Privileged
 import app.genkan.romm.RomMState
+import app.genkan.stats.ReadingLogStatus
+import app.genkan.yomikata.CatalogStatus
 
 @Composable
 fun SetupScreen(viewModel: SetupViewModel, onAction: (SetupAction) -> Unit) {
@@ -72,6 +82,14 @@ data class SetupState(
     val prefetchManuals: Boolean = true,
     val faceAOnRight: Boolean = false,
     val armsxPine: Boolean = false,
+    /** The Yomikata catalog, the last Anki send and the last reading-log push: as last seen. */
+    val catalog: CatalogStatus = CatalogStatus.Idle,
+    val anki: AnkiStatus = AnkiStatus.Idle,
+    val readingLog: ReadingLogStatus = ReadingLogStatus.NotSet,
+    /** The app's version, for About. */
+    val version: String = "",
+    /** The time the page was drawn, for the catalog's age (milliseconds since the epoch). */
+    val nowMs: Long = 0,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -128,13 +146,19 @@ fun SetupContent(
     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, color = colors.primary)
-            groups.forEachIndexed { index, group ->
-                GroupItem(
-                    title = group.title,
-                    selected = index == focus.group,
-                    listFocused = focus.pane == SettingsPane.GROUPS,
-                    onClick = { onSelectGroup(index) },
-                )
+            // More groups than fit: the list keeps the selected one in view, jumping to it (the pad
+            // never moves Compose focus here).
+            val list = rememberLazyListState()
+            LaunchedEffect(focus.group) { keepInView(list, focus.group) }
+            LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(groups) { index, group ->
+                    GroupItem(
+                        title = group.title,
+                        selected = index == focus.group,
+                        listFocused = focus.pane == SettingsPane.GROUPS,
+                        onClick = { onSelectGroup(index) },
+                    )
+                }
             }
         }
         val group = groups.getOrNull(focus.group) ?: return@Row
@@ -146,7 +170,11 @@ fun SetupContent(
             ) {
                 Text(group.title, style = MaterialTheme.typography.headlineMedium, color = colors.onBackground)
                 group.info.forEach { info ->
-                    Text(infoLine(info, state), style = MaterialTheme.typography.bodyLarge, color = colors.onBackground)
+                    if (info == SettingsInfo.STATUS) {
+                        StatusCard(statusLines(state))
+                    } else {
+                        Text(infoLine(info, state), style = MaterialTheme.typography.bodyLarge, color = colors.onBackground)
+                    }
                 }
                 group.rows.forEachIndexed { index, row ->
                     val on = (row as? SettingsRow.Switch)?.let { state.isOn(it.key) }
@@ -166,6 +194,7 @@ fun SetupContent(
     HintRow(
         Hints.settings(
             onRows = focus.pane == SettingsPane.ROWS,
+            groupOpens = groups.getOrNull(focus.group)?.rows?.isNotEmpty() == true,
             rowAction = focusedRow?.let { Hints.settingsRow(it.title, (it as? SettingsRow.Switch)?.let { s -> state.isOn(s.key) }) },
         ),
         Modifier.padding(top = 12.dp),
@@ -247,6 +276,114 @@ private fun SwitchMark(on: Boolean) {
     }
 }
 
+/** Scrolls [list] just enough to show item [index] whole: to its top above the view, to its bottom below. */
+private suspend fun keepInView(list: LazyListState, index: Int) {
+    // Laid out first, so what's visible is known.
+    snapshotFlow { list.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+    val info = list.layoutInfo
+    val visible = info.visibleItemsInfo
+    val first = visible.first().index
+    val whole = visible.filter { it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset }.map { it.index }
+    when {
+        index in whole -> Unit
+        index <= first -> list.scrollToItem(index)
+        else -> {
+            val item = visible.firstOrNull { it.index == index }
+            if (item != null) {
+                list.scrollBy((item.offset + item.size - info.viewportEndOffset).toFloat())
+            } else {
+                // Off the end: put it last, the items before it filling the view.
+                list.scrollToItem(index)
+                val now = list.layoutInfo
+                val at = now.visibleItemsInfo.first { it.index == index }
+                list.scrollBy((at.offset + at.size - now.viewportEndOffset).toFloat())
+            }
+        }
+    }
+}
+
+/** One line of the status card: what, its state, and whether it needs doing something. */
+data class StatusLine(val label: String, val value: String, val attention: Boolean = false)
+
+/** Every connection and state at a glance, as last seen; nothing on it is pressed. */
+@Composable
+private fun StatusCard(lines: List<StatusLine>) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(10.dp))
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        lines.forEach { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(line.label, Modifier.width(150.dp), style = MaterialTheme.typography.titleSmall, color = colors.onSurfaceVariant)
+                Text(
+                    line.value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (line.attention) colors.error else colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** The status card's lines, from what the page already knows. */
+fun statusLines(state: SetupState): List<StatusLine> = listOf(
+    when (val r = state.romm) {
+        is RomMState.SignedIn -> StatusLine("RomM", "${r.account.username} on ${r.account.baseUrl.removeSuffix("/").substringAfter("://")}")
+        else -> StatusLine("RomM", "Not signed in", attention = true)
+    },
+    when (val s = state.sync) {
+        is SyncStatus.Done -> StatusLine("Library", "${s.games} games, synced")
+        is SyncStatus.Running -> StatusLine("Library", "Syncing ${s.platform}…")
+        is SyncStatus.Failed -> StatusLine("Library", "Sync failed: ${s.message}", attention = true)
+        SyncStatus.Idle -> StatusLine("Library", "Not synced yet")
+    },
+    StatusLine("Built-in player", if (state.builtInPlayer) "On" else "Off"),
+    when (val c = state.catalog) {
+        is CatalogStatus.Ready -> StatusLine("Yomikata", "${c.entries} games, updated ${age(state.nowMs - c.updatedAt)}")
+        is CatalogStatus.Failed -> StatusLine("Yomikata", "Unreachable: ${c.reason}", attention = true)
+        CatalogStatus.NotSet -> StatusLine("Yomikata", "No server set")
+        CatalogStatus.Idle -> StatusLine("Yomikata", "Not fetched yet")
+    },
+    when (val a = state.anki) {
+        is AnkiStatus.Sent -> StatusLine("AnkiConnect", "Reachable, ${a.count} cards sent")
+        is AnkiStatus.Unreachable -> StatusLine("AnkiConnect", "Unreachable: ${a.reason}", attention = true)
+        AnkiStatus.NotSet -> StatusLine("AnkiConnect", "No server set")
+        AnkiStatus.Idle -> StatusLine("AnkiConnect", "Nothing sent yet")
+    },
+    when (val l = state.readingLog) {
+        ReadingLogStatus.UpToDate -> StatusLine("kechimochi", "Up to date")
+        is ReadingLogStatus.Sent -> StatusLine("kechimochi", "${l.sessions} sessions sent")
+        is ReadingLogStatus.Failed -> StatusLine("kechimochi", "Unreachable: ${l.reason}", attention = true)
+        ReadingLogStatus.NotSet -> StatusLine("kechimochi", "No server set")
+    },
+    StatusLine("Second screen", state.status.secondaryDisplayId?.let { "Display $it" } ?: "Not found", attention = state.status.secondaryDisplayId == null),
+    StatusLine("Companion", with(state.status) {
+        when {
+            !secondaryUsable -> "Refused by the system"
+            lowerDisplayId != null -> "Running"
+            !companionEnabled -> "Released"
+            else -> "Not running"
+        }
+    }, attention = !state.status.secondaryUsable),
+)
+
+/** How long ago, for the status card: minutes, hours, then days. */
+fun age(ms: Long): String {
+    val minutes = (ms / 60_000).coerceAtLeast(0)
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes min ago"
+        minutes < 48 * 60 -> "${minutes / 60} h ago"
+        else -> "${minutes / (24 * 60)} days ago"
+    }
+}
+
 /** A short status at the right of a row; [attention] marks one that needs doing something. */
 private data class Status(val text: String, val attention: Boolean = false)
 
@@ -256,53 +393,46 @@ private fun infoLine(info: SettingsInfo, state: SetupState): String = when (info
             "Signed in as ${r.account.username} on ${r.account.baseUrl.removeSuffix("/")} (RomM ${r.account.serverVersion})"
         else -> "Not signed in to RomM"
     }
-    SettingsInfo.YOMIKATA_SAMPLES -> "Yomikata samples: " + if (state.textSamples) {
-        "on; built-in player lines that aren't in memory as standard text are saved with what OCR read, for your Yomikata inbox"
-    } else {
-        "off (switched on in Yomikata)"
-    }
-    SettingsInfo.SECOND_SCREEN -> "Second screen: " + (state.status.secondaryDisplayId?.let { "display $it" } ?: "not found, or switched off")
-    SettingsInfo.COMPANION -> "Companion: " + with(state.status) {
-        when {
-            !secondaryUsable -> "refused by the system (single-screen)"
-            lowerDisplayId != null -> "running on display $lowerDisplayId"
-            !companionEnabled -> "released"
-            else -> "not running"
-        }
-    }
+    SettingsInfo.SHORTCUTS -> "In the built-in player, hold Select: +Start quits, +R1 saves a state, +L1 loads it, " +
+        "+left/right picks its slot, +R2 fast-forwards. On a DS game, a stick click swaps its lower screen and the reader."
+    SettingsInfo.VERSION -> "Genkan ${state.version}"
+    SettingsInfo.LICENCE -> "Free software under the GPL-3.0. The code it borrows and the cores it builds are listed, " +
+        "with their licences, in its NOTICE file."
+    // Drawn as the card (StatusCard), never as a line.
+    SettingsInfo.STATUS -> ""
 }
 
 /** The line under a row's title: what it does, or what its state means. */
 private fun explanation(row: SettingsRow, state: SetupState): String = when (row) {
     is SettingsRow.Switch -> switchExplanation(row.key, state)
     is SettingsRow.Button -> when (row.action) {
-        SetupAction.SYNC_LIBRARY -> "Library: " + when (val s = state.sync) {
-            is SyncStatus.Done -> "${s.games} games"
-            is SyncStatus.Running -> "syncing ${s.platform}…"
-            is SyncStatus.Failed -> "sync failed (${s.message})"
-            SyncStatus.Idle -> "not synced"
+        SetupAction.SYNC_LIBRARY -> when (val s = state.sync) {
+            is SyncStatus.Done -> "Fetch RomM's games now (${s.games} games)"
+            is SyncStatus.Running -> "Syncing ${s.platform}…"
+            is SyncStatus.Failed -> "The last sync failed: ${s.message}"
+            SyncStatus.Idle -> "Fetch RomM's games now"
         }
-        SetupAction.SIGN_OUT -> "Forgets the RomM account on this device."
-        SetupAction.SHIZUKU -> "DuckStation and Dolphin saves: " + when (state.shizuku) {
-            Privileged.State.READY -> "reachable through Shizuku"
-            Privileged.State.NOT_ALLOWED -> "Shizuku is running; press to allow Genkan"
-            Privileged.State.STOPPED -> "start Shizuku (it stops at every reboot)"
-            Privileged.State.MISSING -> "install Shizuku to sync them"
+        SetupAction.SIGN_OUT -> "Forget the RomM account on this device"
+        SetupAction.SHIZUKU -> when (state.shizuku) {
+            Privileged.State.READY -> "Syncs DuckStation and Dolphin saves"
+            Privileged.State.NOT_ALLOWED -> "Running: press to allow Genkan"
+            Privileged.State.STOPPED -> "Start it to sync DuckStation and Dolphin saves"
+            Privileged.State.MISSING -> "Install it to sync DuckStation and Dolphin saves"
         }
         SetupAction.USAGE_ACCESS -> if (state.usageAccess) {
-            "Play time is exact."
+            "Only time in the game counts"
         } else {
-            "Play time is approximate: sleep and other apps are counted too."
+            "Sleep and other apps count as play time too"
         }
-        SetupAction.YOMIKATA -> "Memory samples and the inbox they go to."
-        SetupAction.HEADPHONES -> "Reconnect paired headphones without Android's settings (at once with Shizuku running)."
-        SetupAction.SCREEN_LOOK -> "How the built-in player draws each console (smoothed, sharp, scanlines or an LCD grid), its low-latency sound, and per-console button swaps."
+        SetupAction.YOMIKATA -> "The script catalog, samples and their inbox"
+        SetupAction.HEADPHONES -> "Reconnect paired headphones"
+        SetupAction.SCREEN_LOOK -> "Each console's look, sound and button swaps"
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
             if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"
         }
-        SetupAction.WORDS -> "Known and ignored words, lookup counts, Hachidori."
-        SetupAction.ANKI -> "The AnkiConnect server, deck and note type for mined cards."
-        SetupAction.READING_LOG -> "Reading time and characters per game, logged in kechimochi."
+        SetupAction.WORDS -> "Known and ignored words, counts, Hachidori"
+        SetupAction.ANKI -> "Deck, note type and server for mined cards"
+        SetupAction.READING_LOG -> "Time and characters per game, to kechimochi"
         // Switch actions never sit on a button row; SettingsGroupsTest checks the groups.
         else -> ""
     }
@@ -310,54 +440,49 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
 
 private fun switchExplanation(key: SwitchKey, state: SetupState): String = when (key) {
     SwitchKey.HOME -> when {
-        state.isOn(key) -> "Home comes back here. Switching off opens Android's Home settings."
-        state.status.homeAliasEnabled -> "The Home entry is on, but another launcher is the default."
-        else -> "Another launcher answers Home."
+        state.isOn(key) -> "Home comes back here"
+        state.status.homeAliasEnabled -> "On, but another launcher is the default"
+        else -> "Another launcher answers Home"
     }
     SwitchKey.BUILT_IN_PLAYER -> if (state.builtInPlayer) {
-        "GB, GBA, Super Famicom, DS, PS1, PSP, GameCube, Wii, PC Engine, Saturn, Dreamcast and PS2 games run inside Genkan " +
-            "(Screen look and sound › Plays with picks ARMSX2 for the PS2 instead). " +
-            "Hold Select: +Start quits, +R1 saves a state, +L1 loads it, +left/right picks its slot, +R2 fast-forwards. " +
-            "On a DS game, a stick click swaps its lower screen and the reader."
+        "Play supported consoles inside Genkan"
     } else {
-        "Every game starts in its installed emulator."
+        "Every game starts in its emulator app"
     }
     SwitchKey.INSERT_ANIMATION -> if (state.insertAnimation) {
-        "Starting a game slides its disc or cartridge into the machine first. Any button skips it."
+        "A game's disc or cartridge goes in first"
     } else {
-        "Games start without the animation."
+        "Games start without the animation"
     }
     SwitchKey.PREFETCH_MANUALS -> if (state.prefetchManuals) {
-        "After each sync, installed games' manuals are fetched in the background, so they open offline."
+        "Installed games' manuals download after a sync"
     } else {
-        "Manuals are fetched when you open them."
+        "A manual downloads when you open it"
     }
     SwitchKey.FACE_A_ON_RIGHT -> if (state.faceAOnRight) {
-        "Your device's A is its right button (Nintendo layout). The built-in player gives each game the buttons where its " +
-            "console's pad had them: the right one is A on Nintendo consoles and circle on PlayStation."
+        "Games get A, or circle, on the right button"
     } else {
-        "The built-in player assumes your device's A is its bottom button (Xbox layout). The launcher follows your device's " +
-            "own button labels; if its A is on the right, switch this on so games get A (circle on PlayStation) on the right too."
+        "For a pad whose A is the right button"
     }
     SwitchKey.FULL_BOX -> if (state.fullBox) {
-        "The focused game is drawn as its box, front and spine, where its scans have both."
+        "The focused game shows as its whole box"
     } else {
-        "The focused game is drawn in its case."
+        "The focused game shows in its case"
     }
     SwitchKey.PSP_TEXT -> if (state.pspDebugger) {
-        "PPSSPP's debugger is reachable from your network while a game runs."
+        "Read from PPSSPP's memory (debugger on your network)"
     } else {
-        "PSP games use OCR. Switching on opens PPSSPP's debugger to your network while a game runs."
+        "Uses OCR; on opens PPSSPP's debugger to your network"
     }
     SwitchKey.ARMSX2_TEXT -> if (state.armsxPine) {
-        "After OCR reads a line, Genkan follows it in memory. Turn on PINE once in ARMSX2 ▸ Settings ▸ Global ▸ Advanced; it listens on this device only."
+        "Read from ARMSX2's memory (PINE, in its Advanced settings)"
     } else {
-        "PS2 games use OCR. Switching on reads ARMSX2's memory through its PINE (ARMSX2 2.9.6 or newer), which you turn on once in ARMSX2 ▸ Settings ▸ Global ▸ Advanced."
+        "Uses OCR; on needs PINE, in ARMSX2's Advanced settings"
     }
     SwitchKey.AZAHAR_TEXT -> if (state.azaharRpc) {
-        "After OCR reads a line, Genkan follows it in memory. Azahar's RPC server is reachable from your network while a game runs."
+        "Read from Azahar's memory (RPC on your network)"
     } else {
-        "3DS games use OCR. Switching on opens Azahar's RPC server to your network while a game runs."
+        "Uses OCR; on opens Azahar's RPC to your network"
     }
 }
 

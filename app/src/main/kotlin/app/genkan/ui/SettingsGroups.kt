@@ -15,8 +15,11 @@ data class SettingsGroup(
     val rows: List<SettingsRow>,
 )
 
-/** A status line with nothing to press, shown above a group's rows. */
-enum class SettingsInfo { ROMM_ACCOUNT, YOMIKATA_SAMPLES, SECOND_SCREEN, COMPANION }
+/**
+ * Lines with nothing to press, shown above a group's rows: [STATUS] is the status card (every
+ * connection and state at a glance), the others one line each.
+ */
+enum class SettingsInfo { STATUS, ROMM_ACCOUNT, SHORTCUTS, VERSION, LICENCE }
 
 /** The on/off settings a switch row can show. */
 enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, ARMSX2_TEXT, FULL_BOX, PREFETCH_MANUALS, FACE_A_ON_RIGHT }
@@ -49,47 +52,44 @@ sealed interface SettingsRow {
     }
 }
 
-/** The settings page's groups, in order. */
+/**
+ * The settings page's groups, in order: the status card, then what Genkan does (the library,
+ * consoles, controls, reading, Anki), the servers in one place, the device, and About. A title is
+ * four words at most; what a row does is one line under it (SetupScreen's explanations).
+ */
 object SettingsGroups {
     val DEFAULT: List<SettingsGroup> = listOf(
+        SettingsGroup(id = "status", title = "Status", info = listOf(SettingsInfo.STATUS), rows = emptyList()),
         SettingsGroup(
             id = "library",
-            title = "Library & account",
-            info = listOf(SettingsInfo.ROMM_ACCOUNT),
+            title = "Library",
             rows = listOf(
-                SettingsRow.Button("Sync library now", SetupAction.SYNC_LIBRARY),
                 SettingsRow.Switch("Full box", SwitchKey.FULL_BOX, SetupAction.FULL_BOX),
-                SettingsRow.Switch("Fetch manuals of installed games", SwitchKey.PREFETCH_MANUALS, SetupAction.PREFETCH_MANUALS),
-                SettingsRow.Button("Sign out of RomM", SetupAction.SIGN_OUT),
+                SettingsRow.Switch("Fetch manuals", SwitchKey.PREFETCH_MANUALS, SetupAction.PREFETCH_MANUALS),
             ),
         ),
         SettingsGroup(
-            id = "playing",
-            title = "Playing",
+            id = "consoles",
+            title = "Consoles",
             rows = listOf(
                 SettingsRow.Switch("Built-in player", SwitchKey.BUILT_IN_PLAYER, SetupAction.BUILT_IN_PLAYER),
-                SettingsRow.Switch("Face buttons: A on the right", SwitchKey.FACE_A_ON_RIGHT, SetupAction.FACE_A_ON_RIGHT),
-                SettingsRow.Button("Screen look and sound", SetupAction.SCREEN_LOOK),
-                SettingsRow.Button("Bluetooth headphones", SetupAction.HEADPHONES),
-                SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
-                SettingsRow.Button("Emulator saves through Shizuku", SetupAction.SHIZUKU),
-                SettingsRow.Button("Usage access for play time", SetupAction.USAGE_ACCESS),
+                SettingsRow.Button("Look and sound", SetupAction.SCREEN_LOOK),
+                SettingsRow.Switch("PSP text", SwitchKey.PSP_TEXT, SetupAction.PSP_DEBUGGER),
+                SettingsRow.Switch("3DS text", SwitchKey.AZAHAR_TEXT, SetupAction.AZAHAR_RPC),
+                SettingsRow.Switch("PS2 text", SwitchKey.ARMSX2_TEXT, SetupAction.ARMSX2_PINE),
+            ),
+        ),
+        SettingsGroup(
+            id = "controls",
+            title = "Controls",
+            info = listOf(SettingsInfo.SHORTCUTS),
+            rows = listOf(
+                SettingsRow.Switch("A on the right", SwitchKey.FACE_A_ON_RIGHT, SetupAction.FACE_A_ON_RIGHT),
             ),
         ),
         SettingsGroup(
             id = "reading",
-            title = "Reading text",
-            info = listOf(SettingsInfo.YOMIKATA_SAMPLES),
-            rows = listOf(
-                SettingsRow.Switch("PSP text from PPSSPP", SwitchKey.PSP_TEXT, SetupAction.PSP_DEBUGGER),
-                SettingsRow.Switch("3DS text from Azahar", SwitchKey.AZAHAR_TEXT, SetupAction.AZAHAR_RPC),
-                SettingsRow.Switch("PS2 text from ARMSX2", SwitchKey.ARMSX2_TEXT, SetupAction.ARMSX2_PINE),
-                SettingsRow.Button("Yomikata", SetupAction.YOMIKATA),
-            ),
-        ),
-        SettingsGroup(
-            id = "words",
-            title = "Dictionaries & words",
+            title = "Reading",
             rows = listOf(
                 SettingsRow.Button("Dictionaries", SetupAction.DICTIONARIES),
                 SettingsRow.Button("Words", SetupAction.WORDS),
@@ -97,20 +97,34 @@ object SettingsGroups {
         ),
         SettingsGroup(
             id = "anki",
-            title = "Anki & reading log",
+            title = "Anki",
             rows = listOf(
-                SettingsRow.Button("Anki", SetupAction.ANKI),
+                SettingsRow.Button("Anki cards", SetupAction.ANKI),
                 SettingsRow.Button("Reading log", SetupAction.READING_LOG),
             ),
         ),
         SettingsGroup(
-            id = "device",
-            title = "Device setup",
-            info = listOf(SettingsInfo.SECOND_SCREEN, SettingsInfo.COMPANION),
+            id = "connections",
+            title = "Connections",
+            info = listOf(SettingsInfo.ROMM_ACCOUNT),
             rows = listOf(
-                SettingsRow.Switch("Genkan as Home", SwitchKey.HOME, SetupAction.ENABLE_HOME, SetupAction.DISABLE_HOME),
+                SettingsRow.Button("Sync library", SetupAction.SYNC_LIBRARY),
+                SettingsRow.Button("Yomikata", SetupAction.YOMIKATA),
+                SettingsRow.Button("Sign out of RomM", SetupAction.SIGN_OUT),
             ),
         ),
+        SettingsGroup(
+            id = "device",
+            title = "Device",
+            rows = listOf(
+                SettingsRow.Switch("Genkan as Home", SwitchKey.HOME, SetupAction.ENABLE_HOME, SetupAction.DISABLE_HOME),
+                SettingsRow.Button("Shizuku", SetupAction.SHIZUKU),
+                SettingsRow.Button("Exact play time", SetupAction.USAGE_ACCESS),
+                SettingsRow.Button("Headphones", SetupAction.HEADPHONES),
+                SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
+            ),
+        ),
+        SettingsGroup(id = "about", title = "About", info = listOf(SettingsInfo.VERSION, SettingsInfo.LICENCE), rows = emptyList()),
     )
 }
 

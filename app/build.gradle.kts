@@ -30,6 +30,9 @@ android {
         // The shelf's per-step trace (ui/ShelfTrace.kt): build with -Pgenkan.shelfTrace=true.
         val shelfTrace = providers.gradleProperty("genkan.shelfTrace").orNull == "true"
         buildConfigField("boolean", "SHELF_TRACE", shelfTrace.toString())
+        // The commit built, for Settings › About (the owner installs debug builds of main).
+        val commit = providers.exec { commandLine("git", "rev-parse", "--short=7", "HEAD") }.standardOutput.asText.map { it.trim() }
+        buildConfigField("String", "GIT_COMMIT", "\"${commit.getOrElse("unknown")}\"")
         ndk {
             // The Thor and the arm64 test emulator.
             abiFilters += "arm64-v8a"

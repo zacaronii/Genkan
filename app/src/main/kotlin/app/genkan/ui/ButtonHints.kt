@@ -154,7 +154,7 @@ object Hints {
      * Settings. On the group list A opens the group and B leaves; on a group's rows A runs the
      * focused row ([rowAction], as its switch or button says) and B goes back to the groups.
      */
-    fun settings(onRows: Boolean, rowAction: String?): List<ButtonHint> =
+    fun settings(onRows: Boolean, rowAction: String?, groupOpens: Boolean = true): List<ButtonHint> =
         if (onRows) {
             listOfNotNull(
                 rowAction?.let { ButtonHint(PadButton.A, it) },
@@ -162,7 +162,11 @@ object Hints {
                 ButtonHint(PadButton.START, "Library"),
             )
         } else {
-            listOf(ButtonHint(PadButton.A, "Open"), ButtonHint(listOf(PadButton.B, PadButton.START), "Library"))
+            // A group of lines only (the status card, About) has nothing for A to open.
+            listOfNotNull(
+                ButtonHint(PadButton.A, "Open").takeIf { groupOpens },
+                ButtonHint(listOf(PadButton.B, PadButton.START), "Library"),
+            )
         }
 
     /** A settings page of fields and buttons: the D-pad moves between them, A presses the focused one. */

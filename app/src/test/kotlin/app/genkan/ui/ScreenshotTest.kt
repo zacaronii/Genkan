@@ -27,6 +27,7 @@ import app.genkan.library.LibraryOrder
 import app.genkan.library.LibrarySort
 import app.genkan.library.LibraryPane
 import app.genkan.library.LibraryView
+import app.genkan.anki.AnkiStatus
 import app.genkan.library.PlatformEntity
 import app.genkan.library.SyncStatus
 import app.genkan.play.PlayTotals
@@ -35,6 +36,8 @@ import app.genkan.romm.RomMAccount
 import app.genkan.romm.RomMState
 import app.genkan.saves.SaveStatus
 import app.genkan.stats.ReadingGameTotals
+import app.genkan.stats.ReadingLogStatus
+import app.genkan.yomikata.CatalogStatus
 import coil3.annotation.ExperimentalCoilApi
 import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
@@ -650,10 +653,14 @@ class ScreenshotTest {
         ManualViewer(FakeManual(pages = 12), onClose = {}, listState = rememberLazyListState(3, 1010))
     }
 
-    /** The first group with the group list focused; the others with the pad on their rows. */
+    /** The status card, with the group list focused; the other groups with the pad on their rows. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsLibrary() = shootSettings(0, SettingsFocus(pane = SettingsPane.GROUPS, group = 0))
+    fun settingsStatus() = shootSettings(0, SettingsFocus(pane = SettingsPane.GROUPS, group = 0))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsLibrary() = shootSettings(1, SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 0))
 
     /** The list of looks for the PlayStation, from the screen look page: the pad on the current one. */
     @Test
@@ -746,23 +753,32 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsPlaying() = shootSettings(1, SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 1))
+    fun settingsConsoles() = shootSettings(2, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 1))
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsReading() = shootSettings(2, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 0))
+    fun settingsControls() = shootSettings(3, SettingsFocus(pane = SettingsPane.ROWS, group = 3, row = 0))
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsWords() = shootSettings(3, SettingsFocus(pane = SettingsPane.ROWS, group = 3, row = 0))
+    fun settingsReading() = shootSettings(4, SettingsFocus(pane = SettingsPane.ROWS, group = 4, row = 0))
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsAnki() = shootSettings(4, SettingsFocus(pane = SettingsPane.ROWS, group = 4, row = 1))
+    fun settingsAnki() = shootSettings(5, SettingsFocus(pane = SettingsPane.ROWS, group = 5, row = 1))
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsDevice() = shootSettings(5, SettingsFocus(pane = SettingsPane.ROWS, group = 5, row = 0))
+    fun settingsConnections() = shootSettings(6, SettingsFocus(pane = SettingsPane.ROWS, group = 6, row = 0))
+
+    /** The last groups: the list scrolled to keep the focused group in view. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsDevice() = shootSettings(7, SettingsFocus(pane = SettingsPane.ROWS, group = 7, row = 1))
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsAbout() = shootSettings(8, SettingsFocus(pane = SettingsPane.GROUPS, group = 8))
 
     /** Records group [index] of the settings page as settings_<id>.png. */
     private fun shootSettings(index: Int, focus: SettingsFocus) {
@@ -1006,6 +1022,12 @@ internal object FakeData {
             builtInPlayer = true,
             textSamples = false,
             dictionaries = dictionaries,
+            // A fresh catalog, an unreachable reading log: both kinds of status line.
+            catalog = CatalogStatus.Ready(entries = 120, updatedAt = NOW - 3 * 3_600_000L),
+            anki = AnkiStatus.Sent(5),
+            readingLog = ReadingLogStatus.Failed("connection refused"),
+            version = "0.0.1 (debug, 1234abc)",
+            nowMs = NOW,
         )
     }
 

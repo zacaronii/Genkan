@@ -64,6 +64,7 @@ class HintsTest {
     @Test
     fun settings_hints_follow_the_pane_and_the_row() {
         assertEquals("A Open | B/Start Library", Hints.settings(onRows = false, rowAction = null).text())
+        assertEquals("B/Start Library", Hints.settings(onRows = false, rowAction = null, groupOpens = false).text())
         assertEquals("A Turn on | B Groups | Start Library", Hints.settings(onRows = true, rowAction = Hints.settingsRow("Built-in player", false)).text())
         assertEquals("A Sync library now | B Groups | Start Library", Hints.settings(onRows = true, rowAction = Hints.settingsRow("Sync library now", null)).text())
     }

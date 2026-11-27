@@ -3,6 +3,7 @@ package app.genkan.ui
 import app.genkan.input.PadKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsGroupsTest {
@@ -23,6 +24,30 @@ class SettingsGroupsTest {
         assertEquals("Full box", row.title)
         assertEquals(SetupAction.FULL_BOX, row.action(on = true))
         assertEquals(SetupAction.FULL_BOX, row.action(on = false))
+    }
+
+    @Test
+    fun `the groups run from the status card to About, the servers in one place`() {
+        assertEquals(
+            listOf("status", "library", "consoles", "controls", "reading", "anki", "connections", "device", "about"),
+            groups.map { it.id },
+        )
+        assertEquals(listOf(SettingsInfo.STATUS), groups.first().info)
+        val connections = groups.single { it.id == "connections" }.rows.flatMap { it.actions }
+        assertEquals(setOf(SetupAction.SYNC_LIBRARY, SetupAction.YOMIKATA, SetupAction.SIGN_OUT), connections.toSet())
+    }
+
+    @Test
+    fun `titles are four words at most`() {
+        val titles = groups.map { it.title } + groups.flatMap { it.rows }.map { it.title }
+        titles.forEach { assertTrue(it, it.split(" ").size <= 4) }
+    }
+
+    @Test
+    fun `a group with nothing to press keeps the pad on the group list`() {
+        val status = SettingsFocus(group = 0)
+        assertEquals(status, move(status, PadKey.RIGHT))
+        assertEquals(status, move(status, PadKey.A))
     }
 
     @Test
@@ -72,8 +97,9 @@ class SettingsGroupsTest {
 
     @Test
     fun `right or A enters the rows, left or B goes back to the groups`() {
-        assertEquals(SettingsPane.ROWS, move(SettingsFocus(), PadKey.RIGHT)!!.pane)
-        assertEquals(SettingsPane.ROWS, move(SettingsFocus(), PadKey.A)!!.pane)
+        val library = SettingsFocus(group = 1)
+        assertEquals(SettingsPane.ROWS, move(library, PadKey.RIGHT)!!.pane)
+        assertEquals(SettingsPane.ROWS, move(library, PadKey.A)!!.pane)
         val inRows = SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 1)
         assertEquals(inRows.copy(pane = SettingsPane.GROUPS), move(inRows, PadKey.LEFT))
         assertEquals(inRows.copy(pane = SettingsPane.GROUPS), move(inRows, PadKey.B))
