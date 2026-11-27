@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.first
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.anki.AnkiStatus
+import app.genkan.core.PlayerChoice
+import app.genkan.core.ScreenLook
 import app.genkan.dictionary.DictionaryEntity
 import app.genkan.home.DualScreenStatus
 import app.genkan.library.SyncStatus
@@ -90,6 +92,13 @@ data class SetupState(
     val version: String = "",
     /** The time the page was drawn, for the catalog's age (milliseconds since the epoch). */
     val nowMs: Long = 0,
+    /** Whether the player learns each game's speed step. */
+    val learning: Boolean = true,
+    /** Each console's settings, for its row's line: looks chosen, sound, swaps, what plays it. */
+    val looks: Map<String, ScreenLook> = emptyMap(),
+    val lowLatencyOff: Set<String> = emptySet(),
+    val faceSwapped: Set<String> = emptySet(),
+    val coreChoice: Map<String, String> = emptyMap(),
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -102,6 +111,7 @@ data class SetupState(
         SwitchKey.ARMSX2_TEXT -> armsxPine
         SwitchKey.PSP_TEXT -> pspDebugger
         SwitchKey.AZAHAR_TEXT -> azaharRpc
+        SwitchKey.LEARNING -> learning
     }
 
     /**
@@ -111,6 +121,7 @@ data class SetupState(
     fun actionFor(row: SettingsRow): SetupAction = when (row) {
         is SettingsRow.Button -> row.action
         is SettingsRow.Switch -> row.action(isOn(row.key))
+        is SettingsRow.Console -> SetupAction.CONSOLE
     }
 
     companion object {
@@ -405,6 +416,7 @@ private fun infoLine(info: SettingsInfo, state: SetupState): String = when (info
 /** The line under a row's title: what it does, or what its state means. */
 private fun explanation(row: SettingsRow, state: SetupState): String = when (row) {
     is SettingsRow.Switch -> switchExplanation(row.key, state)
+    is SettingsRow.Console -> consoleSummary(row.platform, state)
     is SettingsRow.Button -> when (row.action) {
         SetupAction.SYNC_LIBRARY -> when (val s = state.sync) {
             is SyncStatus.Done -> "Fetch RomM's games now (${s.games} games)"
@@ -426,7 +438,7 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
         }
         SetupAction.YOMIKATA -> "The script catalog, samples and their inbox"
         SetupAction.HEADPHONES -> "Reconnect paired headphones"
-        SetupAction.SCREEN_LOOK -> "Each console's look, sound and button swaps"
+
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
             if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"
         }
@@ -479,11 +491,30 @@ private fun switchExplanation(key: SwitchKey, state: SetupState): String = when 
     } else {
         "Uses OCR; on needs PINE, in ARMSX2's Advanced settings"
     }
+    SwitchKey.LEARNING -> if (state.learning) {
+        "A slow game tries a lighter setting, a quick one a sharper"
+    } else {
+        "Each game keeps the setting it starts with"
+    }
     SwitchKey.AZAHAR_TEXT -> if (state.azaharRpc) {
         "Read from Azahar's memory (RPC on your network)"
     } else {
         "Uses OCR; on opens Azahar's RPC to your network"
     }
+}
+
+/** A console row's line: its look, then what differs from the usual (sound, buttons, player, text). */
+fun consoleSummary(platform: String, state: SetupState): String {
+    val look = state.looks[platform] ?: ScreenLook.defaultFor(platform)
+    val parts = listOfNotNull(
+        look.label,
+        "plain sound".takeIf { platform in state.lowLatencyOff },
+        "A/B swapped".takeIf { platform in state.faceSwapped },
+        // The player only when it isn't the console's usual one.
+        PlayerChoice.current(platform, state.coreChoice)?.takeIf { it != PlayerChoice.current(platform, emptyMap()) }?.label,
+        consoleText(platform, state)?.takeIf { it.on }?.let { "text from memory" },
+    )
+    return parts.joinToString(", ")
 }
 
 /** The status at the right of a row, for the rows that can need attention. */

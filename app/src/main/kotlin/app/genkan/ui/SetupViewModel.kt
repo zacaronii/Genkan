@@ -3,6 +3,8 @@ package app.genkan.ui
 import app.genkan.BuildConfig
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.AnkiStatus
+import app.genkan.core.ScreenLook
+import app.genkan.core.ScreenLooks
 import app.genkan.stats.ReadingLogPusher
 import app.genkan.stats.ReadingLogStatus
 import app.genkan.yomikata.CatalogStatus
@@ -49,7 +51,10 @@ enum class SetupAction {
     AZAHAR_RPC,
     ARMSX2_PINE,
     BUILT_IN_PLAYER,
-    SCREEN_LOOK,
+    /** Opens a console's page: the row's console (SetupViewModel.focusedConsole). */
+    CONSOLE,
+    /** The player learns each game's speed step. */
+    LEARNING,
     INSERT_ANIMATION,
     /** The shelf's focused game as a full box, or its case. */
     FULL_BOX,
@@ -78,6 +83,7 @@ class SetupViewModel @Inject constructor(
     private val yomikataCatalog: YomikataCatalog,
     ankiMiner: AnkiMiner,
     readingLog: ReadingLogPusher,
+    looks: ScreenLooks,
 ) : ViewModel() {
 
 
@@ -102,6 +108,7 @@ class SetupViewModel @Inject constructor(
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
         playerSettings.aOnRight, armsxText.enabled, yomikataCatalog.status, ankiMiner.status, readingLog.status,
+        playerSettings.learning, looks.consoles, playerSettings.lowLatencyOff, playerSettings.faceSwapped, playerSettings.coreChoice,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -124,6 +131,11 @@ class SetupViewModel @Inject constructor(
             readingLog = v[17] as ReadingLogStatus,
             version = VERSION,
             nowMs = System.currentTimeMillis(),
+            learning = v[18] as Boolean,
+            looks = v[19] as Map<String, ScreenLook>,
+            lowLatencyOff = v[20] as Set<String>,
+            faceSwapped = v[21] as Set<String>,
+            coreChoice = v[22] as Map<String, String>,
         )
     }.stateIn(
         viewModelScope,
@@ -164,6 +176,11 @@ class SetupViewModel @Inject constructor(
         _focus.value = next
         val pressed = key == PadKey.A && current.pane == SettingsPane.ROWS
         return KeyResult(consumed = true, action = if (pressed) actionFor(groups[next.group].rows[next.row]) else null)
+    }
+
+    /** The console of the row the pad is on, for a press that opens its page. */
+    fun focusedConsole(): String? = with(_focus.value) {
+        (groups.getOrNull(group)?.rows?.getOrNull(row) as? SettingsRow.Console)?.platform
     }
 
     /** A tap on a group in the list. */

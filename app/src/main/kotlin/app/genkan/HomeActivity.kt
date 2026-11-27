@@ -59,9 +59,9 @@ import app.genkan.ui.GenkanTheme
 import app.genkan.ui.SetupAction
 import app.genkan.ui.SetupScreen
 import app.genkan.ui.BottomBack
-import app.genkan.ui.ScreenLookScreen
+import app.genkan.ui.ConsoleScreen
 import app.genkan.ui.HeadphonesScreen
-import app.genkan.ui.ScreenLookViewModel
+import app.genkan.ui.ConsoleViewModel
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -70,7 +70,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK, Screen.HEADPHONES)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -91,7 +91,7 @@ class HomeActivity : ComponentActivity() {
     private val readingLogViewModel: ReadingLogViewModel by viewModels()
     private val yomikataSettingsViewModel: YomikataSettingsViewModel by viewModels()
     private val wordsSettingsViewModel: WordsSettingsViewModel by viewModels()
-    private val screenLookViewModel: ScreenLookViewModel by viewModels()
+    private val consoleViewModel: ConsoleViewModel by viewModels()
     private val headphonesViewModel: app.genkan.ui.HeadphonesViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -139,7 +139,10 @@ class HomeActivity : ComponentActivity() {
                     Screen.READING_LOG -> ReadingLogScreen(readingLogViewModel)
                     Screen.YOMIKATA -> YomikataSettingsScreen(yomikataSettingsViewModel)
                     Screen.WORDS -> WordsSettingsScreen(wordsSettingsViewModel)
-                    Screen.SCREEN_LOOK -> ScreenLookScreen(screenLookViewModel)
+                    Screen.CONSOLE -> {
+                        val state by viewModel.state.collectAsStateWithLifecycle()
+                        ConsoleScreen(consoleViewModel, state, onAction = ::run)
+                    }
                     Screen.HEADPHONES -> HeadphonesScreen(headphonesViewModel)
                 }
             }
@@ -270,9 +273,9 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.SCREEN_LOOK, Screen.HEADPHONES -> when (pad) {
-                // B closes the keyboard first, or the screen look list, and only then the page.
-                PadKey.B -> if (!hideKeyboard() && !(screen == Screen.SCREEN_LOOK && screenLookViewModel.closePicker())) appViewModel.closePage()
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES -> when (pad) {
+                // B closes the keyboard first, or a console's list of looks, and only then the page.
+                PadKey.B -> if (!hideKeyboard() && !(screen == Screen.CONSOLE && consoleViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
                 else -> return super.dispatchKeyEvent(event)
             }
@@ -310,7 +313,13 @@ class HomeActivity : ComponentActivity() {
             SetupAction.READING_LOG -> appViewModel.openPage(Screen.READING_LOG)
             SetupAction.YOMIKATA -> appViewModel.openPage(Screen.YOMIKATA)
             SetupAction.WORDS -> appViewModel.openPage(Screen.WORDS)
-            SetupAction.SCREEN_LOOK -> appViewModel.openPage(Screen.SCREEN_LOOK)
+            SetupAction.CONSOLE -> viewModel.focusedConsole()?.let {
+                consoleViewModel.show(it)
+                appViewModel.openPage(Screen.CONSOLE)
+            }
+            SetupAction.LEARNING -> lifecycleScope.launch {
+                viewModel.playerSettings.setLearning(!viewModel.playerSettings.learning.first())
+            }
             SetupAction.HEADPHONES -> appViewModel.openPage(Screen.HEADPHONES)
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())

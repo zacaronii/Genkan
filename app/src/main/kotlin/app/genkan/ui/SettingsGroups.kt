@@ -22,7 +22,7 @@ data class SettingsGroup(
 enum class SettingsInfo { STATUS, ROMM_ACCOUNT, SHORTCUTS, VERSION, LICENCE }
 
 /** The on/off settings a switch row can show. */
-enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, ARMSX2_TEXT, FULL_BOX, PREFETCH_MANUALS, FACE_A_ON_RIGHT }
+enum class SwitchKey { HOME, BUILT_IN_PLAYER, INSERT_ANIMATION, PSP_TEXT, AZAHAR_TEXT, ARMSX2_TEXT, FULL_BOX, PREFETCH_MANUALS, FACE_A_ON_RIGHT, LEARNING }
 
 /** A row of a group, the only things the gamepad lands on. */
 sealed interface SettingsRow {
@@ -34,6 +34,11 @@ sealed interface SettingsRow {
     /** A row that does one thing when pressed: open a page, start a sync, ask for a grant. */
     data class Button(override val title: String, val action: SetupAction) : SettingsRow {
         override val actions get() = setOf(action)
+    }
+
+    /** A console's row, opening its page (ConsoleScreen); one per console the built-in player runs. */
+    data class Console(override val title: String, val platform: String) : SettingsRow {
+        override val actions get() = setOf(SetupAction.CONSOLE)
     }
 
     /**
@@ -58,6 +63,9 @@ sealed interface SettingsRow {
  * four words at most; what a row does is one line under it (SetupScreen's explanations).
  */
 object SettingsGroups {
+    /** The actions a console's page runs (its text source), rather than a row here. */
+    val ON_CONSOLE_PAGES: Set<SetupAction> = setOf(SetupAction.PSP_DEBUGGER, SetupAction.ARMSX2_PINE)
+
     val DEFAULT: List<SettingsGroup> = listOf(
         SettingsGroup(id = "status", title = "Status", info = listOf(SettingsInfo.STATUS), rows = emptyList()),
         SettingsGroup(
@@ -73,10 +81,10 @@ object SettingsGroups {
             title = "Consoles",
             rows = listOf(
                 SettingsRow.Switch("Built-in player", SwitchKey.BUILT_IN_PLAYER, SetupAction.BUILT_IN_PLAYER),
-                SettingsRow.Button("Look and sound", SetupAction.SCREEN_LOOK),
-                SettingsRow.Switch("PSP text", SwitchKey.PSP_TEXT, SetupAction.PSP_DEBUGGER),
+                SettingsRow.Switch("Learn game speeds", SwitchKey.LEARNING, SetupAction.LEARNING),
+            ) + LOOK_CONSOLES.map { (platform, name) -> SettingsRow.Console(name, platform) } + listOf(
+                // The 3DS plays only in Azahar, so it has no console page: its text source is here.
                 SettingsRow.Switch("3DS text", SwitchKey.AZAHAR_TEXT, SetupAction.AZAHAR_RPC),
-                SettingsRow.Switch("PS2 text", SwitchKey.ARMSX2_TEXT, SetupAction.ARMSX2_PINE),
             ),
         ),
         SettingsGroup(

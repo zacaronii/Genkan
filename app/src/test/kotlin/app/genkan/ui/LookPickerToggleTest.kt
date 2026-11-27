@@ -86,7 +86,7 @@ class LookPickerToggleTest {
         compose.setContent {
             // The settings page is reached on the pad, out of touch mode, where rows take focus.
             androidx.compose.ui.platform.LocalInputModeManager.current.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
-            ScreenLookContent(consoles = mapOf("psx" to ScreenLook.CRT_LOTTES), picking = "psx")
+            ConsoleContent(platform = "psx", look = ScreenLook.CRT_LOTTES, picking = true)
         }
         compose.waitForIdle()
         marked("CRT Lottes").assertIsFocused()
