@@ -34,6 +34,23 @@ class TuningStore internal constructor(private val dir: File) {
         changes.value++
     }
 
+    /** Every game with a step of its own, by RomM rom id. */
+    @Synchronized
+    fun all(): Map<Long, Override> {
+        val all = read()
+        return all.keys().asSequence().mapNotNull { key ->
+            val id = key.toLongOrNull() ?: return@mapNotNull null
+            override(id)?.let { id to it }
+        }.toMap()
+    }
+
+    /** Clears every game's step (Settings › Advanced › Tuning steps › Clear all). */
+    @Synchronized
+    fun clearAll() {
+        write(JSONObject())
+        changes.value++
+    }
+
     @Synchronized
     fun clearOverride(romId: Long) {
         val all = read()

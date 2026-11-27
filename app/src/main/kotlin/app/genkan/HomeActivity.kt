@@ -64,6 +64,8 @@ import app.genkan.ui.BottomBack
 import app.genkan.ui.ConsoleScreen
 import app.genkan.ui.HeadphonesScreen
 import app.genkan.ui.NoticeScreen
+import app.genkan.ui.TuningStepsScreen
+import app.genkan.ui.TuningStepsViewModel
 import app.genkan.ui.ConsoleViewModel
 import app.genkan.ui.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -73,7 +75,7 @@ private const val TAG = "HomeActivity"
 private const val REFOCUS_DELAY_MS = 600L
 
 /** Screens that are forms, driven by Compose focus rather than a ViewModel. */
-private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE)
+private val FORMS = setOf(Screen.LOGIN, Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE, Screen.TUNING_STEPS)
 
 /** Top screen (display 0): the launcher. In Phase 0 it only hosts the setup screen. */
 @AndroidEntryPoint
@@ -95,6 +97,7 @@ class HomeActivity : ComponentActivity() {
     private val yomikataSettingsViewModel: YomikataSettingsViewModel by viewModels()
     private val wordsSettingsViewModel: WordsSettingsViewModel by viewModels()
     private val consoleViewModel: ConsoleViewModel by viewModels()
+    private val tuningStepsViewModel: TuningStepsViewModel by viewModels()
     private val headphonesViewModel: app.genkan.ui.HeadphonesViewModel by viewModels()
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -150,6 +153,7 @@ class HomeActivity : ComponentActivity() {
                     }
                     Screen.HEADPHONES -> HeadphonesScreen(headphonesViewModel)
                     Screen.NOTICE -> NoticeScreen()
+                    Screen.TUNING_STEPS -> TuningStepsScreen(tuningStepsViewModel)
                 }
             }
         }
@@ -283,7 +287,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             // A form: the D-pad moves Compose focus between its fields.
-            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE -> when (pad) {
+            Screen.ANKI, Screen.READING_LOG, Screen.YOMIKATA, Screen.YOMIKATA_SERVERS, Screen.ANKI_SERVER, Screen.WORDS, Screen.CONSOLE, Screen.HEADPHONES, Screen.NOTICE, Screen.TUNING_STEPS -> when (pad) {
                 // B closes the keyboard first, or a console's list of looks, and only then the page.
                 PadKey.B -> if (!hideKeyboard() && !(screen == Screen.CONSOLE && consoleViewModel.closePicker())) appViewModel.closePage()
                 PadKey.START -> appViewModel.closeSettings()
@@ -334,6 +338,10 @@ class HomeActivity : ComponentActivity() {
             }
             SetupAction.HEADPHONES -> appViewModel.openPage(Screen.HEADPHONES)
             SetupAction.NOTICE -> appViewModel.openPage(Screen.NOTICE)
+            SetupAction.TUNING_STEPS -> appViewModel.openPage(Screen.TUNING_STEPS)
+            SetupAction.CLEAR_MANUALS -> if (viewModel.confirmed(action)) viewModel.clearManuals()
+            SetupAction.CLEAR_ART -> if (viewModel.confirmed(action)) viewModel.clearArt()
+            SetupAction.SAVE_LOG -> viewModel.saveLog()
             SetupAction.USAGE_ACCESS -> startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
             )

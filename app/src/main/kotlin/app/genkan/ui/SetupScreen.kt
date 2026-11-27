@@ -101,6 +101,15 @@ data class SetupState(
     val coreChoice: Map<String, String> = emptyMap(),
     /** Whether AnkiConnect answered when Settings last asked; null until it has. */
     val ankiReach: AnkiReach? = null,
+    /** What Storage holds, in bytes; null until measured. */
+    val manualsBytes: Long? = null,
+    val artBytes: Long? = null,
+    /** The Clear row waiting for its second press, if any. */
+    val armed: SetupAction? = null,
+    /** How many games have a step of their own. */
+    val tuningSteps: Int = 0,
+    /** What the last Save a log did, if it ran. */
+    val logSaved: String? = null,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -452,6 +461,13 @@ sealed interface AnkiReach {
     data class Unreachable(val reason: String) : AnkiReach
 }
 
+/** A size for Storage: whole megabytes past one, else kilobytes. */
+fun bytes(size: Long): String = when {
+    size >= 1_000_000 -> "${(size + 500_000) / 1_000_000} MB"
+    size >= 1_000 -> "${(size + 500) / 1_000} KB"
+    else -> "$size B"
+}
+
 /** How long ago, for the status card: minutes, hours, then days. */
 fun age(ms: Long): String {
     val minutes = (ms / 60_000).coerceAtLeast(0)
@@ -507,6 +523,10 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
         SetupAction.YOMIKATA_SERVERS -> "The script catalog and the samples inbox"
         SetupAction.ANKI_SERVER -> "Where cards go, and the word-audio source"
         SetupAction.NOTICE -> "The code Genkan borrows and builds, with its licences"
+        SetupAction.CLEAR_MANUALS -> if (state.armed == row.action) "Press again to clear them" else "Kept to open offline; press to clear"
+        SetupAction.CLEAR_ART -> if (state.armed == row.action) "Press again to clear them" else "Fetched again as the shelf shows them"
+        SetupAction.TUNING_STEPS -> if (state.tuningSteps == 0) "No game has a step of its own" else "${state.tuningSteps} games with a step of their own"
+        SetupAction.SAVE_LOG -> state.logSaved ?: "To Download on this device; never sent"
         SetupAction.HEADPHONES -> "Reconnect paired headphones"
 
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
@@ -599,6 +619,8 @@ private fun status(row: SettingsRow, state: SetupState): Status? = when {
     }
     row is SettingsRow.Button && row.action == SetupAction.USAGE_ACCESS ->
         if (state.usageAccess) Status("On") else Status("Off", attention = true)
+    row is SettingsRow.Button && row.action == SetupAction.CLEAR_MANUALS -> state.manualsBytes?.let { Status(bytes(it)) }
+    row is SettingsRow.Button && row.action == SetupAction.CLEAR_ART -> state.artBytes?.let { Status(bytes(it)) }
     row is SettingsRow.Button && row.action == SetupAction.SYNC_LIBRARY && state.sync is SyncStatus.Failed ->
         Status("Failed", attention = true)
     else -> null

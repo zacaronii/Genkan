@@ -31,7 +31,7 @@ class SettingsGroupsTest {
     @Test
     fun `the groups run from the status card to About, the servers in one place`() {
         assertEquals(
-            listOf("status", "library", "consoles", "controls", "reading", "anki", "connections", "device", "about"),
+            listOf("status", "library", "consoles", "controls", "reading", "anki", "connections", "device", "storage", "advanced", "about"),
             groups.map { it.id },
         )
         assertEquals(listOf(SettingsInfo.STATUS), groups.first().info)
