@@ -43,6 +43,9 @@ import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -805,6 +808,28 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun settingsHelp() = shoot("settings_help", TOP_PIXELS) {
         SetupContent(FakeData.settings, SettingsGroups.DEFAULT, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 0, help = true), onSelectGroup = {}, onRow = { _, _, _ -> })
+    }
+
+    /** The app icon's layers (Design/icons), in a circle mask, and its monochrome layer as a themed icon. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun appIcon() = shoot("app_icon", TOP_PIXELS) {
+        androidx.compose.foundation.layout.Row(
+            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFFE9E9EE)).padding(androidx.compose.ui.unit.Dp(40f)),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(androidx.compose.ui.unit.Dp(40f)),
+        ) {
+            val size = androidx.compose.ui.Modifier.size(androidx.compose.ui.unit.Dp(216f)).clip(CircleShape)
+            androidx.compose.foundation.layout.Box(size) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(app.genkan.R.drawable.ic_launcher_background), null, androidx.compose.ui.Modifier.fillMaxSize())
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(app.genkan.R.drawable.ic_launcher_foreground), null, androidx.compose.ui.Modifier.fillMaxSize())
+            }
+            androidx.compose.foundation.layout.Box(size.background(androidx.compose.ui.graphics.Color(0xFFD7E3F4))) {
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(app.genkan.R.drawable.ic_launcher_monochrome), null, androidx.compose.ui.Modifier.fillMaxSize(),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(androidx.compose.ui.graphics.Color(0xFF24456E)),
+                )
+            }
+        }
     }
 
     /** Settings › About › Licences, with made-up notices (NOTICE itself changes as cores are added). */
