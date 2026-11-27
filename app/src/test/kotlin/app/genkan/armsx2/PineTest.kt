@@ -142,9 +142,9 @@ class PineTest {
 
     @Test
     fun `nothing listening is null, not an error`() {
-        val port = pine.server.localPort
-        pine.close()
-        PineClient(port, timeoutMs = 300).use {
+        // TCP port 1, which nothing on a test machine binds: a port just closed could be taken
+        // again on a busy machine before the client tries it.
+        PineClient(NEVER_BOUND, timeoutMs = 300).use {
             assertNull(it.status())
             assertEquals(PineFailure.REFUSED, it.lastFailure)
         }
@@ -196,5 +196,10 @@ class PineTest {
         assertEquals(0x123456L, ram.target(0x80123456))
         assertNull(ram.target(0x12000000)) // hardware registers
         assertNull(ram.target(0x03000000)) // past 32 MB
+    }
+
+    private companion object {
+        /** A port nothing listens on: TCP port 1 (tcpmux), privileged and unused. */
+        const val NEVER_BOUND = 1
     }
 }
