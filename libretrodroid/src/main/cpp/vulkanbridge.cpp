@@ -616,17 +616,18 @@ bool VulkanBridge::present(unsigned width, unsigned height, GLuint framebuffer, 
     GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
     if (scissor) glDisable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+    // Black first: the framebuffer can be larger than the frame (it grows to the largest yet), and
+    // a look that samples past the frame's edge would otherwise read what was never drawn. A
+    // blanking frame (no image) is just this.
+    GLfloat clear[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(clear[0], clear[1], clear[2], clear[3]);
     if (copies) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, target.framebuffer);
         GLint top = (GLint) height;
         glBlitFramebuffer(0, 0, (GLint) width, top, 0, flip ? top : 0, (GLint) width, flip ? 0 : top, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    } else {
-        // The core's blanking: a black frame.
-        GLfloat clear[4];
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
-        glClearColor(0, 0, 0, 1);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(clear[0], clear[1], clear[2], clear[3]);
     }
     if (scissor) glEnable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) boundRead);

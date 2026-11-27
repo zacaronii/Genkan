@@ -206,10 +206,11 @@ class CoreCatalogTest {
         assertFalse(ps2.debugOnly)
         assertEquals(mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"), ps2.firmware)
         assertEquals("ps2-0230a-20080220.bin", ps2.variables["pcsx2_bios"])
-        // The renderer is the ladder's: Software on 6 threads by default, GL ("Auto") as the lighter step.
+        // The renderer is the ladder's: Vulkan by default, GL ("Auto" without Vulkan), or Software on 6 threads.
         assertNull(ps2.variables["pcsx2_renderer"])
         val ladder = TuningLadders.of(ps2.tuning)!!
-        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), ladder.assignment("default"))
+        assertEquals("vulkan", ladder.defaultId)
+        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), ladder.assignment("software"))
         assertEquals("Auto", ladder.assignment("gl")["pcsx2_renderer"])
         // Only LRPS2 is ever offered Vulkan.
         assertTrue(ps2.vulkan)
