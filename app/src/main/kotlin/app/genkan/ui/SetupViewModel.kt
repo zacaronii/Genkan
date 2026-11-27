@@ -1,5 +1,12 @@
 package app.genkan.ui
 
+import app.genkan.BuildConfig
+import app.genkan.anki.AnkiMiner
+import app.genkan.anki.AnkiStatus
+import app.genkan.stats.ReadingLogPusher
+import app.genkan.stats.ReadingLogStatus
+import app.genkan.yomikata.CatalogStatus
+import app.genkan.yomikata.YomikataCatalog
 import androidx.lifecycle.ViewModel
 import app.genkan.dictionary.Dictionaries
 import app.genkan.home.DualScreenState
@@ -25,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** Everything the settings page can do. Each one has exactly one row in [SettingsGroups.DEFAULT]. */
@@ -67,6 +75,9 @@ class SetupViewModel @Inject constructor(
     val armsxText: ArmsxText,
     val playerSettings: PlayerSettings,
     val librarySettings: LibraryViewSettings,
+    private val yomikataCatalog: YomikataCatalog,
+    ankiMiner: AnkiMiner,
+    readingLog: ReadingLogPusher,
 ) : ViewModel() {
 
 
@@ -90,7 +101,7 @@ class SetupViewModel @Inject constructor(
         dualScreen.status, romm.state, librarySync.status, usageAccess, shizuku,
         ppssppText.enabled, azaharText.enabled, playerSettings.enabled, playerSettings.samples, dictionaries.all,
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
-        playerSettings.aOnRight, armsxText.enabled,
+        playerSettings.aOnRight, armsxText.enabled, yomikataCatalog.status, ankiMiner.status, readingLog.status,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -108,6 +119,11 @@ class SetupViewModel @Inject constructor(
             prefetchManuals = v[12] as Boolean,
             faceAOnRight = v[13] as Boolean,
             armsxPine = v[14] as Boolean,
+            catalog = v[15] as CatalogStatus,
+            anki = v[16] as AnkiStatus,
+            readingLog = v[17] as ReadingLogStatus,
+            version = VERSION,
+            nowMs = System.currentTimeMillis(),
         )
     }.stateIn(
         viewModelScope,
@@ -123,8 +139,14 @@ class SetupViewModel @Inject constructor(
             builtInPlayer = false,
             textSamples = false,
             dictionaries = emptyList(),
+            version = VERSION,
         ),
     )
+
+    init {
+        // The status card's catalog line: the cached index, fetched again only when it's stale.
+        viewModelScope.launch { runCatching { yomikataCatalog.refresh() } }
+    }
 
     val groups: List<SettingsGroup> = SettingsGroups.DEFAULT
 
@@ -158,4 +180,9 @@ class SetupViewModel @Inject constructor(
     private fun actionFor(row: SettingsRow): SetupAction = state.value.actionFor(row)
 
     data class KeyResult(val consumed: Boolean, val action: SetupAction? = null)
+
+    private companion object {
+        /** The version About shows: the build's name, its kind, and the commit it was built from. */
+        val VERSION = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE}, ${BuildConfig.GIT_COMMIT})"
+    }
 }
