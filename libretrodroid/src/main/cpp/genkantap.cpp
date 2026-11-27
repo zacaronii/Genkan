@@ -166,19 +166,26 @@ size_t GenkanTap::videoRamSize() {
     return systemRamSize(RETRO_MEMORY_VIDEO_RAM);
 }
 
+void GenkanTap::setVideoRamWordSize(unsigned size) {
+    std::lock_guard<std::mutex> lock(memoryLock);
+    videoRamWordSize = size;
+}
+
 bool GenkanTap::readVideoRam(uint64_t offset, uint8_t *out, size_t size) {
     uint8_t *data;
     size_t total;
+    unsigned word;
     {
         std::lock_guard<std::mutex> lock(memoryLock);
         if (systemRamData == nullptr) return false;
         data = static_cast<uint8_t *>(systemRamData(RETRO_MEMORY_VIDEO_RAM));
         total = systemRamSize(RETRO_MEMORY_VIDEO_RAM);
+        word = videoRamWordSize;
     }
     if (data == nullptr || offset + size > total) return false;
-    struct iovec local { out, size };
-    struct iovec remote { data + offset, size };
-    return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
+    // In the console's order, as a word-kept region of the system RAM is read (copyOut).
+    Region region { 0, total, data, false, 0, 0, word };
+    return copyOut(region, offset, out, size) == size;
 }
 
 void GenkanTap::setSampleRate(int32_t rate) {

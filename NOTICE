@@ -143,14 +143,23 @@ Pinned commit: fee2e824525daa22bcf318f96127fe43fa8a15ad
   libmupen64plus_next_gles3_libretro_android.so (Mupen64Plus-Next, GPL-2.0,
   https://github.com/libretro/mupen64plus-libretro-nx),
   libfceumm_libretro_android.so (FCEUmm, GPL-2.0,
-  https://github.com/libretro/libretro-fceumm) and
-  libgenesis_plus_gx_libretro_android.so (Genesis Plus GX, non-commercial
-  licence, https://github.com/libretro/Genesis-Plus-GX), arm64-v8a,
+  https://github.com/libretro/libretro-fceumm), arm64-v8a,
   unmodified, bundled as native libraries; and assets/ppsspp.zip (PPSSPP's
   fonts, shaders and flash0 files, unmodified) as assets/cores/ppsspp.zip.
   They are downloaded at build time by the downloadCores and
   downloadCoreAssets tasks in app/build.gradle.kts and are not committed
   here; their sources are at the links above.
+
+--------------------------------------------------------------------------
+Genesis Plus GX, the Mega Drive core, built from source (submodule
+third_party/genesis-plus-gx):
+
+  libgenesis_plus_gx_libretro_android.so (Genesis Plus GX, non-commercial
+  licence, https://github.com/libretro/Genesis-Plus-GX), pinned commit
+  51348f65738b0c75f4b8b4488fbc67645e3769af, arm64-v8a, with Genkan's patch
+  in patches/genesis_plus_gx (the VDP's video RAM given to the frontend;
+  see its README), under the core's own licence. It is built by the
+  buildGenesisPlusGx task in app/build.gradle.kts.
   Genesis Plus GX's licence allows redistribution for non-commercial use
   only; Genkan is not sold, and the core is bundled as Lemuroid bundles it.
 

@@ -174,11 +174,14 @@ abstract class DownloadPinnedFiles : DefaultTask() {
 
 /**
  * A libretro core built from source, a submodule pinned at [commit] (checked before building), with
- * the NDK's ndk-build into [outputDir]. Built once per commit into [cacheDir], so later builds (and
- * CI, which caches the folder) only copy it; nothing is downloaded but the submodule itself.
+ * the NDK's ndk-build into [outputDir]. Built once per commit (and set of [patches]) into
+ * [cacheDir], so later builds (and CI, which caches the folder) only copy it; nothing is downloaded
+ * but the submodule itself.
  */
 abstract class BuildLibretroCore : DefaultTask() {
     @get:Input abstract val commit: Property<String>
+    /** Genkan's own patches to the source (the .patch files in patches/<core>), applied in name order to a copy of it. */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val patches: ConfigurableFileCollection
     /** The folder holding the core's jni/Android.mk and jni/Application.mk, inside the submodule. */
     @get:Internal abstract val projectDir: DirectoryProperty
     @get:Internal abstract val submoduleDir: DirectoryProperty
@@ -198,11 +201,16 @@ abstract class BuildLibretroCore : DefaultTask() {
             exec.exec { commandLine("git", "-C", submoduleDir.get().asFile.path, "rev-parse", "HEAD"); standardOutput = out }
         }.toString().trim()
         check(head == commit.get()) { "${submoduleDir.get().asFile.name} is at $head, not the pinned ${commit.get()}: run git submodule update" }
-        val cached = cacheDir.get().asFile.resolve("${libraryName.get().removeSuffix(".so")}-${commit.get()}/${abi.get()}/${libraryName.get()}")
+        val patchFiles = patches.files.filter { it.isFile }.sortedBy { it.name }
+        // A patched build is its own: the patches' hash is part of the cached library's name.
+        val patchKey = if (patchFiles.isEmpty()) "" else "-p" + MessageDigest.getInstance("SHA-256")
+            .digest(patchFiles.joinToString("") { it.name + "\n" + it.readText() }.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
+        val cached = cacheDir.get().asFile.resolve("${libraryName.get().removeSuffix(".so")}-${commit.get()}$patchKey/${abi.get()}/${libraryName.get()}")
         if (!cached.isFile) {
             logger.lifecycle("Building ${libraryName.get()} at ${commit.get().take(7)}")
             val work = temporaryDir.apply { deleteRecursively(); mkdirs() }
-            val project = projectDir.get().asFile
+            val source = submoduleDir.get().asFile
+            val project = patched(source, work, patchFiles).resolve(projectDir.get().asFile.relativeTo(source))
             exec.exec {
                 commandLine(
                     listOf(
@@ -223,6 +231,32 @@ abstract class BuildLibretroCore : DefaultTask() {
         }
         val out = outputDir.get().asFile.resolve(abi.get()).apply { deleteRecursively(); mkdirs() }
         cached.copyTo(out.resolve(libraryName.get()), overwrite = true)
+    }
+
+    /** [source] itself with no patches, else a copy of it in [temp] with each of [patchFiles] applied. */
+    private fun patched(source: File, temp: File, patchFiles: List<File>): File {
+        if (patchFiles.isEmpty()) return source
+        val copy = temp.resolve("source")
+        exec.exec { commandLine("cp", "-R", source.path, copy.path) }
+        // A submodule's .git names its git directory relative to itself: the copy needs it whole
+        // (the build asks git for its version).
+        val gitFile = source.resolve(".git")
+        if (gitFile.isFile) {
+            val gitDir = gitFile.readText().trim().removePrefix("gitdir:").trim()
+            copy.resolve(".git").writeText("gitdir: ${source.resolve(gitDir).canonicalPath}\n")
+        }
+        for (patch in patchFiles) {
+            // patch(1) with no fuzz, as BuildCmakeCore applies its own: a patch whose context moved
+            // doesn't apply, rather than landing near it.
+            val applies = exec.exec {
+                commandLine("patch", "-p1", "-F", "0", "--forward", "--dry-run", "-d", copy.path, "-i", patch.path)
+                isIgnoreExitValue = true
+            }
+            check(applies.exitValue == 0) { "${patch.name} no longer applies to ${source.name} at ${commit.get().take(7)}: update or drop it (see its README)" }
+            exec.exec { commandLine("patch", "-p1", "-F", "0", "--forward", "-d", copy.path, "-i", patch.path) }
+            logger.lifecycle("Applied ${patch.name}")
+        }
+        return copy
     }
 }
 
@@ -264,6 +298,27 @@ val buildBeetleSaturn = tasks.register<BuildLibretroCore>("buildBeetleSaturn") {
     ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
     cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
     outputDir.set(layout.buildDirectory.dir("generated/beetle-saturn"))
+}
+
+/**
+ * Genesis Plus GX (its own non-commercial licence), the Mega Drive core, built from libretro's
+ * repository at this commit with Genkan's patch (patches/genesis_plus_gx: the VDP's video RAM given
+ * to the frontend, the patch Yomikata's tools build with, so both builds match). See NOTICE.
+ */
+val genesisPlusGxCommit = "51348f65738b0c75f4b8b4488fbc67645e3769af"
+
+val buildGenesisPlusGx = tasks.register<BuildLibretroCore>("buildGenesisPlusGx") {
+    commit.set(genesisPlusGxCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/genesis-plus-gx"))
+    projectDir.set(rootProject.layout.projectDirectory.dir("third_party/genesis-plus-gx/libretro"))
+    patches.from(rootProject.fileTree("patches/genesis_plus_gx") { include("*.patch") })
+    libraryName.set("libgenesis_plus_gx_libretro_android.so")
+    abi.set("arm64-v8a")
+    variables.set(emptyList())
+    flags.set(emptyList())
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    outputDir.set(layout.buildDirectory.dir("generated/genesis-plus-gx"))
 }
 
 /**
@@ -537,7 +592,7 @@ val downloadMeikiModels = tasks.register<DownloadPinnedFiles>("downloadMeikiMode
 /**
  * Libretro cores for the built-in player, as native libraries, from Lemuroid's prebuilt cores
  * (each under its own license: mGBA MPL-2.0, PCSX ReARMed GPL-2.0, PPSSPP GPL-2.0, Beetle PCE Fast
- * GPL-2.0, Mupen64Plus-Next GPL-2.0, FCEUmm GPL-2.0, Genesis Plus GX its own non-commercial licence).
+ * GPL-2.0, Mupen64Plus-Next GPL-2.0, FCEUmm GPL-2.0).
  * See NOTICE.
  */
 val lemuroidCores = "https://raw.githubusercontent.com/Swordfish90/LemuroidCores/fee2e824525daa22bcf318f96127fe43fa8a15ad"
@@ -553,7 +608,6 @@ val downloadCores = tasks.register<DownloadPinnedFiles>("downloadCores") {
             "$lemuroidCores/lemuroid_core_mednafen_pce_fast/src/main/jniLibs/arm64-v8a/libmednafen_pce_fast_libretro_android.so 6487d7828b48d1f63d2233e45f5aa909f91543114355bf326364f430a37a32e9 libmednafen_pce_fast_libretro_android.so",
             "$lemuroidCores/lemuroid_core_mupen64plus_next_gles3/src/main/jniLibs/arm64-v8a/libmupen64plus_next_gles3_libretro_android.so c7e44a9f6bfc67411a76d0253e12b546cd36746cc5adf2fffe68146544fe8d7a libmupen64plus_next_gles3_libretro_android.so",
             "$lemuroidCores/lemuroid_core_fceumm/src/main/jniLibs/arm64-v8a/libfceumm_libretro_android.so a47b7abf60d5cf964e320b7db164379eef0201f05319a248f3f7591308aa2778 libfceumm_libretro_android.so",
-            "$lemuroidCores/lemuroid_core_genesis_plus_gx/src/main/jniLibs/arm64-v8a/libgenesis_plus_gx_libretro_android.so 9c958d1fe2c060cf824aaa503751e32c9c819d0b3a3584c959a32cb954c3a000 libgenesis_plus_gx_libretro_android.so",
         ),
     )
     cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
@@ -755,6 +809,7 @@ androidComponents {
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBsnes, BuildLibretroCore::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildLrps2, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildBeetleSaturn, BuildLibretroCore::outputDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildGenesisPlusGx, BuildLibretroCore::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)

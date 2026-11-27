@@ -33,6 +33,11 @@ data class CoreDef(
      */
     val ramWordSize: Int = 0,
     /**
+     * The same for the core's video RAM: Genesis Plus GX keeps the VDP's as 16-bit words in the host's
+     * order. Reads (snapshots, scripts) give it in the console's, as Yomikata's harness does. 0: as it is.
+     */
+    val videoRamWordSize: Int = 0,
+    /**
      * Snapshots and the text search read the core's blocks whole where its map leaves gaps in them
      * (a PC Engine CD's card RAM), as Yomikata's harness does; scripts keep to the map.
      */
@@ -198,6 +203,8 @@ object CoreCatalog {
             // its addresses are 24-bit, the RAM mirrored up to 0xFFFFFF.
             ramStretches = listOf(RamStretch(0xFF0000L, 0L, 0x10000L)),
             ramWordSize = 2,
+            // Its VDP's 64 KB too (patches/genesis_plus_gx), 16-bit words in the host's order.
+            videoRamWordSize = 2,
             pointerMask = 0xFFFFFFL,
             bigEndian = true,
             extensions = setOf("md", "gen", "smd", "bin"),

@@ -57,6 +57,18 @@ jobs:
           path: .gradle/cores/libbsnes_mercury_libretro_android-${{ env.BSNES_COMMIT }}
           key: bsnes-mercury-${{ env.BSNES_COMMIT }}
 
+      # Genesis Plus GX, the Mega Drive core, likewise, with Genkan's patch: the build's folder is
+      # named for the patches too (BuildLibretroCore), so the commit's folders are cached under a
+      # key that changes with them.
+      - name: Note the Genesis Plus GX commit
+        run: echo "GPGX_COMMIT=$(git rev-parse HEAD:third_party/genesis-plus-gx)" >> "$GITHUB_ENV"
+
+      - name: Cache the built Genesis Plus GX
+        uses: actions/cache@v4
+        with:
+          path: .gradle/cores/libgenesis_plus_gx_libretro_android-${{ env.GPGX_COMMIT }}-*
+          key: gpgx-${{ env.GPGX_COMMIT }}-${{ hashFiles('patches/genesis_plus_gx/*.patch') }}
+
       # Beetle Saturn, the Saturn core, likewise.
       - name: Note the Beetle Saturn commit
         run: echo "BEETLE_SATURN_COMMIT=$(git rev-parse HEAD:third_party/beetle-saturn)" >> "$GITHUB_ENV"

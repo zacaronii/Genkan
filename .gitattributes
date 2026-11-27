@@ -1,0 +1,3 @@
+# Patches are applied byte for byte: one whose context keeps its source's CRLF line endings
+# (patches/genesis_plus_gx) must not have them changed.
+*.patch -text
