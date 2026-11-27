@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Genkan's app icon, foreground: made from Design/icons/noren_foreground.svg by Design/icons/render.py. Edit that, not this. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M40,34h28a2,2 0 0 1 2,2v42a2,2 0 0 1 -2,2h-28a2,2 0 0 1 -2,-2v-42a2,2 0 0 1 2,-2z"
+        android:fillColor="#FFFFFDF7"
+        android:strokeColor="#FFD6C29C"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M54,40L54,48"
+        android:strokeColor="#FF3B3A44"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,52L54,58"
+        android:strokeColor="#FF3B3A44"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M28,27h52a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2h-52a2,2 0 0 1 -2,-2v-0a2,2 0 0 1 2,-2z"
+        android:fillColor="#FF5A3A22" />
+    <path
+        android:pathData="M29 31h21v33c0 2.5-1.5 4-4 4H29z"
+        android:fillColor="#FF22385E" />
+    <path
+        android:pathData="M79 31H58v33c0 2.5 1.5 4 4 4h17z"
+        android:fillColor="#FF22385E" />
+    <path
+        android:pathData="M49 37.5 A12 12 0 0 0 49 60.5"
+        android:strokeColor="#FFE7D9B8"
+        android:strokeWidth="3" />
+    <path
+        android:pathData="M59 37.5 A12 12 0 0 1 59 60.5"
+        android:strokeColor="#FFE7D9B8"
+        android:strokeWidth="3" />
+</vector>
