@@ -37,7 +37,11 @@ public:
         std::string buildId;  // empty when unknown
         uint64_t pointerMask = 0xFFFFFFFFull; // folds a mirror onto the address the core maps
         uint64_t ramBase = 0;                 // subtracted after folding, for a core whose RAM starts at 0
+        bool cartridgeImage = false;          // the cartridge's image is served at CARTRIDGE_IMAGE_AT on
     };
+
+    /** Where the cartridge's image is (GenkanTap::CARTRIDGE_IMAGE_AT), past what any console has. */
+    static constexpr uint64_t CARTRIDGE_IMAGE_AT = 0x01000000;
 
     /** One event as the runtime gives it: YK_TEXT, YK_LAYOUT, YK_CURSOR or YK_LOG, and its JSON. */
     using Event = std::pair<int, std::string>;
@@ -65,8 +69,12 @@ public:
     /** The runtime's last error, or "". */
     std::string error() const;
 
-    /** The core's address for the game's `address`: folded through the mirrors, then less the base. */
-    static bool fold(uint64_t address, uint64_t pointerMask, uint64_t ramBase, uint64_t *local);
+    /**
+     * The core's address for the game's `address`: folded through the mirrors, then less the base. The
+     * cartridge's image, when [cartridgeImage], is Genkan's own and past the console's addresses: an
+     * address from [CARTRIDGE_IMAGE_AT] on is read as it is, never masked into the console's.
+     */
+    static bool fold(uint64_t address, uint64_t pointerMask, uint64_t ramBase, uint64_t *local, bool cartridgeImage = false);
 
 private:
     static size_t readHost(void *user, uint64_t address, void *out, size_t size);

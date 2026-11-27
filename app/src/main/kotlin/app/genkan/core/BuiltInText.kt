@@ -225,8 +225,10 @@ class BuiltInText @Inject constructor(
                 Log.i(TAG, "${game.title} ($id): reading its Yomikata script")
                 return true
             }
-            if (!ScriptRetry.again(error, System.currentTimeMillis(), gameStartedMs, stateLoadedMs)) {
-                if (ScriptRetry.anotherBuild(error)) refused = game to id
+            val fromStart = game.platform?.let(CartridgeImage::covers) == true
+            if (!ScriptRetry.again(error, System.currentTimeMillis(), gameStartedMs, stateLoadedMs, fromStart)) {
+                // A cartridge's refusal stands: a savestate load doesn't change the cartridge.
+                if (ScriptRetry.anotherBuild(error) && !fromStart) refused = game to id
                 Log.i(TAG, "${game.title} ($id): its script didn't load: $error")
                 return false
             }

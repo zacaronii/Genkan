@@ -58,6 +58,8 @@ class CoreActivity : ComponentActivity() {
     /** What the game is drawn with: the launcher's choice, or the reader's while it plays. */
     private var look = ScreenLook.DEFAULT
     private var host: ICoreHost? = null
+    /** The last script load's outcome as logged, so a refusal tried again isn't logged each time. */
+    @Volatile private var lastScriptLine: String? = null
     /** The core is offered Vulkan: its ladder step asks for it, and it hasn't failed this game. */
     private var vulkan = false
     private lateinit var saver: SramSaver
@@ -490,7 +492,10 @@ class CoreActivity : ComponentActivity() {
             }
             if (!done.await(SCRIPT_LOAD_WAIT_MS, TimeUnit.MILLISECONDS)) return "the game didn't run a frame to load it in"
             val error = result.get()
-            Log.i(TAG, if (error == null) "Script $name loaded for $gameId" else "Script $name didn't load: $error")
+            // A refusal said once: a disc console's script is tried again through the first minute.
+            val line = if (error == null) "Script $name loaded for $gameId" else "Script $name didn't load: $error"
+            if (line != lastScriptLine) Log.i(TAG, line)
+            lastScriptLine = line
             return error
         }
 
