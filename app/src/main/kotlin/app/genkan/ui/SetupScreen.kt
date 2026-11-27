@@ -99,6 +99,8 @@ data class SetupState(
     val lowLatencyOff: Set<String> = emptySet(),
     val faceSwapped: Set<String> = emptySet(),
     val coreChoice: Map<String, String> = emptyMap(),
+    /** Whether AnkiConnect answered when Settings last asked; null until it has. */
+    val ankiReach: AnkiReach? = null,
 ) {
     /** Whether the switch for [key] shows on. */
     fun isOn(key: SwitchKey): Boolean = when (key) {
@@ -361,11 +363,11 @@ fun statusLines(state: SetupState): List<StatusLine> = listOf(
         CatalogStatus.NotSet -> StatusLine("Yomikata", "No server set")
         CatalogStatus.Idle -> StatusLine("Yomikata", "Not fetched yet")
     },
-    when (val a = state.anki) {
-        is AnkiStatus.Sent -> StatusLine("AnkiConnect", "Reachable, ${a.count} cards sent")
-        is AnkiStatus.Unreachable -> StatusLine("AnkiConnect", "Unreachable: ${a.reason}", attention = true)
-        AnkiStatus.NotSet -> StatusLine("AnkiConnect", "No server set")
-        AnkiStatus.Idle -> StatusLine("AnkiConnect", "Nothing sent yet")
+    when (val reach = state.ankiReach) {
+        is AnkiReach.Reachable -> StatusLine("AnkiConnect", "Reachable (AnkiConnect ${reach.version})")
+        is AnkiReach.Unreachable -> StatusLine("AnkiConnect", "Unreachable: ${reach.reason}", attention = true)
+        AnkiReach.NotSet -> StatusLine("AnkiConnect", "No server set")
+        null -> ankiLine(state.anki)
     },
     when (val l = state.readingLog) {
         ReadingLogStatus.UpToDate -> StatusLine("kechimochi", "Up to date")
@@ -383,6 +385,21 @@ fun statusLines(state: SetupState): List<StatusLine> = listOf(
         }
     }, attention = !state.status.secondaryUsable),
 )
+
+/** AnkiConnect's line before Settings has asked it: what the last send found. */
+private fun ankiLine(status: AnkiStatus): StatusLine = when (status) {
+    is AnkiStatus.Sent -> StatusLine("AnkiConnect", "Reachable, ${status.count} cards sent")
+    is AnkiStatus.Unreachable -> StatusLine("AnkiConnect", "Unreachable: ${status.reason}", attention = true)
+    AnkiStatus.NotSet -> StatusLine("AnkiConnect", "No server set")
+    AnkiStatus.Idle -> StatusLine("AnkiConnect", "Nothing sent yet")
+}
+
+/** Whether AnkiConnect answered when Settings asked (SetupViewModel.checkServers). */
+sealed interface AnkiReach {
+    data object NotSet : AnkiReach
+    data class Reachable(val version: Int) : AnkiReach
+    data class Unreachable(val reason: String) : AnkiReach
+}
 
 /** How long ago, for the status card: minutes, hours, then days. */
 fun age(ms: Long): String {
@@ -436,15 +453,17 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
         } else {
             "Sleep and other apps count as play time too"
         }
-        SetupAction.YOMIKATA -> "The script catalog, samples and their inbox"
+        SetupAction.YOMIKATA -> "RAM snapshots of unread lines, for your inbox"
+        SetupAction.YOMIKATA_SERVERS -> "The script catalog and the samples inbox"
+        SetupAction.ANKI_SERVER -> "Where cards go, and the word-audio source"
         SetupAction.HEADPHONES -> "Reconnect paired headphones"
 
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
             if (isEmpty()) "None imported" else "${count { it.enabled }} of $size on (${filter { it.enabled }.joinToString { it.title }})"
         }
         SetupAction.WORDS -> "Known and ignored words, counts, Hachidori"
-        SetupAction.ANKI -> "Deck, note type and server for mined cards"
-        SetupAction.READING_LOG -> "Time and characters per game, to kechimochi"
+        SetupAction.ANKI -> "Deck, note type and word marks"
+        SetupAction.READING_LOG -> "Reading time and characters per game, logged there"
         // Switch actions never sit on a button row; SettingsGroupsTest checks the groups.
         else -> ""
     }

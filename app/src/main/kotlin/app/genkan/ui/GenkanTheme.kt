@@ -169,7 +169,7 @@ fun GenkanTextField(
  * focused, and A on an option picks it and closes them again.
  */
 @Composable
-fun ChoiceField(label: String, value: String, options: List<String>, onChoose: (String) -> Unit) {
+fun ChoiceField(label: String, value: String, options: List<String>, modifier: Modifier = Modifier, onChoose: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
     var open by remember { mutableStateOf(false) }
     val header = remember { FocusRequester() }
@@ -186,7 +186,8 @@ fun ChoiceField(label: String, value: String, options: List<String>, onChoose: (
             (value.ifEmpty { "Choose…" }) + if (open) "  ▴" else "  ▾",
             focused = null,
             onClick = { open = !open },
-            modifier = Modifier.padding(top = 6.dp).focusRequester(header),
+            // [modifier] goes on the field's own row, where a page's first focus lands.
+            modifier = modifier.padding(top = 6.dp).focusRequester(header),
         )
         if (open) {
             val selected = options.indexOf(value).coerceAtLeast(0)

@@ -101,6 +101,7 @@ object SettingsGroups {
             rows = listOf(
                 SettingsRow.Button("Dictionaries", SetupAction.DICTIONARIES),
                 SettingsRow.Button("Words", SetupAction.WORDS),
+                SettingsRow.Button("Memory samples", SetupAction.YOMIKATA),
             ),
         ),
         SettingsGroup(
@@ -108,7 +109,6 @@ object SettingsGroups {
             title = "Anki",
             rows = listOf(
                 SettingsRow.Button("Anki cards", SetupAction.ANKI),
-                SettingsRow.Button("Reading log", SetupAction.READING_LOG),
             ),
         ),
         SettingsGroup(
@@ -117,7 +117,9 @@ object SettingsGroups {
             info = listOf(SettingsInfo.ROMM_ACCOUNT),
             rows = listOf(
                 SettingsRow.Button("Sync library", SetupAction.SYNC_LIBRARY),
-                SettingsRow.Button("Yomikata", SetupAction.YOMIKATA),
+                SettingsRow.Button("Yomikata servers", SetupAction.YOMIKATA_SERVERS),
+                SettingsRow.Button("AnkiConnect", SetupAction.ANKI_SERVER),
+                SettingsRow.Button("kechimochi", SetupAction.READING_LOG),
                 SettingsRow.Button("Sign out of RomM", SetupAction.SIGN_OUT),
             ),
         ),

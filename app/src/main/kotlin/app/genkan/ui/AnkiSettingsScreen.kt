@@ -24,11 +24,14 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.genkan.anki.AnkiStatus
 
+/**
+ * AnkiConnect (Settings › Connections): where cards go, its key, and the word-audio source cards
+ * fetch from. The deck, note type and word marks are on [AnkiSettingsScreen].
+ */
 @Composable
-fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
+fun AnkiServerScreen(viewModel: AnkiSettingsViewModel) {
     val form by viewModel.form.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
-    val choices by viewModel.choices.collectAsStateWithLifecycle()
     val status by viewModel.miner.status.collectAsStateWithLifecycle()
     val pending by viewModel.miner.pending.collectAsStateWithLifecycle(0)
     val refused by viewModel.miner.refused.collectAsStateWithLifecycle(emptyList())
@@ -49,7 +52,7 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
             .padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Anki", style = MaterialTheme.typography.displaySmall, color = colors.primary)
+        Text("AnkiConnect", style = MaterialTheme.typography.displaySmall, color = colors.primary)
         Text(
             "Cards go to an AnkiConnect server (desktop Anki with the AnkiConnect add-on, listening on " +
                 "0.0.0.0). Cards made offline wait here and are sent when it answers.",
@@ -61,18 +64,6 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
             GenkanTextField(form.address, { v -> viewModel.edit { it.copy(address = v) } }, "AnkiConnect address (host or host:port)", modifier = Modifier.focusRequester(firstField))
             GenkanTextField(form.apiKey, { v -> viewModel.edit { it.copy(apiKey = v) } }, "API key (if AnkiConnect has one)", keyboardType = KeyboardType.Password)
             GenkanTextField(form.audioUrl, { v -> viewModel.edit { it.copy(audioUrl = v) } }, "Word audio: a Yomitan audio source URL with {term} and {reading} (optional)", keyboardType = KeyboardType.Uri)
-            // Picked from what Anki has: cards can't be sent without reaching it anyway.
-            val known = choices
-            if (known != null) {
-                ChoiceField("Deck", form.deck, known.decks) { v -> viewModel.edit { it.copy(deck = v) } }
-                ChoiceField("Note type (Lapis or Kiku)", form.noteType, known.noteTypes) { v -> viewModel.edit { it.copy(noteType = v) } }
-            } else {
-                Text(
-                    "Deck and note type: chosen from your Anki once it answers (Save and test).",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = colors.onSurfaceVariant,
-                )
-            }
             ActionRow("Save and test", focused = null, onClick = viewModel::saveAndTest)
         }
         check?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }
@@ -89,6 +80,51 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
         refused.take(5).forEach {
             Text("Refused: ${it.expression}: ${it.error}", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
         }
+    }
+}
+
+/**
+ * Anki cards (Settings › Anki): the deck and note type cards are made in, and word marks. The
+ * server is on [AnkiServerScreen]; the deck and note type are picked from what it has.
+ */
+@Composable
+fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
+    val form by viewModel.form.collectAsStateWithLifecycle()
+    val check by viewModel.check.collectAsStateWithLifecycle()
+    val choices by viewModel.choices.collectAsStateWithLifecycle()
+    val colors = MaterialTheme.colorScheme
+    val first = remember { FocusRequester() }
+    val scroll = rememberScrollState()
+    var opened by remember { mutableStateOf(false) }
+    LaunchedEffect(check) { if (opened) scroll.animateScrollTo(scroll.maxValue) else opened = true }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .verticalScroll(scroll)
+            .padding(horizontal = 48.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Anki cards", style = MaterialTheme.typography.displaySmall, color = colors.primary)
+        HintRow(Hints.form())
+        Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Picked from what Anki has: cards can't be sent without reaching it anyway.
+            val known = choices
+            if (known != null) {
+                ChoiceField("Deck", form.deck, known.decks, modifier = Modifier.focusRequester(first)) { v -> viewModel.edit { it.copy(deck = v) } }
+                ChoiceField("Note type (Lapis or Kiku)", form.noteType, known.noteTypes) { v -> viewModel.edit { it.copy(noteType = v) } }
+                ActionRow("Save and test", focused = null, onClick = viewModel::saveAndTest)
+            } else {
+                Text(
+                    "Deck and note type: chosen from your Anki once it answers (Settings › Connections › AnkiConnect).",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+        }
+        check?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = colors.onBackground) }
         Text("Word marks", style = MaterialTheme.typography.titleMedium, color = colors.primary)
         Text(
             "Underlines in the reader's backlog, as Hachidori draws them: solid for a word not in Anki, dashed " +
@@ -98,7 +134,8 @@ fun AnkiSettingsScreen(viewModel: AnkiSettingsViewModel) {
             color = colors.onSurfaceVariant,
         )
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionRow("Underline words by Anki state: " + if (form.marksWords) "on" else "off", focused = null, onClick = viewModel::toggleMarks)
+            val marks = Modifier.let { if (choices == null) it.focusRequester(first) else it }
+            ActionRow("Underline words by Anki state: " + if (form.marksWords) "on" else "off", focused = null, onClick = viewModel::toggleMarks, modifier = marks)
             val decks = choices?.decks?.filter { it != form.deck }
             if (decks == null) {
                 Text("Other decks: listed once Anki answers.", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)

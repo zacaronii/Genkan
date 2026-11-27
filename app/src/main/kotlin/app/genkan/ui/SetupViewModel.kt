@@ -1,7 +1,9 @@
 package app.genkan.ui
 
 import app.genkan.BuildConfig
+import app.genkan.anki.AnkiConnect
 import app.genkan.anki.AnkiMiner
+import app.genkan.anki.AnkiSettings
 import app.genkan.anki.AnkiStatus
 import app.genkan.core.ScreenLook
 import app.genkan.core.ScreenLooks
@@ -63,7 +65,12 @@ enum class SetupAction {
     /** The bonded Bluetooth headphones, a press to connect one. */
     HEADPHONES,
     WORDS,
+    /** Memory samples (Reading). */
     YOMIKATA,
+    /** Yomikata's catalog repository and samples inbox (Connections). */
+    YOMIKATA_SERVERS,
+    /** AnkiConnect's address and key, and the word-audio source (Connections). */
+    ANKI_SERVER,
     SIGN_OUT,
 }
 
@@ -84,6 +91,8 @@ class SetupViewModel @Inject constructor(
     ankiMiner: AnkiMiner,
     readingLog: ReadingLogPusher,
     looks: ScreenLooks,
+    private val ankiSettings: AnkiSettings,
+    private val ankiConnect: AnkiConnect,
 ) : ViewModel() {
 
 
@@ -95,6 +104,29 @@ class SetupViewModel @Inject constructor(
     fun refresh() {
         _usageAccess.value = sessionTracker.hasUsageAccess()
         _shizuku.value = privileged.state()
+        checkServers()
+    }
+
+    private val _ankiReach = MutableStateFlow<AnkiReach?>(null)
+    /** Whether AnkiConnect answered when last asked; null until asked. */
+    val ankiReach: StateFlow<AnkiReach?> = _ankiReach.asStateFlow()
+
+    /**
+     * Asks the servers the status card shows whether they answer: AnkiConnect for its version
+     * (sending nothing). kechimochi's line is its pusher's, which sends on its own every few minutes.
+     */
+    fun checkServers() {
+        viewModelScope.launch {
+            val config = ankiSettings.current()
+            _ankiReach.value = if (!config.configured) {
+                AnkiReach.NotSet
+            } else {
+                runCatching { ankiConnect.version(config) }.fold(
+                    { AnkiReach.Reachable(it) },
+                    { AnkiReach.Unreachable(it.message ?: it.javaClass.simpleName) },
+                )
+            }
+        }
     }
 
     private val _shizuku = MutableStateFlow(privileged.state())
@@ -109,6 +141,7 @@ class SetupViewModel @Inject constructor(
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
         playerSettings.aOnRight, armsxText.enabled, yomikataCatalog.status, ankiMiner.status, readingLog.status,
         playerSettings.learning, looks.consoles, playerSettings.lowLatencyOff, playerSettings.faceSwapped, playerSettings.coreChoice,
+        ankiReach,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -136,6 +169,7 @@ class SetupViewModel @Inject constructor(
             lowLatencyOff = v[20] as Set<String>,
             faceSwapped = v[21] as Set<String>,
             coreChoice = v[22] as Map<String, String>,
+            ankiReach = v[23] as AnkiReach?,
         )
     }.stateIn(
         viewModelScope,
