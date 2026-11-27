@@ -278,6 +278,11 @@ abstract class BuildCmakeCore : DefaultTask() {
     @get:Input abstract val libraryName: Property<String>
     @get:Input abstract val abi: Property<String>
     @get:Input abstract val cmakeArgs: ListProperty<String>
+    /**
+     * Part of the cached library's name, for a build whose CMake options changed (a renderer switched
+     * on): the commit's old build is then not taken for it. Empty for most.
+     */
+    @get:Input abstract val buildTag: Property<String>
     @get:Input abstract val target: Property<String>
     /** The source's own submodules the build doesn't need (Windows' Qt and FFmpeg). */
     @get:Input abstract val skipExternals: ListProperty<String>
@@ -299,6 +304,7 @@ abstract class BuildCmakeCore : DefaultTask() {
         externals.convention(emptyList())
         sysEntries.convention(emptyList())
         sysZipName.convention("")
+        buildTag.convention("")
     }
 
     private fun git(dir: File, vararg args: String): String = ByteArrayOutputStream().also { out ->
@@ -318,7 +324,7 @@ abstract class BuildCmakeCore : DefaultTask() {
         // A patched build is its own: the patches' hash is part of the cached library's name.
         val patchKey = if (patchFiles.isEmpty()) "" else "-p" + MessageDigest.getInstance("SHA-256")
             .digest(patchFiles.joinToString("") { it.name + "\n" + it.readText() }.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
-        val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}$patchKey")
+        val cached = cacheDir.get().asFile.resolve("$stem-${commit.get()}$patchKey${buildTag.get()}")
         val library = cached.resolve("${abi.get()}/${libraryName.get()}")
         val entriesKey = MessageDigest.getInstance("SHA-256").digest(sysEntries.get().joinToString("\n").toByteArray())
             .joinToString("") { "%02x".format(it) }.take(12)
@@ -483,8 +489,9 @@ val buildFlycast = tasks.register<BuildCmakeCore>("buildFlycast") {
 
 /**
  * LRPS2 (libretro/parallel-ps2, GPL-3.0), libretro's PCSX2 with native ARM64 recompilers for the EE
- * and IOP, built from its repository at this commit with the OpenGL ES renderer (libretrodroid gives
- * cores no Vulkan) and Genkan's patches. The PS2's own player unless ARMSX2 is chosen. See NOTICE.
+ * and IOP, built from its repository at this commit with its OpenGL ES and Vulkan renderers (Vulkan
+ * only where libretrodroid offers it: its ladder's Vulkan step, see vulkanbridge.h) and Genkan's
+ * patches. The PS2's own player unless ARMSX2 is chosen. See NOTICE.
  */
 val lrps2Commit = "4d2c5d0904c339fd18252574e010fbf38d1b1929"
 
@@ -495,7 +502,9 @@ val buildLrps2 = tasks.register<BuildCmakeCore>("buildLrps2") {
     patches.from(rootProject.fileTree("patches/lrps2") { include("*.patch") })
     libraryName.set("libpcsx2_libretro_android.so")
     abi.set("arm64-v8a")
-    cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DUSE_VULKAN=OFF", "-DANDROID_PLATFORM=android-33"))
+    cmakeArgs.set(listOf("-DLIBRETRO=ON", "-DUSE_VULKAN=ON", "-DANDROID_PLATFORM=android-33"))
+    // Built with Vulkan since the GL-only build: a name of its own.
+    buildTag.set("-vk")
     target.set("pcsx2_libretro")
     ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
     cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
@@ -659,6 +668,18 @@ val audioPaceTest = tasks.register<NativeHostTest>("audioPaceTest") {
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
+/** The frontend's side of libretro's Vulkan handover: which slot a frame's work is in, what's used once. */
+val vulkanHandoverTest = tasks.register<NativeHostTest>("vulkanHandoverTest") {
+    testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
+    sources.from(rootProject.files("libretrodroid/src/main/cpp/vulkanhandover.h"))
+    commits.add(submoduleCommit("third_party/yomikata"))
+    target.set("vulkan_handover_test")
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    buildDir.set(layout.buildDirectory.dir("vulkan-handover-test"))
+    passed.set(layout.buildDirectory.file("vulkan-handover-test/passed"))
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
 /** One sector of a CHD's data track through libchdr: a disc's boot block, read for its id. */
 val discSectorTest = tasks.register<NativeHostTest>("discSectorTest") {
     testSources.set(rootProject.layout.projectDirectory.dir("libretrodroid/src/test/cpp"))
@@ -722,7 +743,7 @@ val jsPopupTest = tasks.register<JsPopupTest>("jsPopupTest") {
     passed.set(layout.buildDirectory.file("js-tests/passed"))
 }
 
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, audioPaceTest, discSectorTest, jsPopupTest) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(nativeLookupTest, scriptHostTest, frameFillTest, memoryMapTest, pointerTest, gameIdTest, audioPaceTest, vulkanHandoverTest, discSectorTest, jsPopupTest) }
 
 androidComponents {
     onVariants { variant ->

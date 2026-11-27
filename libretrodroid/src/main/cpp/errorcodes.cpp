@@ -24,6 +24,8 @@ namespace libretrodroid {
     int ERROR_GL_NOT_COMPATIBLE = 2;
     int ERROR_SERIALIZATION = 3;
     int ERROR_CHEAT = 4;
+    // Genkan: the Vulkan context failed after the game loaded (vulkanbridge.h): it starts again on GL.
+    int ERROR_VULKAN = 5;
     int ERROR_GENERIC = -1;
 }
 

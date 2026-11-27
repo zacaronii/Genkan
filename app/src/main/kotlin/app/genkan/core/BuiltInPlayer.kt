@@ -1,16 +1,25 @@
 package app.genkan.core
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.util.Log
 import androidx.core.graphics.createBitmap
+import app.genkan.launch.topScreenOptions
 import app.genkan.memory.MemorySource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +74,22 @@ class BuiltInPlayer @Inject constructor() {
 
     fun scriptStateLoaded() {
         _scriptStateLoads.tryEmit(Unit)
+    }
+
+    private val relaunches = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /**
+     * Starts the player with [intent] once the running game's process has ended: its core can't be
+     * loaded again in that process (a game going back to GL after its Vulkan context failed).
+     */
+    fun relaunchWhenGone(context: Context, intent: Intent) {
+        relaunches.launch {
+            withTimeoutOrNull(RELAUNCH_WAIT_MS) { game.first { it == null } }
+            Log.i(TAG, "Starting the player again")
+            runCatching {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), topScreenOptions())
+            }.onFailure { Log.w(TAG, "The player didn't start again: $it") }
+        }
     }
 
     /** Where the game's picture sits on the player's view (left, top, right, bottom fractions), or null. */
@@ -294,6 +319,8 @@ class BuiltInPlayer @Inject constructor() {
         const val VRAM_SUFFIX = ".vram"
         private const val VIDEO_CHUNK = 64 * 1024
         private const val TAG = "BuiltInPlayer"
+        /** How long a relaunch waits for the old player's process to end. */
+        private const val RELAUNCH_WAIT_MS = 10_000L
         const val FRAME_WIDTH = "width"
         const val FRAME_HEIGHT = "height"
         const val FRAME_PIXELS = "pixels"

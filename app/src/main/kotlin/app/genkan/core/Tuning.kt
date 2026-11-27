@@ -13,6 +13,8 @@ data class TuningStep(
     val live: Boolean = true,
     /** What the step does, short enough for a button on the game's details (resolutions as the console's times). */
     val label: String = id,
+    /** The core is offered Vulkan (only a core that has it: CoreDef.vulkan). */
+    val vulkan: Boolean = false,
 )
 
 /**
@@ -87,9 +89,13 @@ object TuningLadders {
     // LRPS2's GS drawn on 6 CPU threads ("Software (HW)", presented through GL) held full speed on
     // the Thor where its GL renderer fell to 90% (the GPU stuck at its lowest clock, CPU and GPU
     // waiting on each other). GL is the step lighter on the CPU, for a device running hot, though
-    // not always as fast. The renderer is chosen at start: both wait for a restart.
+    // not always as fast. The renderer is chosen at start: all wait for a restart.
+    // Vulkan ("Auto", with libretrodroid offering Vulkan as its preferred context) is only ever
+    // chosen: first on the ladder, where the learner, which tries the lighter step after the one
+    // played, never goes, and it takes no step as the game runs.
     private val lrps2 = TuningLadder(
         steps = listOf(
+            TuningStep("vulkan", mapOf("pcsx2_renderer" to "Auto"), live = false, label = "Vulkan", vulkan = true),
             TuningStep("default", emptyMap(), live = false, label = "Software"),
             TuningStep("gl", mapOf("pcsx2_renderer" to "Auto"), live = false, label = "GL"),
         ),

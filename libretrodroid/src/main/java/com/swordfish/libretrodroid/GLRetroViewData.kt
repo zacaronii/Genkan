@@ -45,6 +45,10 @@ class GLRetroViewData(context: Context) {
      * D-pad presses made of them (see StickMotion).
      */
     var sticksOnly: Boolean = false
+    /** Genkan: the core may draw with Vulkan, shown through GL (libretrodroid's vulkanbridge.h). */
+    var vulkan: Boolean = false
+    /** Genkan: a Vulkan failure to force (LibretroDroid.offerVulkan), to see the way back to GL. */
+    var vulkanFailure: Int = 0
 }
 
 enum class ViewportAlignment(val value: Int) {

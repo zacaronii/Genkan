@@ -108,6 +108,7 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING -n app.genkan/.debug.DictionaryDebugReceiver --ez hints false --ez frame_rate true --ez game_state true --ez priority true
  * (which of the player's speed aids are on from the next game started, to measure one without the others; any
  *  left out are on; --ez reset true deletes the file, so all are on)
+ * (--ei vulkan_failure N forces a Vulkan failure on a game offered Vulkan: 1 the probe, 2 the device, 3 a lost device)
  *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
@@ -380,6 +381,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                                 frameRate = intent.getBooleanExtra("frame_rate", true),
                                 gameState = intent.getBooleanExtra("game_state", true),
                                 priority = intent.getBooleanExtra("priority", true),
+                                vulkanFailure = intent.getIntExtra("vulkan_failure", 0),
                             )
                             file.writeText(switches.toJson())
                             Log.i(TAG, "Tuning: $switches")

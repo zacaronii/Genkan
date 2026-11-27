@@ -35,5 +35,8 @@ class HintThreadsTest {
         val off = TuningSwitches(hints = false, frameRate = true, gameState = false, priority = false)
         assertEquals(off, TuningSwitches.parse(off.toJson()))
         assertEquals(TuningSwitches(), TuningSwitches.parse("{}"))
+        // A forced Vulkan failure: 1 the probe, 2 the device, 3 a lost device (a larger number is 3).
+        assertEquals(3, TuningSwitches.parse(TuningSwitches(vulkanFailure = 3).toJson()).vulkanFailure)
+        assertEquals(3, TuningSwitches.parse("""{"vulkan_failure": 9}""").vulkanFailure)
     }
 }

@@ -24,6 +24,7 @@ namespace libretrodroid {
     extern int ERROR_GL_NOT_COMPATIBLE;
     extern int ERROR_SERIALIZATION;
     extern int ERROR_CHEAT;
+    extern int ERROR_VULKAN;
     extern int ERROR_GENERIC;
 }
 

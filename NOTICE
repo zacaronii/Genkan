@@ -227,7 +227,7 @@ License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
   applies Genkan's patches in patches/lrps2 (no initial-exec TLS on Android,
   which can't load the core otherwise; the game's serial and ELF CRC handed
   to the frontend; see their README) to a copy, builds it for arm64-v8a with the NDK's CMake toolchain as a libretro core
-  with the OpenGL renderer (-DLIBRETRO=ON -DUSE_VULKAN=OFF, android-33,
+  with its OpenGL and Vulkan renderers (-DLIBRETRO=ON -DUSE_VULKAN=ON, android-33,
   c++_static, stripped) and bundles it as
   libpcsx2_libretro_android.so. It isn't committed; the source it is built
   from is the submodule at that commit.

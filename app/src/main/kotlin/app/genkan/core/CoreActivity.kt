@@ -27,11 +27,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.swordfish.libretrodroid.GLRetroView
+import com.swordfish.libretrodroid.GLRetroView.GLRetroEvents
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.GenkanTap
 import com.swordfish.libretrodroid.Variable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -56,6 +58,8 @@ class CoreActivity : ComponentActivity() {
     /** What the game is drawn with: the launcher's choice, or the reader's while it plays. */
     private var look = ScreenLook.DEFAULT
     private var host: ICoreHost? = null
+    /** The core is offered Vulkan: its ladder step asks for it, and it hasn't failed this game. */
+    private var vulkan = false
     private lateinit var saver: SramSaver
     /** The line of text over the game: unpacking, a failed load, no sound. */
     private lateinit var notice: TextView
@@ -133,7 +137,10 @@ class CoreActivity : ComponentActivity() {
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
         val ladder = TuningLadders.of(def.tuning)
         tuningStep = ladder?.let { it.step(intent.getStringExtra(EXTRA_TUNING_STEP))?.id ?: it.defaultId }
-        if (ladder != null && intent.getBooleanExtra(EXTRA_LEARN, false)) learner = TuningLearner(ladder, tuningStep!!)
+        // Vulkan is only ever chosen: the learner, which moves a hot game a step lighter, stays off on it.
+        vulkan = def.vulkan && ladder?.step(tuningStep)?.vulkan == true && !intent.getBooleanExtra(EXTRA_NO_VULKAN, false)
+        val learns = intent.getBooleanExtra(EXTRA_LEARN, false) && ladder?.step(tuningStep)?.vulkan != true
+        if (ladder != null && learns) learner = TuningLearner(ladder, tuningStep!!)
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
         states = SaveStates(SaveStates.dirFor(File(filesDir, SaveStates.FOLDER), def.id, GameFile.keyFor(romId, rom)), def.id)
@@ -215,6 +222,8 @@ class CoreActivity : ComponentActivity() {
             // core's sound comes in lumps too big for it (CoreDef.lowLatencySound).
             preferLowLatencyAudio = def.lowLatencySound && intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
             rumbleEventsEnabled = false
+            vulkan = this@CoreActivity.vulkan
+            vulkanFailure = if (this@CoreActivity.vulkan) switches.vulkanFailure else 0
         }
         saver = SramSaver(saveFile, loaded = ::gameLoaded, read = { retroView.serializeSRAM(useEmulationThread = false) }, last = data.saveRAMState)
         retroView = GLRetroView(this, data).apply {
@@ -238,7 +247,17 @@ class CoreActivity : ComponentActivity() {
         overlay?.let { root.addView(it, 1, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
         retroView.requestFocus()
         // A load that fails says why on screen, then closes: never a silent black screen.
-        lifecycleScope.launch { retroView.getGLRetroErrors().collect { code -> fail(PlayerMessages.loadError(code, def.displayName)) } }
+        lifecycleScope.launch {
+            retroView.getGLRetroErrors().collect { code ->
+                if (code == GLRetroView.ERROR_VULKAN && vulkan) restartOnGl() else fail(PlayerMessages.loadError(code, def.displayName))
+            }
+        }
+        if (vulkan) {
+            lifecycleScope.launch {
+                retroView.getGLRetroEvents().first { it == GLRetroEvents.FrameRendered }
+                Log.i(TAG, "Renderer: ${if (retroView.usesVulkan()) "Vulkan" else "GL (Vulkan refused)"}")
+            }
+        }
         logOutputs()
         watchSound()
         if (switches.frameRate) {
@@ -334,6 +353,32 @@ class CoreActivity : ComponentActivity() {
                 delay(forMs)
                 if (notice.text == text) say(null)
             }
+        }
+    }
+
+    /**
+     * The game's Vulkan context failed after it loaded (a device that couldn't be made, or was
+     * lost): it says so and starts again on GL, through the launcher's process, once this one has
+     * ended. Nothing is saved: the core stopped mid-frame (a PS2's memory cards are the core's own
+     * files, written as the game saves).
+     */
+    private fun restartOnGl() {
+        if (quitting) return
+        quitting = true
+        failed = true
+        Log.w(TAG, "Vulkan failed: starting again on GL")
+        say(PlayerMessages.VULKAN_RESTART)
+        val again = Intent(intent).putExtra(EXTRA_NO_VULKAN, true)
+        val asked = try {
+            host?.relaunch(again)
+            host != null
+        } catch (e: RemoteException) {
+            false
+        }
+        if (!asked) Log.w(TAG, "Reader unreachable: the game isn't started again")
+        lifecycleScope.launch {
+            delay(FAIL_SHOW_MS)
+            finish()
         }
     }
 
@@ -1071,6 +1116,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_LEARN = "learn"
         /** The core's ladder step to start at (see [GameTuning]); absent, its default. */
         const val EXTRA_TUNING_STEP = "tuning_step"
+        /** The game goes back to GL: its Vulkan context failed (see [restartOnGl]). */
+        const val EXTRA_NO_VULKAN = "no_vulkan"
         /** A Wii game's controller (WiiController, see [GameWiiController]); absent, the core's default. */
         const val EXTRA_WII_CONTROLLER = "wii_controller"
         const val EXTRA_PLATFORM = "platform"

@@ -95,11 +95,14 @@ jobs:
       - name: Note the LRPS2 commit
         run: echo "LRPS2_COMMIT=$(git rev-parse HEAD:third_party/lrps2)" >> "$GITHUB_ENV"
 
+      # The build's folder is named for its patches and build tag too (BuildCmakeCore), so the
+      # folders of the commit are cached, under a key that changes with either.
       - name: Cache the built LRPS2
         uses: actions/cache@v4
         with:
-          path: .gradle/cores/libpcsx2_libretro_android-${{ env.LRPS2_COMMIT }}
-          key: lrps2-${{ env.LRPS2_COMMIT }}
+          path: .gradle/cores/libpcsx2_libretro_android-${{ env.LRPS2_COMMIT }}-*
+          key: lrps2-${{ env.LRPS2_COMMIT }}-${{ hashFiles('patches/lrps2/*.patch', 'app/build.gradle.kts') }}
+          restore-keys: lrps2-${{ env.LRPS2_COMMIT }}
 
       # The PC hook kit Genkan installs for GameNative games (tools/hookbridge): MinGW builds
       # the proxy and host; LunaHook comes from LunaTranslator's pinned release.

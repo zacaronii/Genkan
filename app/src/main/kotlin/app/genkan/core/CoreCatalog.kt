@@ -79,6 +79,11 @@ data class CoreDef(
      * core (a Wii by the GameCube's Dolphin) shares that core's.
      */
     val tuning: String = id,
+    /**
+     * The core can draw with Vulkan (libretrodroid's vulkanbridge.h), and is offered it on a ladder
+     * step that asks for it (TuningStep.vulkan); every other core is never offered it.
+     */
+    val vulkan: Boolean = false,
     /** A lifted finger leaves the game's pointer where it was (a Wii's: aimed, then left there). */
     val keepPointer: Boolean = false,
     /**
@@ -261,6 +266,8 @@ object CoreCatalog {
             // through the uncached views at 0x20000000 and 0x30000000.
             pointerMask = 0x01FFFFFFL,
             extensions = setOf("iso", "chd", "cso", "zso", "ciso", "cue", "elf", "m3u"),
+            // Its Vulkan renderer, on the ladder's Vulkan step only.
+            vulkan = true,
         ),
         CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",

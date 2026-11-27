@@ -81,6 +81,8 @@ public class LibretroDroid {
     public static final int ERROR_GL_NOT_COMPATIBLE = 2;
     public static final int ERROR_SERIALIZATION = 3;
     public static final int ERROR_CHEAT = 4;
+    /** Genkan: the Vulkan context failed after the game loaded: the player starts it again on GL. */
+    public static final int ERROR_VULKAN = 5;
     public static final int ERROR_GENERIC = -1;
 
     public static native void create(
@@ -98,6 +100,16 @@ public class LibretroDroid {
         ImmersiveMode immersiveMode,
         String language
     );
+
+    /**
+     * Genkan: whether the core may draw with Vulkan (only a core and step that ask for it), and a
+     * failure to force, to see the way back to GL (0 none, 1 the probe, 2 the device, 3 a lost
+     * device). After create and before the game loads.
+     */
+    public static native void offerVulkan(boolean offered, int forcedFailure);
+
+    /** Genkan: whether the core draws with Vulkan (its context made). */
+    public static native boolean usesVulkan();
 
     public static native void loadGameFromPath(String gameFilePath);
     public static native void loadGameFromBytes(byte[] gameFileBytes);

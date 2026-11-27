@@ -123,6 +123,7 @@ class GLRetroView(
             data.immersiveMode,
             getDeviceLanguage()
         )
+        LibretroDroid.offerVulkan(data.vulkan, data.vulkanFailure)
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
         LibretroDroid.setViewportAlignment(data.viewportAlignment.value)
     }
@@ -212,6 +213,9 @@ class GLRetroView(
     fun getGLRetroEvents(): Flow<GLRetroEvents> {
         return retroGLEventsSubject
     }
+
+    /** Genkan: whether the core draws with Vulkan, once the game is up. */
+    fun usesVulkan(): Boolean = LibretroDroid.usesVulkan()
 
     fun getGLRetroErrors(): Flow<Int> {
         return retroGLIssuesErrors
@@ -629,6 +633,7 @@ class GLRetroView(
 
         const val ERROR_LOAD_LIBRARY = LibretroDroid.ERROR_LOAD_LIBRARY
         const val ERROR_LOAD_GAME = LibretroDroid.ERROR_LOAD_GAME
+        const val ERROR_VULKAN = LibretroDroid.ERROR_VULKAN
         const val ERROR_GL_NOT_COMPATIBLE = LibretroDroid.ERROR_GL_NOT_COMPATIBLE
         const val ERROR_SERIALIZATION = LibretroDroid.ERROR_SERIALIZATION
         const val ERROR_CHEAT = LibretroDroid.ERROR_CHEAT

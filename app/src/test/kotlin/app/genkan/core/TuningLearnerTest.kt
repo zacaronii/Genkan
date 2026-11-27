@@ -162,6 +162,16 @@ class TuningLearnerTest {
     }
 
     @Test
+    fun `the learner never takes a PS2 game to Vulkan, which is only ever chosen`() {
+        val lrps2 = TuningLadders.of("lrps2")!!
+        val learner = clocked(ladder = lrps2)
+        val decisions = learner.feed(full.copy(hottestC = 85, fastestMhz = 2500), HOT_WINDOW * 4) +
+            learner.feed(slow(0.8), WINDOW * 4) + learner.feed(full, WINDOW * 8)
+        assertTrue(decisions.isNotEmpty())
+        assertTrue(decisions.none { lrps2.step(it.step)!!.vulkan })
+    }
+
+    @Test
     fun `a clock that only dips between busy moments isn't throttling`() {
         // The governor idles the fastest core between frames; its highest second in the window counts.
         val learner = clocked()

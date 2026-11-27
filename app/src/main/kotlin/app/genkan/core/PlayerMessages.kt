@@ -14,6 +14,9 @@ object PlayerMessages {
         else -> "$core stopped with an error"
     }
 
+    /** Shown when a game's Vulkan context failed: it starts again on GL. */
+    const val VULKAN_RESTART = "Vulkan stopped: starting the game again on GL"
+
     /** Shown when the game can't be heard: its sound stream wouldn't open, or stopped. */
     fun noSound(problem: String): String = "No sound: $problem"
 

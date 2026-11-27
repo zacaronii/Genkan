@@ -93,6 +93,9 @@ add_library(libretrodroid SHARED
         genkantapjni.cpp
         framestats.h
         framestats.cpp
+
+        vulkanbridge.h
+        vulkanbridge.cpp
         scripthost.h
         scripthost.cpp
         scriptjni.cpp
