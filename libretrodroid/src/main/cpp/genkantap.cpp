@@ -28,7 +28,9 @@ void GenkanTap::setMemoryMaps(const struct retro_memory_map *map) {
         bool mirror = std::any_of(memory.begin(), memory.end(), [&](const Region &r) {
             return host >= r.host && host < r.host + r.length;
         });
-        memory.push_back(Region { d.start, d.len, host, mirror, d.select, d.disconnect });
+        // A core that keeps its memory in words of the host's order keeps its map's blocks so too
+        // (mupen64plus_next's RDRAM, RSP memory and cartridge): read back in the console's order.
+        memory.push_back(Region { d.start, d.len, host, mirror, d.select, d.disconnect, wordSize });
     }
 }
 
@@ -38,10 +40,10 @@ void GenkanTap::setSystemRam(void *(*data)(unsigned), size_t (*size)(unsigned)) 
     systemRamSize = size;
 }
 
-void GenkanTap::setSystemRamStretches(std::vector<Stretch> given, bool words) {
+void GenkanTap::setSystemRamStretches(std::vector<Stretch> given, unsigned wordSize) {
     std::lock_guard<std::mutex> lock(memoryLock);
     stretches = std::move(given);
-    stretchWords = words;
+    this->wordSize = wordSize;
 }
 
 void GenkanTap::clear() {
@@ -77,7 +79,7 @@ std::vector<GenkanTap::Region> GenkanTap::regions() {
     std::vector<Region> out;
     for (const auto &s : stretches) {
         if (s.offset >= size) continue;
-        out.push_back(Region { s.start, std::min<uint64_t>(s.length, size - s.offset), data + s.offset, false, 0, 0, stretchWords });
+        out.push_back(Region { s.start, std::min<uint64_t>(s.length, size - s.offset), data + s.offset, false, 0, 0, wordSize });
     }
     return out;
 }
@@ -93,18 +95,19 @@ MemoryDescriptor descriptorOf(const GenkanTap::Region &r) {
  * kernel, so memory the core unmapped or never mapped fails the read instead of crashing the game.
  */
 size_t copyOut(const GenkanTap::Region &r, uint64_t at, uint8_t *out, size_t size) {
-    if (!r.words) {
+    if (r.wordSize < 2) {
         struct iovec local { out, size };
         struct iovec remote { r.host + at, size };
         ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
         return got > 0 ? static_cast<size_t>(got) : 0;
     }
-    // Whole words, then each byte pair swapped back; a word-kept region's length is even.
-    std::vector<uint8_t> span(wordSpanLength(at, size));
+    // Whole words, then each one's bytes back in the console's order; a word-kept region's length is
+    // a whole number of words.
+    std::vector<uint8_t> span(wordSpanLength(at, size, r.wordSize));
     struct iovec local { span.data(), span.size() };
-    struct iovec remote { r.host + wordSpanStart(at), span.size() };
+    struct iovec remote { r.host + wordSpanStart(at, r.wordSize), span.size() };
     if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != static_cast<ssize_t>(span.size())) return 0;
-    unswapWords(span.data(), at, out, size);
+    unswapWords(span.data(), at, out, size, r.wordSize);
     return size;
 }
 

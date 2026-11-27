@@ -137,9 +137,11 @@ Pinned commit: fee2e824525daa22bcf318f96127fe43fa8a15ad
   https://github.com/libretro/pcsx_rearmed), libppsspp_libretro_android.so
   (PPSSPP, GPL-2.0, https://github.com/hrydgard/ppsspp),
   libmelonds_libretro_android.so (melonDS DS, GPL-3.0,
-  https://github.com/JesseTG/melonds-ds) and
+  https://github.com/JesseTG/melonds-ds),
   libmednafen_pce_fast_libretro_android.so (Beetle PCE Fast, GPL-2.0,
-  https://github.com/libretro/beetle-pce-fast-libretro), arm64-v8a,
+  https://github.com/libretro/beetle-pce-fast-libretro) and
+  libmupen64plus_next_gles3_libretro_android.so (Mupen64Plus-Next, GPL-2.0,
+  https://github.com/libretro/mupen64plus-libretro-nx), arm64-v8a,
   unmodified, bundled as native libraries; and assets/ppsspp.zip (PPSSPP's
   fonts, shaders and flash0 files, unmodified) as assets/cores/ppsspp.zip.
   They are downloaded at build time by the downloadCores and

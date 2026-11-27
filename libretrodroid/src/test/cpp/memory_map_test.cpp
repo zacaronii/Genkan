@@ -1,6 +1,7 @@
 // Genkan: reading a console's address through a core's memory descriptor (memorymap.h), on made-up maps
 // shaped as bsnes gives them: a LoROM cartridge of 1.5 MB, a HiROM one of 3 MB, plain work RAM.
 #include <cstdio>
+#include <cstring>
 #include <optional>
 
 #include "memorymap.h"
@@ -77,17 +78,31 @@ int main() {
     // "SEGA" (53 45 47 41) lies as 45 53 41 47.
     const uint8_t words[] = { 0x45, 0x53, 0x41, 0x47, 0x00, 0x21 };
     uint8_t out[6] = {};
-    check(wordSpanStart(0) == 0 && wordSpanLength(0, 4) == 4, "an aligned read fetches its own words");
-    unswapWords(words, 0, out, 4);
+    check(wordSpanStart(0, 2) == 0 && wordSpanLength(0, 4, 2) == 4, "an aligned read fetches its own words");
+    unswapWords(words, 0, out, 4, 2);
     check(out[0] == 'S' && out[1] == 'E' && out[2] == 'G' && out[3] == 'A', "each pair goes back in the console's order");
-    check(wordSpanStart(1) == 0 && wordSpanLength(1, 2) == 4, "an odd start fetches the word it starts in and the next");
-    unswapWords(words, 1, out, 2);
+    check(wordSpanStart(1, 2) == 0 && wordSpanLength(1, 2, 2) == 4, "an odd start fetches the word it starts in and the next");
+    unswapWords(words, 1, out, 2, 2);
     check(out[0] == 'E' && out[1] == 'G', "an odd start reads from the pair's second byte");
-    check(wordSpanLength(5, 1) == 2, "one byte fetches its word");
-    unswapWords(words + 4, 5, out, 1);
+    check(wordSpanLength(5, 1, 2) == 2, "one byte fetches its word");
+    unswapWords(words + 4, 5, out, 1, 2);
     check(out[0] == 0x00, "the word's second byte, as the console has it");
-    unswapWords(words + 4, 4, out, 1);
+    unswapWords(words + 4, 4, out, 1, 2);
     check(out[0] == 0x21, "and its first");
+
+    // RDRAM kept as 32-bit words, each one's four bytes reversed (mupen64plus_next's): the console's
+    // "NUS-" (4E 55 53 2D) then "ABCD" lie as 2D 53 55 4E 44 43 42 41.
+    const uint8_t rdram[] = { 0x2D, 0x53, 0x55, 0x4E, 0x44, 0x43, 0x42, 0x41 };
+    uint8_t text[8] = {};
+    check(wordSpanStart(0, 4) == 0 && wordSpanLength(0, 8, 4) == 8, "an aligned read fetches its own 32-bit words");
+    unswapWords(rdram, 0, text, 8, 4);
+    check(std::memcmp(text, "NUS-ABCD", 8) == 0, "each word's four bytes go back in the console's order");
+    check(wordSpanStart(3, 4) == 0 && wordSpanLength(3, 2, 4) == 8, "a read across two words fetches both");
+    unswapWords(rdram, 3, text, 2, 4);
+    check(text[0] == '-' && text[1] == 'A', "from the first word's last byte into the next word's first");
+    check(wordSpanStart(6, 4) == 4 && wordSpanLength(6, 1, 4) == 4, "one byte fetches its word");
+    unswapWords(rdram + 4, 6, text, 1, 4);
+    check(text[0] == 'C', "the word's third byte, as the console has it");
 
     if (failures == 0) std::printf("memory map: passed\n");
     return failures == 0 ? 0 : 1;

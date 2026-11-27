@@ -47,12 +47,14 @@ class RamSnapshotsTest {
         assertEquals(16L * 1024 * 1024, size("dc"))
         assertEquals(0x06000000L, MainRam.of("saturn")!!.baseAddress)
         assertEquals(1L * 1024 * 1024, size("saturn"))
+        assertEquals(0x80000000L, MainRam.of("n64")!!.baseAddress)
+        assertEquals(8L * 1024 * 1024, size("n64"))
         // A PC Engine CD's card RAM and then the CD's, joined, under Yomikata's name for it.
         assertEquals(0xD0000L, MainRam.of("turbografx-cd")!!.baseAddress)
         assertEquals(256L * 1024, size("turbografx-cd"))
         assertEquals("pce-cd", TextSamples.yomikataPlatform("turbografx-cd"))
         assertEquals("pce", TextSamples.yomikataPlatform("tg16"))
-        assertNull(MainRam.of("n64"))
+        assertNull(MainRam.of("3ds"))
     }
 
     @Test

@@ -130,7 +130,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setKeepPointer
 
 /** `stretches` as (console address, offset in the system RAM, length) triples. */
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamStretches(
-    JNIEnv *env, jclass, jlongArray stretches, jboolean words
+    JNIEnv *env, jclass, jlongArray stretches, jint wordSize
 ) {
     std::vector<GenkanTap::Stretch> out;
     jsize count = stretches != nullptr ? env->GetArrayLength(stretches) : 0;
@@ -141,7 +141,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamSt
             static_cast<uint64_t>(values[i]), static_cast<uint64_t>(values[i + 1]), static_cast<uint64_t>(values[i + 2]),
         });
     }
-    GenkanTap::getInstance().setSystemRamStretches(std::move(out), words == JNI_TRUE);
+    GenkanTap::getInstance().setSystemRamStretches(std::move(out), wordSize == 2 || wordSize == 4 ? static_cast<unsigned>(wordSize) : 0);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setReadsWhole(JNIEnv *, jclass, jboolean whole) {

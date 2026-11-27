@@ -176,7 +176,7 @@ class GameFileTest {
         assertTrue(GameFile.takes(ngc, File(temp.root, "game.rvz").apply { writeBytes(bytes(64, 25)) }))
         assertFalse(GameFile.takes(ngc, File(temp.root, "game.wbfs").apply { writeBytes(bytes(64, 26)) }))
         // A console with no built-in core goes to the outside emulator as before.
-        assertNull(CoreCatalog.forPlatform("n64"))
+        assertNull(CoreCatalog.forPlatform("3ds"))
     }
 
     @Test

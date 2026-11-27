@@ -181,7 +181,7 @@ class CoreActivity : ComponentActivity() {
     private fun play(def: CoreDef, rom: File, game: File) {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
         cartridge = CartridgeId.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game)
-        cartridge?.let { Log.i(TAG, "Game id from its file: ${it.id}, build ${it.headerCrc32}") }
+        cartridge?.let { Log.i(TAG, "Game id from its file: ${it.id}, build ${it.build ?: it.headerCrc32}") }
         // The process may have played a game before this one: its sound problem isn't this one's.
         GenkanTap.clearAudioProblem()
         val system = File(filesDir, "system").apply { mkdirs() }
@@ -189,7 +189,7 @@ class CoreActivity : ComponentActivity() {
 
         GenkanTap.setSplitScreens(def.splitScreens)
         GenkanTap.setKeepPointer(def.keepPointer)
-        GenkanTap.setSystemRamStretches(def.ramStretches.flatMap { listOf(it.address, it.offset, it.length) }.toLongArray(), def.ramWords)
+        GenkanTap.setSystemRamStretches(def.ramStretches.flatMap { listOf(it.address, it.offset, it.length) }.toLongArray(), def.ramWordSize)
         GenkanTap.setReadsWhole(def.readsWhole)
         val data = GLRetroViewData(this).apply {
             // The linker finds a bare name among the APK's own libraries.
@@ -419,7 +419,7 @@ class CoreActivity : ComponentActivity() {
 
     private val session = object : ICoreSession.Stub() {
         // A cartridge's from its header; else the one the core named (a PS2 disc's serial and CRC).
-        override fun cartridgeId(): String? = cartridge?.let { "${it.id} ${it.headerCrc32}" } ?: GenkanTap.gameId()
+        override fun cartridgeId(): String? = cartridge?.wire() ?: GenkanTap.gameId()
 
         override fun loadScript(name: String, source: ByteArray, data: Bundle, gameId: String, buildId: String?): String? {
             if (!gameLoaded()) return "no game is running"
@@ -1069,7 +1069,7 @@ enum class BottomCycle {
 
     companion object {
         /** Consoles whose own pad has no stick clicks; a PlayStation's (DualShock) has. */
-        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc")
+        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc", "n64")
 
         /** Whether the stick clicks step the bottom screen for [platform], rather than going to the game. */
         fun takesStickClicks(platform: String): Boolean = platform in NO_STICK_CLICKS

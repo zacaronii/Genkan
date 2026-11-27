@@ -75,23 +75,25 @@ inline std::optional<uint64_t> wholeOffset(const MemoryDescriptor &d, uint64_t a
 }
 
 /**
- * Memory a core keeps as 16-bit words in the host's order, little-endian (mednafen_saturn's work RAM):
- * each pair of the console's big-endian bytes swapped. A read of [size] bytes at offset [at] fetches
- * the whole words they're in, from [wordSpanStart] for [wordSpanLength] bytes, and [unswapWords] puts
- * them back in the console's order, as Yomikata's harness reads them.
+ * Memory a core keeps as words of [word] bytes (2 or 4) in the host's order, little-endian, where the
+ * console has them big-endian: mednafen_saturn's work RAM, 16-bit words with each pair of bytes
+ * swapped; mupen64plus_next's RDRAM, 32-bit words with each one's four bytes reversed. A read of
+ * [size] bytes at offset [at] fetches the whole words they're in, from [wordSpanStart] for
+ * [wordSpanLength] bytes, and [unswapWords] puts them back in the console's order, as Yomikata's
+ * harness reads them.
  */
-inline uint64_t wordSpanStart(uint64_t at) {
-    return at & ~uint64_t { 1 };
+inline uint64_t wordSpanStart(uint64_t at, uint64_t word) {
+    return at & ~(word - 1);
 }
 
-inline uint64_t wordSpanLength(uint64_t at, uint64_t size) {
-    return ((at + size + 1) & ~uint64_t { 1 }) - wordSpanStart(at);
+inline uint64_t wordSpanLength(uint64_t at, uint64_t size, uint64_t word) {
+    return ((at + size + word - 1) & ~(word - 1)) - wordSpanStart(at, word);
 }
 
 /** Bytes [at, at + size) in the console's order, from [span]: the core's words from wordSpanStart(at). */
-inline void unswapWords(const uint8_t *span, uint64_t at, uint8_t *out, size_t size) {
-    uint64_t start = wordSpanStart(at);
-    for (size_t i = 0; i < size; i++) out[i] = span[((at + i) ^ 1) - start];
+inline void unswapWords(const uint8_t *span, uint64_t at, uint8_t *out, size_t size, uint64_t word) {
+    uint64_t start = wordSpanStart(at, word);
+    for (size_t i = 0; i < size; i++) out[i] = span[((at + i) ^ (word - 1)) - start];
 }
 
 }

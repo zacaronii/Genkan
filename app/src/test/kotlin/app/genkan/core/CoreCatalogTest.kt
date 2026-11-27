@@ -112,13 +112,28 @@ class CoreCatalogTest {
             listOf(RamStretch(0x06000000L, 0x100000L, 0x100000L), RamStretch(0x00200000L, 0L, 0x100000L)),
             saturn.ramStretches,
         )
-        assertTrue(saturn.ramWords)
+        assertEquals(2, saturn.ramWordSize)
         assertTrue(saturn.bigEndian)
         assertEquals(0x06001234L, 0x26001234L and saturn.pointerMask)
         assertEquals(0x00201234L, 0x20201234L and saturn.pointerMask)
         assertEquals(0L, saturn.ramBase)
-        // No other core cuts its RAM up.
-        CoreCatalog.cores.filter { it !== saturn }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && !it.ramWords) }
+        // No other core but the N64's cuts its RAM up or keeps it in words.
+        val n64 = CoreCatalog.forPlatform("n64")!!
+        CoreCatalog.cores.filter { it !== saturn && it !== n64 }.forEach { assertTrue(it.id, it.ramStretches.isEmpty() && it.ramWordSize == 0) }
+        assertTrue(n64.ramStretches.isEmpty())
+    }
+
+    @Test
+    fun `an N64's RDRAM reads at 0x80000000 in its order, past the cache too`() {
+        val n64 = CoreCatalog.forPlatform("n64")!!
+        assertEquals("mupen64plus_next", n64.id)
+        assertEquals("libmupen64plus_next_gles3_libretro_android.so", n64.library)
+        // The core's map gives the 8 MB RDRAM at 0x80000000, as 32-bit words in the host's order.
+        assertEquals(4, n64.ramWordSize)
+        assertTrue(n64.bigEndian && n64.sticksOnly)
+        assertEquals(0x80123456L, 0xA0123456L and n64.pointerMask)
+        assertEquals(0x80123456L, 0x80123456L and n64.pointerMask)
+        listOf("game.z64", "game.v64", "game.n64").forEach { assertTrue(it, n64.takes(it)) }
     }
 
     @Test
