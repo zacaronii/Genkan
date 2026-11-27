@@ -25,7 +25,7 @@ class StickMotionTest {
     }
 
     @Test
-    fun `a GameCube's, a Wii's and an N64's sticks are only sticks, other consoles' still steer the D-pad`() {
+    fun `a GameCube's, a Wii's, an N64's and a PS2's sticks are only sticks, other consoles' still steer the D-pad`() {
         val gamecube = CoreCatalog.forPlatform("ngc")!!
         assertTrue(gamecube.sticksOnly)
         // Handled: Android makes no D-pad presses of the stick, which a game may read as its menus.
@@ -35,7 +35,10 @@ class StickMotionTest {
         // An N64's analog stick, beside its D-pad.
         val n64 = CoreCatalog.forPlatform("n64")!!
         assertTrue(n64.sticksOnly)
-        CoreCatalog.cores.filter { it.library != gamecube.library && it !== n64 }.forEach { core ->
+        // A DualShock's: a game in analog mode that also got the D-pad would read both.
+        val ps2 = CoreCatalog.cores.single { it.id == "lrps2" }
+        assertTrue(ps2.sticksOnly)
+        CoreCatalog.cores.filter { it.library != gamecube.library && it !== n64 && it !== ps2 }.forEach { core ->
             assertFalse(core.id, core.sticksOnly)
             assertFalse(core.id, StickMotion.handled(core.sticksOnly))
         }

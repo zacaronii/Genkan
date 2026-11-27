@@ -267,6 +267,10 @@ object CoreCatalog {
             // (Vulkan on the Vulkan step, else OpenGL ES 3, for which the core's GL renderer asks 3.1;
             // "OpenGL" asks for desktop GL 3.3 and draws nothing), or Software on 6 threads.
             variables = mapOf("pcsx2_bios" to "ps2-0230a-20080220.bin"),
+            // A DualShock's sticks: a game in analog mode that also got the D-pad Android makes of the
+            // left stick would read both, and one that walks on the stick and turns on the D-pad
+            // only turned.
+            sticksOnly = true,
             // RomM's PS2 BIOS, in the folder the core looks in.
             firmware = mapOf("ps2-0230a-20080220.bin" to "pcsx2/bios/ps2-0230a-20080220.bin"),
             // The core gives the EE's 32 MB without a map, from address 0; games also point at it
