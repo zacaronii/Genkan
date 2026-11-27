@@ -69,6 +69,11 @@ void GenkanTap::clear() {
     ringCount = 0;
 }
 
+bool GenkanTap::hasCartridgeImage() {
+    std::lock_guard<std::mutex> lock(memoryLock);
+    return !cartridge.empty();
+}
+
 void GenkanTap::setCartridgeImage(std::vector<uint8_t> image) {
     std::lock_guard<std::mutex> lock(memoryLock);
     cartridge = std::move(image);

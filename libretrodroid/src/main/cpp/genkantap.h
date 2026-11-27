@@ -77,6 +77,8 @@ public:
      * build against it. Set before the game loads; empty, none.
      */
     void setCartridgeImage(std::vector<uint8_t> image);
+    /** Whether a cartridge's image is served (setCartridgeImage). */
+    bool hasCartridgeImage();
     static constexpr uint64_t CARTRIDGE_IMAGE_AT = 0x01000000;
     void clear();
     std::vector<Region> regions();

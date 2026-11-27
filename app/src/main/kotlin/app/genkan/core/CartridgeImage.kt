@@ -19,6 +19,9 @@ object CartridgeImage {
     /** Past the largest of these (an 8 MB Game Boy Color cartridge): not one. */
     private const val MAX_SIZE = 16L * 1024 * 1024
 
+    /** Whether a game of [platform] has its cartridge's image served (its code there from the start). */
+    fun covers(platform: String): Boolean = platform in PLATFORMS
+
     fun of(platform: String, file: File): ByteArray? = runCatching {
         if (platform !in PLATFORMS || file.length() > MAX_SIZE) return null
         of(platform, file.readBytes())

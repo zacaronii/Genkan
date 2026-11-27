@@ -5,8 +5,9 @@ package app.genkan.core
  * it loads, and some consoles have that code only after their BIOS has run (a PS1), so "another
  * build" at the start may only mean "not yet": it's tried once a second through the game's first
  * minute, and through a minute after each savestate load. Only a script that still refuses then is
- * not this game's. Any other refusal (a later runtime, a region the host lacks, a syntax error) is
- * final.
+ * not this game's. A cartridge's code is there from the start (its image, CartridgeImage), so its
+ * refusal is final at once. Any other refusal (a later runtime, a region the host lacks, a syntax
+ * error) is final.
  */
 object ScriptRetry {
     const val EVERY_MS = 1_000L
@@ -16,8 +17,9 @@ object ScriptRetry {
 
     /**
      * Whether to try again after [error] at [nowMs], the game having started at [startedMs] and a
-     * savestate last loaded at [stateLoadedMs] (null: none since).
+     * savestate last loaded at [stateLoadedMs] (null: none since); never when its code is there
+     * from the start ([fromStart]: a cartridge).
      */
-    fun again(error: String, nowMs: Long, startedMs: Long, stateLoadedMs: Long?): Boolean =
-        anotherBuild(error) && (nowMs - startedMs < WINDOW_MS || (stateLoadedMs != null && nowMs - stateLoadedMs < WINDOW_MS))
+    fun again(error: String, nowMs: Long, startedMs: Long, stateLoadedMs: Long?, fromStart: Boolean = false): Boolean =
+        !fromStart && anotherBuild(error) && (nowMs - startedMs < WINDOW_MS || (stateLoadedMs != null && nowMs - stateLoadedMs < WINDOW_MS))
 }
