@@ -22,6 +22,17 @@ class TuningStoreTest {
     }
 
     @Test
+    fun `every game's step is listed, and all of them clear at once`() {
+        val dir = File(folder.root, "tuning")
+        TuningStore(dir).setOverride(42, "efb-2x", "learning", atMs = 1_000)
+        TuningStore(dir).setOverride(7, "gl", "chosen", atMs = 2_000)
+        assertEquals(setOf(42L, 7L), TuningStore(dir).all().keys)
+        assertEquals("gl", TuningStore(dir).all()[7]?.step)
+        TuningStore(dir).clearAll()
+        assertEquals(emptyMap<Long, TuningStore.Override>(), TuningStore(dir).all())
+    }
+
+    @Test
     fun `no file, or one that doesn't read, is no steps`() {
         val dir = File(folder.root, "tuning").apply { mkdirs() }
         assertNull(TuningStore(dir).override(42))

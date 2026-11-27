@@ -135,6 +135,22 @@ object SettingsGroups {
             ),
         ),
         SettingsGroup(
+            id = "storage",
+            title = "Storage",
+            rows = listOf(
+                SettingsRow.Button("Manuals", SetupAction.CLEAR_MANUALS),
+                SettingsRow.Button("Covers and art", SetupAction.CLEAR_ART),
+            ),
+        ),
+        SettingsGroup(
+            id = "advanced",
+            title = "Advanced",
+            rows = listOf(
+                SettingsRow.Button("Tuning steps", SetupAction.TUNING_STEPS),
+                SettingsRow.Button("Save a log", SetupAction.SAVE_LOG),
+            ),
+        ),
+        SettingsGroup(
             id = "about",
             title = "About",
             info = listOf(SettingsInfo.VERSION, SettingsInfo.LICENCE),

@@ -1,7 +1,15 @@
 package app.genkan.ui
 
 import app.genkan.BuildConfig
+import android.content.Context
 import app.genkan.anki.AnkiConnect
+import app.genkan.art.ArtCache
+import app.genkan.core.TuningStore
+import app.genkan.manual.Manuals
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 import app.genkan.anki.AnkiMiner
 import app.genkan.anki.AnkiSettings
 import app.genkan.anki.AnkiStatus
@@ -71,6 +79,14 @@ enum class SetupAction {
     YOMIKATA_SERVERS,
     /** The third-party notices and their licences (About). */
     NOTICE,
+    /** The manuals kept for offline, cleared on a second press (Storage). */
+    CLEAR_MANUALS,
+    /** The covers and art, cleared on a second press (Storage). */
+    CLEAR_ART,
+    /** The games with a step of their own (Advanced). */
+    TUNING_STEPS,
+    /** Genkan's log, redacted, to Download (Advanced). */
+    SAVE_LOG,
     /** AnkiConnect's address and key, and the word-audio source (Connections). */
     ANKI_SERVER,
     SIGN_OUT,
@@ -95,6 +111,10 @@ class SetupViewModel @Inject constructor(
     looks: ScreenLooks,
     private val ankiSettings: AnkiSettings,
     private val ankiConnect: AnkiConnect,
+    private val manuals: Manuals,
+    val tuningStore: TuningStore,
+    private val logSaver: LogSaver,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
 
@@ -118,6 +138,7 @@ class SetupViewModel @Inject constructor(
      * (sending nothing). kechimochi's line is its pusher's, which sends on its own every few minutes.
      */
     fun checkServers() {
+        refreshStorage()
         viewModelScope.launch {
             val config = ankiSettings.current()
             _ankiReach.value = if (!config.configured) {
@@ -135,6 +156,15 @@ class SetupViewModel @Inject constructor(
     /** Whether DuckStation's and Dolphin's saves (in their own Android/data) can be synced. */
     val shizuku: StateFlow<Privileged.State> = _shizuku.asStateFlow()
 
+    /** What Storage holds (the manuals, the art), in bytes; null until measured. */
+    private val storage = MutableStateFlow<Pair<Long?, Long?>>(null to null)
+    private val pressAgain = PressAgain()
+    /** The Clear row waiting for its second press. */
+    private val pressAgainArmed = MutableStateFlow<SetupAction?>(null)
+    private val tuningCount = tuningStore.changes.map { tuningStore.all().size }
+    /** What the last Save a log did. */
+    private val logSaved = MutableStateFlow<String?>(null)
+
     /** Everything the page shows; a press by pad or by touch reads the switches from here alike. */
     @Suppress("UNCHECKED_CAST")
     val state: StateFlow<SetupState> = combine(
@@ -143,7 +173,7 @@ class SetupViewModel @Inject constructor(
         librarySettings.insertAnimation, librarySettings.fullBox, librarySettings.prefetchManuals,
         playerSettings.aOnRight, armsxText.enabled, yomikataCatalog.status, ankiMiner.status, readingLog.status,
         playerSettings.learning, looks.consoles, playerSettings.lowLatencyOff, playerSettings.faceSwapped, playerSettings.coreChoice,
-        ankiReach,
+        ankiReach, storage, pressAgainArmed, tuningCount, logSaved,
     ) { v ->
         SetupState(
             status = v[0] as DualScreenStatus,
@@ -172,6 +202,11 @@ class SetupViewModel @Inject constructor(
             faceSwapped = v[21] as Set<String>,
             coreChoice = v[22] as Map<String, String>,
             ankiReach = v[23] as AnkiReach?,
+            manualsBytes = (v[24] as Pair<Long?, Long?>).first,
+            artBytes = (v[24] as Pair<Long?, Long?>).second,
+            armed = v[25] as SetupAction?,
+            tuningSteps = v[26] as Int,
+            logSaved = v[27] as String?,
         )
     }.stateIn(
         viewModelScope,
@@ -194,6 +229,55 @@ class SetupViewModel @Inject constructor(
     init {
         // The status card's catalog line: the cached index, fetched again only when it's stale.
         viewModelScope.launch { runCatching { yomikataCatalog.refresh() } }
+    }
+
+    /** Measures what Storage holds: the manuals and the art. */
+    fun refreshStorage() {
+        viewModelScope.launch(Dispatchers.IO) {
+            storage.value = manuals.size() to ArtCache.directory(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        }
+    }
+
+    /**
+     * A press on a Clear row: true on the second press within [PressAgain.WINDOW_MS], the first
+     * arming it (its line says to press again, until the window passes).
+     */
+    fun confirmed(action: SetupAction): Boolean {
+        val now = System.currentTimeMillis()
+        if (pressAgain.press(action, now)) {
+            pressAgainArmed.value = null
+            return true
+        }
+        pressAgainArmed.value = action
+        viewModelScope.launch {
+            delay(PressAgain.WINDOW_MS)
+            if (pressAgain.armed(System.currentTimeMillis()) == null) pressAgainArmed.value = null
+        }
+        return false
+    }
+
+    fun clearManuals() {
+        viewModelScope.launch(Dispatchers.IO) {
+            manuals.clearAll()
+            refreshStorage()
+        }
+    }
+
+    /** The covers and art: the disk and memory caches, fetched again as the shelf shows them. */
+    fun clearArt() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val loader = coil3.SingletonImageLoader.get(context)
+            loader.memoryCache?.clear()
+            loader.diskCache?.clear()
+            refreshStorage()
+        }
+    }
+
+    fun saveLog() {
+        viewModelScope.launch {
+            logSaved.value = "Saving…"
+            logSaved.value = logSaver.save().fold({ "Saved as Download/$it (on this device only)" }, { "Not saved: ${it.message ?: it.javaClass.simpleName}" })
+        }
     }
 
     val groups: List<SettingsGroup> = SettingsGroups.DEFAULT

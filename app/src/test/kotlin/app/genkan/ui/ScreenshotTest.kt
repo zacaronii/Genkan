@@ -766,7 +766,39 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun settingsAbout() = shootSettings(8, SettingsFocus(pane = SettingsPane.GROUPS, group = 8))
+    fun settingsAbout() = shootSettings(10, SettingsFocus(pane = SettingsPane.GROUPS, group = 10))
+
+    /** Storage, the pad on the art: its size, and the line asking for a second press. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsStorage() = shoot("settings_storage", TOP_PIXELS) {
+        SetupContent(
+            FakeData.settings.copy(manualsBytes = 48_300_000, artBytes = 212_000_000, armed = SetupAction.CLEAR_ART),
+            SettingsGroups.DEFAULT, SettingsFocus(pane = SettingsPane.ROWS, group = 8, row = 1), onSelectGroup = {}, onRow = { _, _, _ -> },
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsAdvanced() = shoot("settings_advanced", TOP_PIXELS) {
+        SetupContent(
+            FakeData.settings.copy(tuningSteps = 3),
+            SettingsGroups.DEFAULT, SettingsFocus(pane = SettingsPane.ROWS, group = 9, row = 1), onSelectGroup = {}, onRow = { _, _, _ -> },
+        )
+    }
+
+    /** Settings › Advanced › Tuning steps: made-up games, each with its step. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun tuningSteps() = shoot("settings_tuning_steps", TOP_PIXELS) {
+        TuningStepsContent(
+            listOf(
+                TuningEntry(1, "The Clockmaker's Apprentice", "GL", "the device ran hot"),
+                TuningEntry(2, "Lantern Street", "2×", "chosen on its details"),
+            ),
+            clearAllArmed = false, onClear = {}, onClearAll = {},
+        )
+    }
 
     /** A row's longer help, open (Y): Built-in player's. */
     @Test

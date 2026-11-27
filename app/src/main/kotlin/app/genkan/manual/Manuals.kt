@@ -355,6 +355,16 @@ class Manuals @Inject constructor(
         metaFile(file).delete()
     }
 
+    /** Removes every manual not in use (Settings › Storage); the bytes freed. */
+    fun clearAll(): Long {
+        var freed = 0L
+        for ((_, file) in stored().filterNot { (_, file) -> inUse(file) }) {
+            freed += file.length() + metaFile(file).length()
+            remove(file)
+        }
+        return freed
+    }
+
     /** Empties the folder (signed out). */
     private fun clear() {
         folder.listFiles()?.forEach { it.delete() }
