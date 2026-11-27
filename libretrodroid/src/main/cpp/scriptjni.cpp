@@ -17,6 +17,9 @@
 
 #include "genkantap.h"
 #include "scripthost.h"
+
+static_assert(libretrodroid::ScriptHost::CARTRIDGE_IMAGE_AT == libretrodroid::GenkanTap::CARTRIDGE_IMAGE_AT,
+              "the script host reads the cartridge's image where GenkanTap serves it");
 #include "yomikata_reader.h"
 
 using libretrodroid::GenkanTap;
@@ -95,6 +98,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_GenkanTap_scriptLo
     game.buildId = stringOf(env, buildId);
     game.pointerMask = static_cast<uint64_t>(pointerMask);
     game.ramBase = static_cast<uint64_t>(ramBase);
+    game.cartridgeImage = GenkanTap::getInstance().hasCartridgeImage();
     // The script checks the game's memory as it loads.
     regions = GenkanTap::getInstance().regions();
     std::string error = host.load(stringOf(env, name), bytesOf(env, source), game, std::move(data), readMemory, regionSize, regionRead);

@@ -12,7 +12,11 @@ ScriptHost::~ScriptHost() {
     unload();
 }
 
-bool ScriptHost::fold(uint64_t address, uint64_t pointerMask, uint64_t ramBase, uint64_t *local) {
+bool ScriptHost::fold(uint64_t address, uint64_t pointerMask, uint64_t ramBase, uint64_t *local, bool cartridgeImage) {
+    if (cartridgeImage && address >= CARTRIDGE_IMAGE_AT) {
+        *local = address;
+        return true;
+    }
     uint64_t folded = address & pointerMask;
     if (folded < ramBase) return false;
     *local = folded - ramBase;
@@ -85,7 +89,7 @@ std::string ScriptHost::error() const {
 size_t ScriptHost::readHost(void *user, uint64_t address, void *out, size_t size) {
     auto *self = static_cast<ScriptHost *>(user);
     uint64_t local;
-    if (!self->memory || !fold(address, self->game.pointerMask, self->game.ramBase, &local)) return 0;
+    if (!self->memory || !fold(address, self->game.pointerMask, self->game.ramBase, &local, self->game.cartridgeImage)) return 0;
     return self->memory(local, static_cast<uint8_t *>(out), size);
 }
 

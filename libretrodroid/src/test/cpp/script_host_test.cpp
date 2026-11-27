@@ -120,6 +120,11 @@ void refusals() {
     uint64_t local = 0;
     check(!ScriptHost::fold(0x00001000, 0xFFFFFFFF, 0x08000000, &local), "an address below the base folds to nothing");
     check(ScriptHost::fold(0x48001000, 0x3FFFFFFF, 0x08000000, &local) && local == 0x1000, "a PSP mirror folds onto its RAM");
+    // The cartridge's image is past the console's addresses: never masked into them (a Mega Drive's
+    // 24-bit mask would put its header at the console's 0x180).
+    check(ScriptHost::fold(0x01000180, 0xFFFFFF, 0, &local, true) && local == 0x01000180, "the cartridge's image is read where it is");
+    check(ScriptHost::fold(0x01000180, 0xFFFFFF, 0, &local, false) && local == 0x180, "without an image, the address folds as any other");
+    check(ScriptHost::fold(0x00FF0010, 0xFFFFFF, 0, &local, true) && local == 0xFF0010, "the console's own addresses still fold");
 }
 
 }

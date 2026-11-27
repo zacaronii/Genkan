@@ -20,6 +20,13 @@ class ScriptRetryTest {
     }
 
     @Test
+    fun `a cartridge's refusal is final at once, its code there from the start`() {
+        assertFalse(ScriptRetry.again(anotherBuild, nowMs = 1_000, startedMs = 0, stateLoadedMs = null, fromStart = true))
+        assertFalse(ScriptRetry.again(anotherBuild, nowMs = 200_000, startedMs = 0, stateLoadedMs = 199_000, fromStart = true))
+        assertTrue(CartridgeImage.covers("genesis") && CartridgeImage.covers("gb") && !CartridgeImage.covers("psx"))
+    }
+
+    @Test
     fun `any other refusal is final`() {
         for (error in listOf("the script needs a later reader runtime (level 2, this one is 1)", "the script needs vram, which this host doesn't give out", "[string \"x.lua\"]:1: syntax error")) {
             assertFalse(error, ScriptRetry.again(error, nowMs = 1, startedMs = 0, stateLoadedMs = null))
