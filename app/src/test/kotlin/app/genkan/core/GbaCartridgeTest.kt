@@ -61,7 +61,8 @@ class GbaCartridgeTest {
         val file = File(temp.root, "game.gba").apply { writeBytes(r) }
         assertEquals(CartridgeId("AGB-ZQXJ", headerCrc(r)), GbaCartridge.of(file))
         assertEquals(GbaCartridge.of(file), CartridgeId.of("gba", file))
-        assertNull(CartridgeId.of("gb", file))
+        // The platform picks the rule: a console whose games aren't read so gives none.
+        assertNull(CartridgeId.of("psx", file))
         assertNull(GbaCartridge.of(File(temp.root, "short.gba").apply { writeBytes(ByteArray(0x40)) }))
         assertNull(GbaCartridge.of(File(temp.root, "missing.gba")))
     }
