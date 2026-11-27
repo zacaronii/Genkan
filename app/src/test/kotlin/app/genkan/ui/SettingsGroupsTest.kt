@@ -11,10 +11,12 @@ class SettingsGroupsTest {
     private val groups = SettingsGroups.DEFAULT
 
     @Test
-    fun `every action has exactly one row`() {
-        val reachable = groups.flatMap { group -> group.rows.flatMap { it.actions } }
-        assertEquals(SetupAction.entries.toSet(), reachable.toSet())
+    fun `every action has exactly one row, or a console page, and only a console's page is opened from many`() {
+        val reachable = groups.flatMap { group -> group.rows.flatMap { it.actions } }.filter { it != SetupAction.CONSOLE }
+        assertEquals(SetupAction.entries.toSet() - SetupAction.CONSOLE, reachable.toSet() + SettingsGroups.ON_CONSOLE_PAGES)
         assertEquals(reachable.distinct(), reachable)
+        assertTrue(SettingsGroups.ON_CONSOLE_PAGES.none { it in reachable })
+        assertTrue(groups.flatMap { it.rows }.any { it is SettingsRow.Console })
     }
 
     @Test

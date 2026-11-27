@@ -662,11 +662,11 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun settingsLibrary() = shootSettings(1, SettingsFocus(pane = SettingsPane.ROWS, group = 1, row = 0))
 
-    /** The list of looks for the PlayStation, from the screen look page: the pad on the current one. */
+    /** The list of looks for the PlayStation, from its console page: the pad on the current one. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
     fun screenLookPicker() = shoot("screen_look_picker", TOP_PIXELS) {
-        ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
+        ConsoleContent(platform = "psx", look = app.genkan.core.ScreenLook.CRT_LOTTES, picking = true)
     }
 
     /** A PSP game's list, filtered to the looks that suit a PSP, the show-all row first. */
@@ -717,7 +717,7 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun screenLookPickerChipFocused() = shoot("screen_look_picker_chip_focused", TOP_PIXELS) {
         androidx.compose.ui.platform.LocalInputModeManager.current.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
-        ScreenLookContent(consoles = mapOf("psx" to app.genkan.core.ScreenLook.CRT_LOTTES), picking = "psx")
+        ConsoleContent(platform = "psx", look = app.genkan.core.ScreenLook.CRT_LOTTES, picking = true)
         val focus = androidx.compose.ui.platform.LocalFocusManager.current
         androidx.compose.runtime.LaunchedEffect(Unit) {
             // The list focuses the look in use a frame after it opens; Right then goes to the chip.
@@ -726,34 +726,22 @@ class ScreenshotTest {
         }
     }
 
-    /** The screen look page: the defaults, with the GBA and PSP chosen. */
+    /** The PlayStation 2's console page: played in ARMSX2, its text read from memory. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun screenLook() = shoot("screen_look", TOP_PIXELS) {
-        ScreenLookContent(
-            consoles = mapOf("gba" to app.genkan.core.ScreenLook.SHARP, "psp" to app.genkan.core.ScreenLook.CUT),
+    fun consolePage() = shoot("console_ps2", TOP_PIXELS) {
+        ConsoleContent(
+            platform = "ps2",
+            look = app.genkan.core.ScreenLook.SHARP,
+            faceSwapped = true,
+            playsWith = app.genkan.core.PlayerChoice.Option(app.genkan.core.CoreCatalog.EXTERNAL, "ARMSX2"),
+            text = ConsoleText(on = true, from = "ARMSX2's memory (PINE, switched on in its Advanced settings)", action = SetupAction.ARMSX2_PINE),
         )
     }
 
-    /** The screen look page's Plays with rows: the PS2 on ARMSX2. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun playsWith() = shoot("screen_look_plays_with", TOP_PIXELS) {
-        androidx.compose.foundation.layout.Box(
-            androidx.compose.ui.Modifier.fillMaxSize().background(androidx.tv.material3.MaterialTheme.colorScheme.background)
-                .padding(horizontal = androidx.compose.ui.unit.Dp(48f), vertical = androidx.compose.ui.unit.Dp(32f)),
-        ) {
-            PlaysWith(
-                consoles = listOf("ps2" to "PlayStation 2"),
-                choice = mapOf("ps2" to app.genkan.core.CoreCatalog.EXTERNAL),
-                onCycle = {},
-            )
-        }
-    }
-
-    @Test
-    @Config(qualifiers = TOP_SCREEN)
-    fun settingsConsoles() = shootSettings(2, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 1))
+    fun settingsConsoles() = shootSettings(2, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 3))
 
     @Test
     @Config(qualifiers = TOP_SCREEN)
