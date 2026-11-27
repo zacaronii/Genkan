@@ -134,7 +134,12 @@ object SettingsGroups {
                 SettingsRow.Switch("Insert animation", SwitchKey.INSERT_ANIMATION, SetupAction.INSERT_ANIMATION),
             ),
         ),
-        SettingsGroup(id = "about", title = "About", info = listOf(SettingsInfo.VERSION, SettingsInfo.LICENCE), rows = emptyList()),
+        SettingsGroup(
+            id = "about",
+            title = "About",
+            info = listOf(SettingsInfo.VERSION, SettingsInfo.LICENCE),
+            rows = listOf(SettingsRow.Button("Licences", SetupAction.NOTICE)),
+        ),
     )
 }
 
@@ -145,6 +150,8 @@ data class SettingsFocus(
     val pane: SettingsPane = SettingsPane.GROUPS,
     val group: Int = 0,
     val row: Int = 0,
+    /** The focused row's help is open (Y): the next press closes it. */
+    val help: Boolean = false,
 )
 
 /** Pure focus moves, so navigation can be tested without a screen. */
@@ -157,6 +164,8 @@ object SettingsNavigator {
      */
     fun onKey(focus: SettingsFocus, key: PadKey, groups: List<SettingsGroup>): SettingsFocus? {
         if (groups.isEmpty()) return null
+        // An open help closes on B, Y or A; nothing else moves under it.
+        if (focus.help) return if (key == PadKey.B || key == PadKey.Y || key == PadKey.A) focus.copy(help = false) else focus
         return when (focus.pane) {
             SettingsPane.GROUPS -> when (key) {
                 PadKey.UP -> focus.copy(group = (focus.group - 1).coerceAtLeast(0), row = 0)
@@ -170,6 +179,8 @@ object SettingsNavigator {
                 PadKey.DOWN -> focus.copy(row = (focus.row + 1).coerceAtMost(groups[focus.group].rows.lastIndex))
                 PadKey.LEFT, PadKey.B -> focus.copy(pane = SettingsPane.GROUPS)
                 PadKey.A -> focus
+                // Y opens the row's longer help, where it has one.
+                PadKey.Y -> if (groups[focus.group].rows.getOrNull(focus.row)?.let(SettingsHelp::of) != null) focus.copy(help = true) else focus
                 else -> null
             }
         }

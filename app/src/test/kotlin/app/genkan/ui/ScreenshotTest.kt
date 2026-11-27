@@ -768,6 +768,25 @@ class ScreenshotTest {
     @Config(qualifiers = TOP_SCREEN)
     fun settingsAbout() = shootSettings(8, SettingsFocus(pane = SettingsPane.GROUPS, group = 8))
 
+    /** A row's longer help, open (Y): Built-in player's. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun settingsHelp() = shoot("settings_help", TOP_PIXELS) {
+        SetupContent(FakeData.settings, SettingsGroups.DEFAULT, SettingsFocus(pane = SettingsPane.ROWS, group = 2, row = 0, help = true), onSelectGroup = {}, onRow = { _, _, _ -> })
+    }
+
+    /** Settings › About › Licences, with made-up notices (NOTICE itself changes as cores are added). */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun noticePage() = shoot("settings_licences", TOP_PIXELS) {
+        NoticeContent(
+            (1..3).joinToString("\n\n") { n ->
+                "-".repeat(74) + "\nExample Core $n (GPL-2.0)\nhttps://example.com/core$n\nPinned commit: ${"0123456789abcdef".repeat(2)}${n}\n\n" +
+                    "  libexample${n}_libretro_android.so, arm64-v8a, unmodified. It is built by the\n  buildExample$n task in app/build.gradle.kts."
+            },
+        )
+    }
+
     /** Records group [index] of the settings page as settings_<id>.png. */
     private fun shootSettings(index: Int, focus: SettingsFocus) {
         val groups = SettingsGroups.DEFAULT

@@ -69,6 +69,8 @@ enum class SetupAction {
     YOMIKATA,
     /** Yomikata's catalog repository and samples inbox (Connections). */
     YOMIKATA_SERVERS,
+    /** The third-party notices and their licences (About). */
+    NOTICE,
     /** AnkiConnect's address and key, and the word-audio source (Connections). */
     ANKI_SERVER,
     SIGN_OUT,

@@ -176,6 +176,16 @@ fun SetupContent(
         }
         val group = groups.getOrNull(focus.group) ?: return@Row
         // Keyed on the group so each one opens scrolled to its top.
+        // A row's help, while it's open (Y), in the place of the rows.
+        val helpRow = group.rows.getOrNull(focus.row)?.takeIf { focus.help }
+        val help = helpRow?.let(SettingsHelp::of)
+        if (helpRow != null && help != null) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(group.title, style = MaterialTheme.typography.headlineMedium, color = colors.onBackground)
+                HelpSheet(helpRow.title, help)
+            }
+            return@Row
+        }
         key(focus.group) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -185,6 +195,8 @@ fun SetupContent(
                 group.info.forEach { info ->
                     if (info == SettingsInfo.STATUS) {
                         StatusCard(statusLines(state))
+                    } else if (info == SettingsInfo.SHORTCUTS) {
+                        ShortcutsTable(SettingsHelp.SHORTCUTS)
                     } else {
                         Text(infoLine(info, state), style = MaterialTheme.typography.bodyLarge, color = colors.onBackground)
                     }
@@ -205,8 +217,9 @@ fun SetupContent(
     }
     val focusedRow = groups.getOrNull(focus.group)?.rows?.getOrNull(focus.row)
     HintRow(
-        Hints.settings(
+        if (focus.help) Hints.settingsHelp() else Hints.settings(
             onRows = focus.pane == SettingsPane.ROWS,
+            help = focus.pane == SettingsPane.ROWS && focusedRow?.let(SettingsHelp::of) != null,
             groupOpens = groups.getOrNull(focus.group)?.rows?.isNotEmpty() == true,
             rowAction = focusedRow?.let { Hints.settingsRow(it.title, (it as? SettingsRow.Switch)?.let { s -> state.isOn(s.key) }) },
         ),
@@ -312,6 +325,44 @@ private suspend fun keepInView(list: LazyListState, index: Int) {
                 list.scrollBy((at.offset + at.size - now.viewportEndOffset).toFloat())
             }
         }
+    }
+}
+
+/** The built-in player's shortcuts: the buttons, and what each does. */
+@Composable
+private fun ShortcutsTable(rows: List<Pair<String, String>>) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(10.dp))
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("In the built-in player", style = MaterialTheme.typography.titleSmall, color = colors.onSurfaceVariant)
+        rows.forEach { (keys, does) ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(keys, Modifier.width(170.dp), style = MaterialTheme.typography.titleSmall, color = colors.primary)
+                Text(does, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
+            }
+        }
+    }
+}
+
+/** A row's longer help (Y), over the rows: its title and text. */
+@Composable
+private fun HelpSheet(title: String, text: String) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(12.dp))
+            .border(2.dp, colors.primary, RoundedCornerShape(12.dp))
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge, color = colors.primary)
+        Text(text, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface)
     }
 }
 
@@ -421,11 +472,10 @@ private fun infoLine(info: SettingsInfo, state: SetupState): String = when (info
             "Signed in as ${r.account.username} on ${r.account.baseUrl.removeSuffix("/")} (RomM ${r.account.serverVersion})"
         else -> "Not signed in to RomM"
     }
-    SettingsInfo.SHORTCUTS -> "In the built-in player, hold Select: +Start quits, +R1 saves a state, +L1 loads it, " +
-        "+left/right picks its slot, +R2 fast-forwards. On a DS game, a stick click swaps its lower screen and the reader."
+    // Drawn as a table (ShortcutsTable), never as a line.
+    SettingsInfo.SHORTCUTS -> ""
     SettingsInfo.VERSION -> "Genkan ${state.version}"
-    SettingsInfo.LICENCE -> "Free software under the GPL-3.0. The code it borrows and the cores it builds are listed, " +
-        "with their licences, in its NOTICE file."
+    SettingsInfo.LICENCE -> "Free software under the GPL-3.0. The code it borrows and the cores it builds are under Licences."
     // Drawn as the card (StatusCard), never as a line.
     SettingsInfo.STATUS -> ""
 }
@@ -456,6 +506,7 @@ private fun explanation(row: SettingsRow, state: SetupState): String = when (row
         SetupAction.YOMIKATA -> "RAM snapshots of unread lines, for your inbox"
         SetupAction.YOMIKATA_SERVERS -> "The script catalog and the samples inbox"
         SetupAction.ANKI_SERVER -> "Where cards go, and the word-audio source"
+        SetupAction.NOTICE -> "The code Genkan borrows and builds, with its licences"
         SetupAction.HEADPHONES -> "Reconnect paired headphones"
 
         SetupAction.DICTIONARIES -> with(state.dictionaries) {
