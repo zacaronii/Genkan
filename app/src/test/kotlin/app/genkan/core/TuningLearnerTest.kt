@@ -162,9 +162,10 @@ class TuningLearnerTest {
     }
 
     @Test
-    fun `the learner never takes a PS2 game to Vulkan, which is only ever chosen`() {
+    fun `the learner, on a PS2 game played on Software or GL, never takes it back to Vulkan`() {
+        // On Vulkan itself it doesn't run (CoreActivity): it would move a hot game down to Software.
         val lrps2 = TuningLadders.of("lrps2")!!
-        val learner = clocked(ladder = lrps2)
+        val learner = TuningLearner(lrps2, "software").also { it.feed(full.copy(busiest = 0.9, fastestMhz = 3000), SETTLE + CLOCK_BASE) }
         val decisions = learner.feed(full.copy(hottestC = 85, fastestMhz = 2500), HOT_WINDOW * 4) +
             learner.feed(slow(0.8), WINDOW * 4) + learner.feed(full, WINDOW * 8)
         assertTrue(decisions.isNotEmpty())

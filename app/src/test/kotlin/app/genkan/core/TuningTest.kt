@@ -89,24 +89,35 @@ class TuningTest {
     }
 
     @Test
-    fun `LRPS2 draws on 6 CPU threads by default, with GL as the step lighter on the CPU, all at start`() {
+    fun `LRPS2 draws with Vulkan by default, with Software and GL to choose, all at start`() {
         val lrps2 = TuningLadders.of("lrps2")!!
-        assertEquals(listOf("vulkan", "default", "gl"), lrps2.steps.map { it.id })
-        assertEquals("default", lrps2.defaultId)
+        assertEquals(listOf("vulkan", "software", "gl"), lrps2.steps.map { it.id })
+        assertEquals("vulkan", lrps2.defaultId)
         assertFalse(lrps2.steps.any { it.live || it.risky })
-        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("default"))
+        assertEquals(mapOf("pcsx2_renderer" to "Auto", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("vulkan"))
+        assertEquals(mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("software"))
         assertEquals(mapOf("pcsx2_renderer" to "Auto", "pcsx2_sw_renderer_threads" to "6"), lrps2.assignment("gl"))
         assertEquals(listOf("Vulkan", "Software", "GL"), lrps2.steps.map { it.label })
     }
 
     @Test
-    fun `Vulkan is LRPS2's step that asks for it, off unless chosen, and no other ladder's`() {
+    fun `a step kept under Software's old id is still Software`() {
+        val lrps2 = TuningLadders.of("lrps2")!!
+        assertEquals("software", lrps2.step("default")!!.id)
+        assertEquals("software", TuningLadders.resolve(lrps2, "default", null, "thor").step.id)
+        assertEquals("software", TuningLadders.resolve(lrps2, null, BundledTuning("default", null), "thor").step.id)
+    }
+
+    @Test
+    fun `Vulkan is LRPS2's step that asks for it, its default, and no other ladder's`() {
         val lrps2 = TuningLadders.of("lrps2")!!
         assertEquals(listOf("vulkan"), lrps2.steps.filter { it.vulkan }.map { it.id })
         // "Auto" with libretrodroid offering Vulkan as its preferred context.
         assertEquals("Auto", lrps2.assignment("vulkan")["pcsx2_renderer"])
-        assertEquals("default", TuningLadders.resolve(lrps2, null, null, "thor").step.id)
-        assertEquals("vulkan", TuningLadders.resolve(lrps2, "vulkan", null, "thor").step.id)
+        // The default, and the GL step offers no Vulkan: it is GL wherever it's chosen.
+        assertEquals("vulkan", TuningLadders.resolve(lrps2, null, null, "thor").step.id)
+        assertEquals("gl", TuningLadders.resolve(lrps2, "gl", null, "thor").step.id)
+        assertFalse(lrps2.step("gl")!!.vulkan)
         listOf("dolphin", "flycast", "ppsspp").forEach { name -> assertFalse(TuningLadders.of(name)!!.steps.any { it.vulkan }) }
     }
 }

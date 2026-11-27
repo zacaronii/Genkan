@@ -137,7 +137,8 @@ class CoreActivity : ComponentActivity() {
         romId = intent.getLongExtra(EXTRA_ROM_ID, 0)
         val ladder = TuningLadders.of(def.tuning)
         tuningStep = ladder?.let { it.step(intent.getStringExtra(EXTRA_TUNING_STEP))?.id ?: it.defaultId }
-        // Vulkan is only ever chosen: the learner, which moves a hot game a step lighter, stays off on it.
+        // The learner, which moves a hot game a step lighter, stays off on Vulkan: the next step is
+        // Software, which runs hotter (TuningLadders' lrps2).
         vulkan = def.vulkan && ladder?.step(tuningStep)?.vulkan == true && !intent.getBooleanExtra(EXTRA_NO_VULKAN, false)
         val learns = intent.getBooleanExtra(EXTRA_LEARN, false) && ladder?.step(tuningStep)?.vulkan != true
         if (ladder != null && learns) learner = TuningLearner(ladder, tuningStep!!)

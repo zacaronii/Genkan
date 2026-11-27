@@ -22,13 +22,20 @@ data class TuningStep(
  * them. [defaults] are the values every key the ladder touches has without a step, so going back
  * to a step sets them again.
  */
-data class TuningLadder(val steps: List<TuningStep>, val defaultId: String, val defaults: Map<String, String>) {
+data class TuningLadder(
+    val steps: List<TuningStep>,
+    val defaultId: String,
+    val defaults: Map<String, String>,
+    /** Old ids of steps that were renamed, so a step kept under one (an override, a catalog entry) still means it. */
+    val aliases: Map<String, String> = emptyMap(),
+) {
     init {
         require(steps.any { it.id == defaultId }) { "No default step $defaultId" }
         require(steps.all { defaults.keys.containsAll(it.options.keys) }) { "A step sets a key with no default" }
+        require(aliases.values.all { id -> steps.any { it.id == id } }) { "An alias names no step" }
     }
 
-    fun step(id: String?): TuningStep? = steps.firstOrNull { it.id == id }
+    fun step(id: String?): TuningStep? = (aliases[id] ?: id).let { wanted -> steps.firstOrNull { it.id == wanted } }
 
     val default: TuningStep get() = step(defaultId)!!
 
@@ -86,21 +93,23 @@ object TuningLadders {
         defaults = mapOf("reicast_internal_resolution" to "640x480", "reicast_auto_skip_frame" to "disabled"),
     )
 
-    // LRPS2's GS drawn on 6 CPU threads ("Software (HW)", presented through GL) held full speed on
-    // the Thor where its GL renderer fell to 90% (the GPU stuck at its lowest clock, CPU and GPU
-    // waiting on each other). GL is the step lighter on the CPU, for a device running hot, though
-    // not always as fast. The renderer is chosen at start: all wait for a restart.
-    // Vulkan ("Auto", with libretrodroid offering Vulkan as its preferred context) is only ever
-    // chosen: first on the ladder, where the learner, which tries the lighter step after the one
-    // played, never goes, and it takes no step as the game runs.
+    // LRPS2 draws with Vulkan by default ("Auto", libretrodroid offering Vulkan as its preferred
+    // context): full speed through the Thor's slow stretch, and the coolest of the three. Where
+    // Vulkan can't run, the same step gets GL (the probe refuses it, or the game starts again on
+    // GL), the step lighter on the GPU-bound frame though slower in that stretch (75-90%). Its GS
+    // on 6 CPU threads ("Software (HW)") also holds full speed but ran past 85 C: it stays to be
+    // chosen, never the default. The renderer is chosen at start: all wait for a restart. The
+    // learner doesn't run on the Vulkan step (CoreActivity), so it never moves a game off it.
     private val lrps2 = TuningLadder(
         steps = listOf(
-            TuningStep("vulkan", mapOf("pcsx2_renderer" to "Auto"), live = false, label = "Vulkan", vulkan = true),
-            TuningStep("default", emptyMap(), live = false, label = "Software"),
-            TuningStep("gl", mapOf("pcsx2_renderer" to "Auto"), live = false, label = "GL"),
+            TuningStep("vulkan", emptyMap(), live = false, label = "Vulkan", vulkan = true),
+            TuningStep("software", mapOf("pcsx2_renderer" to "Software (HW)"), live = false, label = "Software"),
+            TuningStep("gl", emptyMap(), live = false, label = "GL"),
         ),
-        defaultId = "default",
-        defaults = mapOf("pcsx2_renderer" to "Software (HW)", "pcsx2_sw_renderer_threads" to "6"),
+        defaultId = "vulkan",
+        defaults = mapOf("pcsx2_renderer" to "Auto", "pcsx2_sw_renderer_threads" to "6"),
+        // Software was the default step, "default", until Vulkan was.
+        aliases = mapOf("default" to "software"),
     )
 
     // PPSSPP's core aborts when its resolution changes as the game runs (measured on the Thor):
