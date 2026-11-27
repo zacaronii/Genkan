@@ -88,6 +88,13 @@ object GenkanTap {
      */
     @JvmStatic external fun gameId(): String?
 
+    /**
+     * The 2048 bytes of user data of sector [sector] of the first data track of the CHD at [path],
+     * counted from the track's start (discsector.h): a disc's boot block, read for its id. Null when
+     * it isn't a CD CHD, has no data track, or the sector isn't there.
+     */
+    @JvmStatic external fun chdDataSector(path: String, sector: Int): ByteArray?
+
     /** The last kept frame's width and height, or null before one came. */
     fun frameSize(): Pair<Int, Int>? {
         val packed = packedFrameSize()

@@ -181,6 +181,7 @@ class CoreActivity : ComponentActivity() {
     private fun play(def: CoreDef, rom: File, game: File) {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
         cartridge = CartridgeId.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game)
+        cartridge?.let { Log.i(TAG, "Game id from its file: ${it.id}, build ${it.headerCrc32}") }
         // The process may have played a game before this one: its sound problem isn't this one's.
         GenkanTap.clearAudioProblem()
         val system = File(filesDir, "system").apply { mkdirs() }

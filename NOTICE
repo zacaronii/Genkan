@@ -107,6 +107,18 @@ Pinned commit: 683652f8705a6953218444d72ed77d2c5913fffb
     LibretroDroid.java, shadermanager.{h,cpp}, video.cpp).
 
 --------------------------------------------------------------------------
+libchdr, flyinghead's fork (BSD-3-Clause)
+https://github.com/flyinghead/libchdr
+Pinned commit: 5f82799f2c8cad1e9cd26d39a0f8d36369a5534b
+
+  Used unmodified as a git submodule at third_party/libchdr, with the
+  libraries it vendors under deps/ (LZMA SDK 24.05, public domain; zstd
+  1.5.6, BSD-3-Clause; its zlib is left out for the system's), built static into
+  libretrodroid to read one sector of a CHD disc image
+  (libretrodroid/src/main/cpp/discsector.cpp), and into the host test
+  disc_sector_test. The same commit Flycast's build uses.
+
+--------------------------------------------------------------------------
 Beetle Saturn, the Saturn core, built from source (submodule
 third_party/beetle-saturn):
 

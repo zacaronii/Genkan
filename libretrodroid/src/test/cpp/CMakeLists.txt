@@ -29,6 +29,15 @@ target_include_directories(pointer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../.
 add_executable(game_id_test game_id_test.cpp)
 target_include_directories(game_id_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
 
-# When the frame loop holds a core back by its sound buffer (src/main/cpp/audiopace.h).
+# When the frame loop holds a core back by how far its sound is ahead (src/main/cpp/audiopace.h).
 add_executable(audio_pace_test audio_pace_test.cpp)
 target_include_directories(audio_pace_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+
+# One sector of a CHD's data track, through libchdr (src/main/cpp/discsector.cpp), on a made-up disc.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(WITH_SYSTEM_ZLIB ON CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/libchdr libchdr EXCLUDE_FROM_ALL)
+add_executable(disc_sector_test disc_sector_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/discsector.cpp)
+target_include_directories(disc_sector_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+target_link_libraries(disc_sector_test PRIVATE chdr-static)
+target_compile_definitions(disc_sector_test PRIVATE DISC_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/pce-cd-test.chd")
