@@ -185,6 +185,14 @@ object CoreCatalog {
             extensions = setOf("cue", "ccd", "chd", "toc", "m3u"),
         ),
         CoreDef(
+            // FCEUmm, Lemuroid's build: Famicom cartridges, and Famicom Disk System disks, which boot
+            // through the Disk System's BIOS from RomM's FDS firmware.
+            id = "fceumm", displayName = "FCEUmm", library = "libfceumm_libretro_android.so",
+            platforms = setOf("nes", "famicom", "fds"),
+            firmware = mapOf("disksys.rom" to "disksys.rom"),
+            extensions = setOf("nes", "fds", "unf", "unif"),
+        ),
+        CoreDef(
             // Mupen64Plus-Next with GLideN64 on OpenGL ES 3, Lemuroid's build.
             id = "mupen64plus_next", displayName = "Mupen64Plus-Next", library = "libmupen64plus_next_gles3_libretro_android.so",
             platforms = setOf("n64"),

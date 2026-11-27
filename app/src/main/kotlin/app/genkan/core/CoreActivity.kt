@@ -182,6 +182,7 @@ class CoreActivity : ComponentActivity() {
         // Read now, from the file the core plays: the reader asks for it to find the game's catalog entry.
         cartridge = CartridgeId.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game)
         cartridge?.let { Log.i(TAG, "Game id from its file: ${it.id}, build ${it.build ?: it.headerCrc32}") }
+        GenkanTap.setCartridgeImage(CartridgeImage.of(intent.getStringExtra(EXTRA_PLATFORM).orEmpty(), game))
         // The process may have played a game before this one: its sound problem isn't this one's.
         GenkanTap.clearAudioProblem()
         val system = File(filesDir, "system").apply { mkdirs() }
@@ -1069,7 +1070,7 @@ enum class BottomCycle {
 
     companion object {
         /** Consoles whose own pad has no stick clicks; a PlayStation's (DualShock) has. */
-        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc", "n64")
+        private val NO_STICK_CLICKS = setOf("gb", "gbc", "gba", "snes", "sfam", "nds", "psp", "tg16", "turbografx-cd", "saturn", "dc", "n64", "nes", "famicom", "fds")
 
         /** Whether the stick clicks step the bottom screen for [platform], rather than going to the game. */
         fun takesStickClicks(platform: String): Boolean = platform in NO_STICK_CLICKS

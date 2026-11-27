@@ -128,6 +128,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setKeepPointer
     GenkanTap::getInstance().setKeepPointer(keep == JNI_TRUE);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setCartridgeImage(JNIEnv *env, jclass, jbyteArray image) {
+    std::vector<uint8_t> out;
+    if (image != nullptr) {
+        out.resize(static_cast<size_t>(env->GetArrayLength(image)));
+        env->GetByteArrayRegion(image, 0, static_cast<jsize>(out.size()), reinterpret_cast<jbyte *>(out.data()));
+    }
+    GenkanTap::getInstance().setCartridgeImage(std::move(out));
+}
+
 /** `stretches` as (console address, offset in the system RAM, length) triples. */
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_GenkanTap_setSystemRamStretches(
     JNIEnv *env, jclass, jlongArray stretches, jint wordSize

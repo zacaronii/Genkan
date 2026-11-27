@@ -71,6 +71,13 @@ public:
      * Set before the game loads, for the game.
      */
     void setSystemRamStretches(std::vector<Stretch> stretches, unsigned wordSize);
+    /**
+     * A cartridge's image as Yomikata's harness gives it (a Game Boy's file whole, a Famicom's past
+     * its header), read at [CARTRIDGE_IMAGE_AT] on, where the console has nothing: a script checks its
+     * build against it. Set before the game loads; empty, none.
+     */
+    void setCartridgeImage(std::vector<uint8_t> image);
+    static constexpr uint64_t CARTRIDGE_IMAGE_AT = 0x01000000;
     void clear();
     std::vector<Region> regions();
     /**
@@ -132,6 +139,10 @@ private:
     std::vector<Stretch> stretches;
     // The words the core keeps its memory in, map and system RAM alike (setSystemRamStretches).
     unsigned wordSize = 0;
+    // The cartridge's image (setCartridgeImage).
+    std::vector<uint8_t> cartridge;
+    // The core's own regions (its map, or its system RAM), under memoryLock.
+    std::vector<Region> coreRegions();
 
     std::mutex audioLock;
     std::vector<int16_t> ring;
