@@ -56,6 +56,9 @@ class RamSnapshotsTest {
         assertEquals(256L * 1024, size("turbografx-cd"))
         assertEquals("pce-cd", TextSamples.yomikataPlatform("turbografx-cd"))
         assertEquals("pce", TextSamples.yomikataPlatform("tg16"))
+        // A HuCard's: the console's own 8 KB at 0x1F0000, under Yomikata's name pce.
+        assertEquals(0x1F0000L, MainRam.of("tg16")!!.baseAddress)
+        assertEquals(8L * 1024, size("tg16"))
         assertNull(MainRam.of("3ds"))
     }
 
