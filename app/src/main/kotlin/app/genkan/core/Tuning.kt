@@ -28,11 +28,17 @@ data class TuningLadder(
     val defaults: Map<String, String>,
     /** Old ids of steps that were renamed, so a step kept under one (an override, a catalog entry) still means it. */
     val aliases: Map<String, String> = emptyMap(),
+    /**
+     * The steps that are each a renderer, in the order a game's Graphics offers them (GameGraphics);
+     * none for a ladder of resolutions.
+     */
+    val renderers: List<String> = emptyList(),
 ) {
     init {
         require(steps.any { it.id == defaultId }) { "No default step $defaultId" }
         require(steps.all { defaults.keys.containsAll(it.options.keys) }) { "A step sets a key with no default" }
         require(aliases.values.all { id -> steps.any { it.id == id } }) { "An alias names no step" }
+        require(renderers.all { id -> steps.any { it.id == id && !it.risky } }) { "A renderer names no safe step" }
     }
 
     fun step(id: String?): TuningStep? = (aliases[id] ?: id).let { wanted -> steps.firstOrNull { it.id == wanted } }
@@ -59,7 +65,7 @@ data class BundledTuning(val step: String, val measuredOn: String?)
 
 /** Which step a game gets, and where it came from. */
 data class ResolvedTuning(val step: TuningStep, val source: Source) {
-    enum class Source { OVERRIDE, CATALOG, DEFAULT }
+    enum class Source { CHOSEN, OVERRIDE, CATALOG, DEFAULT }
 }
 
 object TuningLadders {
@@ -110,6 +116,7 @@ object TuningLadders {
         defaults = mapOf("pcsx2_renderer" to "Auto", "pcsx2_sw_renderer_threads" to "6"),
         // Software was the default step, "default", until Vulkan was.
         aliases = mapOf("default" to "software"),
+        renderers = listOf("vulkan", "gl", "software"),
     )
 
     // PPSSPP's core aborts when its resolution changes as the game runs (measured on the Thor):
@@ -135,12 +142,14 @@ object TuningLadders {
     }
 
     /**
-     * The step for a game: the device's own choice for the game ([override], never a risky step),
+     * The step for a game: the renderer chosen for it on its details ([chosen], GameGraphics), then
+     * the device's own choice for the game ([override], never a risky step),
      * then the catalog's for its release ([bundled]: a risky step only where it was measured on
      * this [device], else the safe step nearest it), then the core's default. A step the ladder
      * doesn't have counts as none.
      */
-    fun resolve(ladder: TuningLadder, override: String?, bundled: BundledTuning?, device: String): ResolvedTuning {
+    fun resolve(ladder: TuningLadder, override: String?, bundled: BundledTuning?, device: String, chosen: String? = null): ResolvedTuning {
+        ladder.step(chosen)?.takeIf { it.id in ladder.renderers }?.let { return ResolvedTuning(it, ResolvedTuning.Source.CHOSEN) }
         ladder.step(override)?.takeIf { !it.risky }?.let { return ResolvedTuning(it, ResolvedTuning.Source.OVERRIDE) }
         val fromCatalog = bundled?.let { ladder.step(it.step) }
         if (fromCatalog != null) {

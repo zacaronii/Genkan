@@ -415,6 +415,17 @@ class ScreenshotTest {
         )
     }
 
+    /** A game set to GL: its Graphics button, under the look. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameDetailsGraphics() = shoot("game_details_graphics", BOTTOM_PIXELS) {
+        GameDetailsContent(
+            details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP), graphics = GameGraphicsNote("GL")),
+            onShowReader = {},
+            actionsScroll = rememberScrollState(Int.MAX_VALUE),
+        )
+    }
+
     /** "Open manual" while the manual is fetched: a ring filled to how far along it is, on the button, in view. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
@@ -739,6 +750,18 @@ class ScreenshotTest {
             faceSwapped = true,
             playsWith = app.genkan.core.PlayerChoice.Option(app.genkan.core.CoreCatalog.EXTERNAL, "ARMSX2"),
             text = ConsoleText(on = true, from = "ARMSX2's memory (PINE, switched on in its Advanced settings)", action = SetupAction.ARMSX2_PINE),
+        )
+    }
+
+    /** The PlayStation 2's page with its own player: the games with graphics of their own, each with a reset. */
+    @Test
+    @Config(qualifiers = TOP_SCREEN)
+    fun consolePageGraphics() = shoot("console_ps2_graphics", TOP_PIXELS) {
+        ConsoleContent(
+            platform = "ps2",
+            look = app.genkan.core.ScreenLook.SHARP,
+            playsWith = app.genkan.core.PlayerChoice.Option("lrps2", "LRPS2"),
+            ownGraphics = listOf(OwnGraphics(101, "Made-up Summer", "GL"), OwnGraphics(102, "Pretend Racer", "Software")),
         )
     }
 

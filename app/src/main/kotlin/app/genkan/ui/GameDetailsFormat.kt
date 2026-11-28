@@ -184,6 +184,9 @@ object GameDetailsFormat {
     fun lookLabel(look: GameLook): String =
         look.own?.let { "Look: ${it.label}" } ?: "Look: console's (${look.console.label})"
 
+    /** The game's renderer, on the button that moves it to the next. */
+    fun graphicsLabel(note: GameGraphicsNote): String = "Graphics: ${note.label ?: "Automatic"}"
+
     /** The game's own step, on the button that forgets it. */
     fun tuningLabel(note: GameTuningNote): String =
         "Reset speed (${if (note.learned) "learned" else "set to"} ${note.label})"

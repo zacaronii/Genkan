@@ -97,6 +97,7 @@ fun GameDetailsScreen(
         onToggleFavourite = viewModel::toggleFavourite,
         onLook = viewModel::openLookPicker,
         onResetTuning = viewModel::resetTuning,
+        onGraphics = viewModel::cycleGraphics,
         notice = notice,
         manualFetch = manualFetch,
         factsScroll = scroll,
@@ -134,6 +135,7 @@ fun GameDetailsContent(
     onToggleFavourite: () -> Unit = {},
     onLook: () -> Unit = {},
     onResetTuning: () -> Unit = {},
+    onGraphics: () -> Unit = {},
     notice: String? = null,
     /** The manual being fetched for "Open manual", or why it couldn't be. */
     manualFetch: ManualFetch? = null,
@@ -168,7 +170,7 @@ fun GameDetailsContent(
                 Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ArtAndActions(current, notice, manualFetch, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, onResetTuning, actionsScroll, Modifier.width(176.dp).fillMaxHeight())
+                ArtAndActions(current, notice, manualFetch, onPlay, onOpenManual, onDelete, onToggleFavourite, onLook, onResetTuning, onGraphics, actionsScroll, Modifier.width(176.dp).fillMaxHeight())
                 Facts(current, factsScroll, onScreenshot = { viewing = it }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -217,6 +219,7 @@ private fun ArtAndActions(
     onToggleFavourite: () -> Unit,
     onLook: () -> Unit,
     onResetTuning: () -> Unit,
+    onGraphics: () -> Unit,
     scroll: ScrollState,
     modifier: Modifier,
 ) {
@@ -234,7 +237,7 @@ private fun ArtAndActions(
     // The art gives way, down to ART_MIN, so the first three buttons fit whole; any after them
     // (the look, Delete) scroll, the column's edges fading while there's more that way.
     BoxWithConstraints(modifier) {
-        val buttons = listOf(true, details.art.hasManual, Favourites.canMark(game), details.look != null, details.tuning != null, installed).count { it }
+        val buttons = listOf(true, details.art.hasManual, Favourites.canMark(game), details.look != null, details.graphics != null, details.tuning != null, installed).count { it }
         val art = artSize(maxHeight, logo = details.art.logo != null, buttonsShown = minOf(buttons, 3), more = buttons > 3)
         Column(
             Modifier
@@ -295,6 +298,10 @@ private fun ArtAndActions(
             }
             details.look?.let { look ->
                 DetailsButton(GameDetailsFormat.lookLabel(look), ButtonStyle.PLAIN, onLook)
+            }
+            // Its renderer, where its core has a choice: pressed, the next.
+            details.graphics?.let { note ->
+                DetailsButton(GameDetailsFormat.graphicsLabel(note), ButtonStyle.PLAIN, onGraphics)
             }
             // The game's own speed step (learned, or set): pressed, it's forgotten.
             details.tuning?.let { note ->
