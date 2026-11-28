@@ -223,4 +223,12 @@ class CoreCatalogTest {
         // The pad has stick clicks of its own.
         assertFalse(BottomCycle.takesStickClicks("ps2"))
     }
+
+    @Test
+    fun `Azahar draws with OpenGL ES, the context it's given, never its Auto`() {
+        val azahar = CoreCatalog.cores.single { it.id == "azahar_libretro" }
+        // "Auto" asks for the frontend's preferred context, Vulkan, which the core isn't given: it couldn't load a game.
+        assertEquals("OpenGL", azahar.variables["citra_graphics_api"])
+        assertEquals(false, azahar.vulkan)
+    }
 }
