@@ -38,8 +38,16 @@ class SessionTracker @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val uploadLock = Mutex()
 
-    suspend fun begin(romId: Long, emulatorPackage: String) {
+    /**
+     * A play of [romId] starts. A [test] play (a device round's, see TestMode) closes the one before
+     * it but opens none: it's never timed, uploaded to RomM or followed by a save sync.
+     */
+    suspend fun begin(romId: Long, emulatorPackage: String, test: Boolean = false) {
         endOpenSession()
+        if (test) {
+            Log.i(TAG, "A test play of rom $romId: not recorded")
+            return
+        }
         dao.insert(PlaySessionEntity(romId = romId, emulatorPackage = emulatorPackage, startedAt = System.currentTimeMillis()))
     }
 

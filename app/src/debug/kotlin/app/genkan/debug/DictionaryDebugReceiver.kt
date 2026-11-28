@@ -112,6 +112,11 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
+ *   adb shell am broadcast -a app.genkan.debug.TEST_MODE -n app.genkan/.debug.DictionaryDebugReceiver --el hours 6
+ * (a device round: every game started from Genkan, its library too, is a test play until then, at most 12 hours;
+ *  --ez off true ends it. Whatever this receiver starts is a test play anyway, and any of its broadcasts but the
+ *  settings ones (SETTINGS_ONLY) makes what's playing one: Genkan records none of a test play, so nothing of it
+ *  reaches RomM or the reading log)
  *   adb shell am broadcast -a app.genkan.debug.GRAPHICS -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es graphics gl
  * (the game's own renderer, as its details' Graphics sets it: one of its ladder's renderers; no graphics: Automatic)
  *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform ps2 --es core lrps2
@@ -150,17 +155,26 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var tuningStore: app.genkan.core.TuningStore
     @Inject lateinit var gameTuning: app.genkan.core.GameTuning
     @Inject lateinit var gameGraphics: app.genkan.core.GameGraphics
+    @Inject lateinit var testMode: app.genkan.play.TestMode
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
+                // A device round is driving Genkan: what's playing is a test play from here on.
+                if (intent.action !in SETTINGS_ONLY) nowPlaying.markTest()
                 when (intent.action) {
+                    "app.genkan.debug.TEST_MODE" -> {
+                        if (intent.getBooleanExtra("off", false)) testMode.off()
+                        else testMode.on(intent.getLongExtra("hours", 6) * 60 * 60 * 1000)
+                        Log.i(TAG, "Test mode: ${testMode.until()?.let { "on until ${java.util.Date(it)}" } ?: "off"}")
+                    }
                     "app.genkan.debug.LOOKUP" -> lookup(intent.getStringExtra("text").orEmpty())
                     "app.genkan.debug.NOW_PLAYING" -> nowPlaying.started(
                         intent.getLongExtra("id", 0),
                         intent.getStringExtra("title").orEmpty(),
                         intent.getStringExtra("platform"),
+                        test = true,
                     )
                     "app.genkan.debug.SAVE_SYNC" -> {
                         intent.getStringExtra("copy_to")?.let { dir ->
@@ -207,7 +221,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         } else {
                             val result = gameLauncher.launch(game, download)
                             Log.i(TAG, "Launch: $result")
-                            if (result is LaunchResult.Launched) nowPlaying.started(game.id, game.name, game.platformSlug)
+                            if (result is LaunchResult.Launched) nowPlaying.started(game.id, game.name, game.platformSlug, test = true)
                         }
                     }
                     "app.genkan.debug.AZAHAR_FIND" -> {
@@ -325,6 +339,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         Log.i(TAG, "Headphones: Shizuku's connect ${if (headphones.skipShizuku) "skipped" else "used"}")
                     }
                     "app.genkan.debug.PLAYER_FILE" -> {
+                        nowPlaying.startedTest(java.io.File(intent.getStringExtra("path").orEmpty()).name, intent.getStringExtra("platform"))
                         val start = Intent(context, CoreActivity::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             .putExtra(CoreActivity.EXTRA_ROM, intent.getStringExtra("path"))
@@ -494,5 +509,15 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
 
     private companion object {
         const val TAG = "DictionaryDebug"
+
+        /** The broadcasts that only change a setting, so leave what's playing as it was (any other makes it a test play). */
+        val SETTINGS_ONLY = setOf(
+            "app.genkan.debug.TEST_MODE",
+            "app.genkan.debug.CORE",
+            "app.genkan.debug.GRAPHICS",
+            "app.genkan.debug.TUNING",
+            "app.genkan.debug.TUNING_STEP",
+            "app.genkan.debug.HEADPHONES_SKIP_SHIZUKU",
+        )
     }
 }
