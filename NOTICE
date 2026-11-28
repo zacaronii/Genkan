@@ -242,6 +242,23 @@ License: GPL-3.0 (COPYING at that commit; parts under their own licenses)
   from is the submodule at that commit.
 
 --------------------------------------------------------------------------
+Azahar (GPL-2.0-or-later), the 3DS core
+https://github.com/azahar-emu/azahar
+Pinned commit: c5177f309d4f4efac669623dddeb08e2e5262da1
+License: GPL-2.0-or-later (license.txt at that commit; its externals under their own licenses)
+
+  A submodule at third_party/azahar, which a normal checkout skips
+  (update = none). The buildAzahar task in app/build.gradle.kts fetches it
+  with the externals its libretro build uses (not catch2, libusb, cubeb,
+  discord-rpc, SDL2, OpenAL Soft or dllwalker), applies Genkan's patch in
+  patches/azahar (Yomikata's: the FCRAM as the system RAM, the memory maps set
+  again as the game's heaps appear; see its README) to a copy, builds it for
+  arm64-v8a with the NDK's CMake toolchain as a libretro core with its OpenGL
+  ES and Vulkan renderers (-DENABLE_LIBRETRO=ON, android-21 as its own libretro build, c++_static,
+  stripped) and bundles it as libazahar_libretro_android.so. It isn't
+  committed; the source it is built from is the submodule at that commit.
+
+--------------------------------------------------------------------------
 LunaHook, from LunaTranslator (GPL-3.0)
 https://github.com/HIllya51/LunaTranslator
 

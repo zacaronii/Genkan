@@ -124,6 +124,7 @@ enum class ScreenLook(val label: String, val description: String, val file: Stri
             "gb", "gbc", "gba" -> family(Family.PLAIN) + HANDHELD_LCD + DOT + family(Family.SMOOTHING)
             "nds" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_NDS + family(Family.SMOOTHING)
             "psp" -> family(Family.PLAIN) + HANDHELD_LCD + LCD1X_PSP
+            "3ds" -> family(Family.PLAIN) + HANDHELD_LCD
             else -> null
         }
 
