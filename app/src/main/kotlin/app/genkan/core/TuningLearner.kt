@@ -243,8 +243,8 @@ class TuningLearner(private val ladder: TuningLadder, start: String) {
         const val CLOCK_BASE = 60
         /** Under this share of that clock, the fastest core is throttled. */
         const val CLOCK_KEPT = 0.9
-        /** At or over this for [CEILING_WINDOW] seconds, the game steps down whatever it costs. */
-        const val CEILING_C = 92
-        const val CEILING_WINDOW = 60
+        /** At or over this for [CEILING_WINDOW] seconds, the game steps down whatever it costs: the device's limit. */
+        const val CEILING_C = HeatCeiling.LIMIT_C
+        const val CEILING_WINDOW = HeatCeiling.WINDOW
     }
 }
