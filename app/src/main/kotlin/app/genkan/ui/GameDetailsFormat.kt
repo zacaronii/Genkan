@@ -184,8 +184,10 @@ object GameDetailsFormat {
     fun lookLabel(look: GameLook): String =
         look.own?.let { "Look: ${it.label}" } ?: "Look: console's (${look.console.label})"
 
-    /** The game's renderer, on the button that moves it to the next. */
-    fun graphicsLabel(note: GameGraphicsNote): String = "Graphics: ${note.label ?: "Automatic"}"
+    /** The button that opens the game's settings: the renderer's, when it has its own. */
+    fun settingsLabel(note: GameSettingsNote): String =
+        note.rows.firstOrNull { it.key == app.genkan.core.GameSettings.GRAPHICS && it.source == app.genkan.core.SettingSource.GAME }
+            ?.let { "Game settings (${it.value})" } ?: "Game settings"
 
     /** The game's own step, on the button that forgets it. */
     fun tuningLabel(note: GameTuningNote): String =

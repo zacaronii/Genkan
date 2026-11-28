@@ -415,14 +415,35 @@ class ScreenshotTest {
         )
     }
 
-    /** A game set to GL: its Graphics button, under the look. */
+    /** A game set to GL: its settings button, under the look, naming it. */
     @Test
     @Config(qualifiers = BOTTOM_SCREEN)
-    fun gameDetailsGraphics() = shoot("game_details_graphics", BOTTOM_PIXELS) {
+    fun gameDetailsSettings() = shoot("game_details_settings", BOTTOM_PIXELS) {
         GameDetailsContent(
-            details = FakeData.fullDetails.copy(look = GameLook(null, app.genkan.core.ScreenLook.SHARP), graphics = GameGraphicsNote("GL")),
+            details = FakeData.fullDetails.copy(
+                look = GameLook(null, app.genkan.core.ScreenLook.SHARP),
+                settings = GameSettingsNote(listOf(app.genkan.core.SettingRow(app.genkan.core.GameSettings.GRAPHICS, "Graphics", "GL", app.genkan.core.SettingSource.GAME))),
+            ),
             onShowReader = {},
             actionsScroll = rememberScrollState(Int.MAX_VALUE),
+        )
+    }
+
+    /** A game's settings sheet: each value with where it comes from, the game's own marked, Reset there. */
+    @Test
+    @Config(qualifiers = BOTTOM_SCREEN)
+    fun gameSettingsSheet() = shoot("game_settings_sheet", BOTTOM_PIXELS) {
+        GameSettingsSheet(
+            title = "The Clockmaker's Apprentice: settings",
+            rows = listOf(
+                    app.genkan.core.SettingRow(app.genkan.core.GameSettings.GRAPHICS, "Graphics", "GL", app.genkan.core.SettingSource.GAME),
+                    app.genkan.core.SettingRow("pcsx2_upscale_multiplier", "Resolution", "2×", app.genkan.core.SettingSource.CONSOLE),
+                    app.genkan.core.SettingRow("pcsx2_mtvu", "VU1 on its own thread", "On", app.genkan.core.SettingSource.DEFAULT),
+                    app.genkan.core.SettingRow("pcsx2_ee_cycle_rate", "EE speed", "75%", app.genkan.core.SettingSource.LEARNER),
+                ),
+            onPress = {},
+            onReset = {},
+            onClose = {},
         )
     }
 
@@ -753,15 +774,16 @@ class ScreenshotTest {
         )
     }
 
-    /** The PlayStation 2's page with its own player: the games with graphics of their own, each with a reset. */
+    /** The PlayStation 2's page with its own player: its options once measured, and the games with settings of their own. */
     @Test
     @Config(qualifiers = TOP_SCREEN)
-    fun consolePageGraphics() = shoot("console_ps2_graphics", TOP_PIXELS) {
+    fun consolePageSettings() = shoot("console_ps2_settings", TOP_PIXELS) {
         ConsoleContent(
             platform = "ps2",
             look = app.genkan.core.ScreenLook.SHARP,
             playsWith = app.genkan.core.PlayerChoice.Option("lrps2", "LRPS2"),
-            ownGraphics = listOf(OwnGraphics(101, "Made-up Summer", "GL"), OwnGraphics(102, "Pretend Racer", "Software")),
+            options = listOf(ConsoleOption("pcsx2_upscale_multiplier", "Resolution", "2×", set = true), ConsoleOption("pcsx2_mtvu", "VU1 on its own thread", "On", set = false)),
+            ownSettings = listOf(OwnSettings(101, "Made-up Summer", "GL"), OwnSettings(102, "Pretend Racer", "Software, Resolution 1×")),
         )
     }
 

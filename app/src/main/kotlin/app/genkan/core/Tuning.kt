@@ -45,6 +45,16 @@ data class TuningLadder(
 
     val default: TuningStep get() = step(defaultId)!!
 
+    /**
+     * The ladder without the steps that set any of [pinned] (keys the owner set, OptionPins): what
+     * the learner may move a game along. The default step stays, whatever it sets.
+     */
+    fun without(pinned: Set<String>): TuningLadder =
+        if (pinned.isEmpty()) this
+        else steps.filter { it.id == defaultId || it.options.keys.none(pinned::contains) }.let { kept ->
+            copy(steps = kept, aliases = emptyMap(), renderers = renderers.filter { id -> kept.any { it.id == id } })
+        }
+
     /** Every key the ladder touches, as [id] sets it (the defaults for those it leaves). */
     fun assignment(id: String): Map<String, String> = defaults + (step(id)?.options ?: emptyMap())
 
