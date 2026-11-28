@@ -46,7 +46,9 @@ class ReadingStats @Inject constructor(
                 // The tracker credits time only within its idle timeout of the last line or
                 // lookup, so a game left running unread stops counting by itself; and none at
                 // all while Genkan's own launcher has the top screen: the game isn't being read.
-                tracker?.onHeartbeat(now, reading = !launcher.inFront.value)
+                // Nor while a test play is: what was being read before it gets no time from it.
+                val game = nowPlaying.game.value
+                (if (game.test) trackerFor(game) else tracker)?.onHeartbeat(now, reading = !launcher.inFront.value)
                 if (++ticks % FLUSH_EVERY == 0) tracker?.flush()
                 publish()
             }
@@ -77,7 +79,15 @@ class ReadingStats @Inject constructor(
         scope.launch { tracker?.flush() }
     }
 
+    /** The tracker for [game]; none for no game, or a test play, whose reading is never counted. */
     private fun trackerFor(game: NowPlaying.Game): ActivityTracker? {
+        if (game.test) {
+            tracker?.flush()
+            tracker = null
+            trackedGame = null
+            publish()
+            return null
+        }
         if (game.key == NowPlaying.NONE.key) return null
         if (trackedGame != game.key) {
             tracker?.flush()

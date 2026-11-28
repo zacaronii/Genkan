@@ -57,6 +57,22 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `a test play closes the play before it but is never recorded, so never uploaded or synced`() = runBlocking {
+        tracker.begin(7, context.packageName)
+        dao.backdate(80_000)
+        val start = dao.open()!!.startedAt
+        usage(context.packageName, core, start - 2_000, UsageEvents.Event.ACTIVITY_RESUMED)
+        usage(context.packageName, core, start + 78_000, UsageEvents.Event.ACTIVITY_PAUSED)
+        tracker.begin(8, context.packageName, test = true)
+        assertNull(dao.open())
+        assertEquals(listOf(7L), dao.rows.map { it.romId })
+        assertEquals(78_000L, dao.rows.single().durationMs)
+        // Back at the launcher: nothing to close, so nothing ends (no save sync) and nothing more to upload.
+        assertTrue(!tracker.onLauncherResumed())
+        assertEquals(listOf(7L), dao.pending(100).map { it.romId })
+    }
+
+    @Test
     fun `a built-in play whose game was in front before the session opened is timed in full`() {
         // On main this play was "Dropped a 17 ms session": the game's one RESUMED came before the start.
         val start = play(context.packageName, core, ago = 80_000, played = 78_000)

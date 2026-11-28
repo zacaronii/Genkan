@@ -96,6 +96,7 @@ class LibraryViewModel @Inject constructor(
     private val localShelves: LocalShelves,
     private val hookKit: HookKit,
     private val sessionTracker: SessionTracker,
+    private val testMode: app.genkan.play.TestMode,
     private val nowPlaying: NowPlaying,
     private val focusedGame: FocusedGame,
     private val saveSync: SaveSync,
@@ -446,8 +447,10 @@ class LibraryViewModel @Inject constructor(
             if (game.platformSlug == LocalShelves.PC_SLUG && hasStorageAccess()) viewModelScope.launch { hookKit.install() }
             if (localShelves.launch(game)) {
                 // A PC game's play is timed like an emulator's, under its local id, for "Continue playing".
-                if (game.platformSlug == LocalShelves.PC_SLUG) viewModelScope.launch { sessionTracker.begin(game.id, GameNative.PACKAGE) }
-                nowPlaying.started(game.id, game.name, game.platformSlug)
+                // A device round's (TestMode) is recorded nowhere.
+                val test = testMode.active()
+                if (game.platformSlug == LocalShelves.PC_SLUG) viewModelScope.launch { sessionTracker.begin(game.id, GameNative.PACKAGE, test) }
+                nowPlaying.started(game.id, game.name, game.platformSlug, test)
                 show("Opening ${game.name}…")
             } else {
                 show("Couldn't open ${game.name}")
@@ -532,8 +535,10 @@ class LibraryViewModel @Inject constructor(
                 when (result) {
                     is LaunchResult.Launched -> {
                         launched = true
-                        sessionTracker.begin(game.id, result.emulator.packageName)
-                        nowPlaying.started(game.id, game.name, game.platformSlug)
+                        // A device round's (TestMode) is recorded nowhere.
+                        val test = testMode.active()
+                        sessionTracker.begin(game.id, result.emulator.packageName, test)
+                        nowPlaying.started(game.id, game.name, game.platformSlug, test)
                         show("Starting ${game.name} in ${result.emulator.displayName}…" + (result.note?.let { " ($it)" } ?: ""))
                     }
                     is LaunchResult.NoEmulator -> show(
