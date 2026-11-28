@@ -20,6 +20,9 @@ object PlayerMessages {
     /** Shown when the game can't be heard: its sound stream wouldn't open, or stopped. */
     fun noSound(problem: String): String = "No sound: $problem"
 
+    /** Shown when the device has stayed at its heat limit ([limitC], HeatCeiling): the player should stop. */
+    fun tooHot(limitC: Int): String = "Too hot: the device is at $limitC °C. Save, and let it cool before playing on"
+
     /**
      * Shown when the device ran hot and the game will start at a lighter ladder step next time
      * ([label], the step's own): cooler, but not always as fast, which it says.

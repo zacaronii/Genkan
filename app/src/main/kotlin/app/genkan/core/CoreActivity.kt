@@ -121,6 +121,7 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var wiiController: String? = null
     /** Learns the game's step as it's played (null: off, or no ladder); its kept steps go to [tuningStore]. */
     @Volatile private var learner: TuningLearner? = null
+    private val heat = HeatCeiling()
     private val tuningStore by lazy { TuningStore(File(filesDir, "tuning")) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1098,6 +1099,11 @@ class CoreActivity : ComponentActivity() {
             if (row != null && loading) {
                 loading = false
                 gameState(loading = false)
+            }
+            // Learning or not, on any step: at the device's limit the player is told.
+            if (heat.second(DeviceHeat.hottestCpuC())) {
+                Log.i(TAG, "At ${HeatCeiling.LIMIT_C} °C for ${HeatCeiling.WINDOW} s")
+                runOnUiThread { say(PlayerMessages.tooHot(HeatCeiling.LIMIT_C), WARM_NOTICE_MS) }
             }
             learner?.let { l ->
                 if (row == null) l.paused()
