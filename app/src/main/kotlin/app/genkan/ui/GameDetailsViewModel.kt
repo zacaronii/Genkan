@@ -92,10 +92,15 @@ data class GameDetails(
     val look: GameLook? = null,
     /** The game's own step on its core's ladder, when it has one (learned, or set). */
     val tuning: GameTuningNote? = null,
+    /** Its renderer, when its core has a choice of them (GameGraphics). */
+    val graphics: GameGraphicsNote? = null,
 )
 
 /** A game's own ladder step ([label]: what it does), and whether learning chose it. */
 data class GameTuningNote(val label: String, val learned: Boolean)
+
+/** A game's renderer: [label] the one chosen for it, null for Automatic (its step, as before). */
+data class GameGraphicsNote(val label: String?)
 
 /** A game's own look in the built-in player ([own], null: its console's) and its console's. */
 data class GameLook(val own: ScreenLook?, val console: ScreenLook)
@@ -121,6 +126,7 @@ class GameDetailsViewModel @Inject constructor(
     private val steamStore: SteamStore,
     private val artLoaders: ArtLoaders,
     private val tuningStore: app.genkan.core.TuningStore,
+    private val gameGraphics: app.genkan.core.GameGraphics,
 ) : ViewModel() {
 
     /** Set when the backlog is asked for while browsing; cleared whenever the top screen changes. */
@@ -155,13 +161,13 @@ class GameDetailsViewModel @Inject constructor(
                 downloadQueue.downloads.map { it[game.id] },
                 saveSync.status.map { it[game.id] },
                 // Favourite, and how its text would be read (the cached catalog only, off the main thread).
-                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game), tuningOf(game)) { f, t, l, n -> Extras(f, t, l, n) },
+                combine(favouriteDao.ids().map { game.id in it }, textSourceOf(game), lookOf(game), tuningOf(game), graphicsOf(game)) { f, t, l, n, g -> Extras(f, t, l, n, g) },
             ) { (p, st), r, d, s, f ->
                 GameDetails(
                     st?.let { focus.copy(game = it.applyTo(game)) } ?: focus,
                     p, r.first, d, s,
                     st?.let { GameArt(fanart = it.background, screenshots = it.screenshots) } ?: art,
-                    f.favourite, r.second, f.source, f.look, f.tuning,
+                    f.favourite, r.second, f.source, f.look, f.tuning, f.graphics,
                 )
             }
         }
@@ -283,7 +289,7 @@ class GameDetailsViewModel @Inject constructor(
                 }
         }
 
-    private data class Extras(val favourite: Boolean, val source: TextSource?, val look: GameLook?, val tuning: GameTuningNote?)
+    private data class Extras(val favourite: Boolean, val source: TextSource?, val look: GameLook?, val tuning: GameTuningNote?, val graphics: GameGraphicsNote?)
 
     /** The game's own step, when the built-in player is on, runs its console with a ladder, and the game has one. */
     private fun tuningOf(game: GameEntity) =
@@ -291,13 +297,36 @@ class GameDetailsViewModel @Inject constructor(
             flowOf(null)
         } else {
             // Read again as home comes back: the player keeps what it learned from its own process.
-            combine(playerSettings.enabled, tuningStore.changes, launcher.inFront) { on, _, _ ->
+            combine(playerSettings.enabled, tuningStore.changes, launcher.inFront, gameGraphics.changes) { on, _, _, _ ->
                 val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.tuning) }
                 if (!on || ladder == null) return@combine null
+                // Graphics chosen for it win over its step, which then has nothing to reset.
+                if (withContext(Dispatchers.IO) { gameGraphics.choice(game.id) } != null) return@combine null
                 val own = withContext(Dispatchers.IO) { tuningStore.override(game.id) } ?: return@combine null
                 ladder.step(own.step)?.let { GameTuningNote(it.label, own.why.startsWith("learned")) }
             }
         }
+
+    /** The game's renderer, when the built-in player is on and its core has a choice of them. */
+    private fun graphicsOf(game: GameEntity) =
+        if (LocalShelves.isLocal(game)) {
+            flowOf(null)
+        } else {
+            combine(playerSettings.enabled, gameGraphics.changes) { on, _ ->
+                val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.tuning) }
+                if (!on || ladder == null || ladder.renderers.isEmpty()) return@combine null
+                val chosen = withContext(Dispatchers.IO) { gameGraphics.choice(game.id) }
+                GameGraphicsNote(ladder.step(chosen)?.takeIf { it.id in ladder.renderers }?.label)
+            }
+        }
+
+    /** Moves the focused game to its next renderer: Automatic, then each its core has, in turn. */
+    fun cycleGraphics() {
+        val game = details.value?.focus?.game ?: return
+        val ladder = CoreCatalog.forPlatform(game.platformSlug)?.let { app.genkan.core.TuningLadders.of(it.tuning) } ?: return
+        if (ladder.renderers.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) { gameGraphics.set(game.id, app.genkan.core.GameGraphics.next(ladder, gameGraphics.choice(game.id))) }
+    }
 
     /** Forgets the focused game's own step: it starts at the catalog's or its core's again. */
     fun resetTuning() {

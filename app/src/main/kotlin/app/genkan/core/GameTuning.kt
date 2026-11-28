@@ -9,7 +9,8 @@ import javax.inject.Singleton
 
 /**
  * Which ladder step a game plays at in the built-in player (see [TuningLadders.resolve]): the
- * device's override, the catalog's profile for its release, or the core's default. Only what's on
+ * graphics chosen for it, the device's override, the catalog's profile for its release, or the
+ * core's default. Only what's on
  * the device is read, never the network: the release id learned when the game last ran, and the
  * catalog's cached entry.
  */
@@ -18,6 +19,7 @@ class GameTuning @Inject constructor(
     private val store: TuningStore,
     private val ids: YomikataIds,
     private val catalog: YomikataCatalog,
+    private val graphics: GameGraphics,
 ) {
     /**
      * The step for RomM rom [romId] on ladder [tuning] (its core's CoreDef.tuning); null when the
@@ -27,6 +29,6 @@ class GameTuning @Inject constructor(
         val ladder = TuningLadders.of(tuning) ?: return null
         val release = releaseId ?: ids.idFor(romId).first()
         val bundled = release?.let { catalog.cachedEntry(it)?.tuning?.get(tuning) }
-        return TuningLadders.resolve(ladder, store.override(romId)?.step, bundled, Build.MODEL.orEmpty())
+        return TuningLadders.resolve(ladder, store.override(romId)?.step, bundled, Build.MODEL.orEmpty(), graphics.choice(romId))
     }
 }

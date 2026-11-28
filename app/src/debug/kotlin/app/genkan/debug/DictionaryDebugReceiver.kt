@@ -112,6 +112,8 @@ import javax.inject.Inject
  *   adb shell am broadcast -a app.genkan.debug.TUNING_STEP -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es step efb-2x
  * (sets the game's own ladder step, as learning would; --ez clear true clears it. Applied as the game runs when
  *  it's the one playing and the core can, else from its next start; logs the step it resolves to)
+ *   adb shell am broadcast -a app.genkan.debug.GRAPHICS -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es graphics gl
+ * (the game's own renderer, as its details' Graphics sets it: one of its ladder's renderers; no graphics: Automatic)
  *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform ps2 --es core lrps2
  * (plays the console's games with that core, as Settings › Screen look and sound › Plays with does, and kept;
  *  --es core external: its emulator app (ARMSX2 for the PS2); no core: its first core again)
@@ -147,6 +149,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var headphones: app.genkan.bluetooth.Headphones
     @Inject lateinit var tuningStore: app.genkan.core.TuningStore
     @Inject lateinit var gameTuning: app.genkan.core.GameTuning
+    @Inject lateinit var gameGraphics: app.genkan.core.GameGraphics
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -177,6 +180,19 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         playerSettings.setCoreChoice(platform, core?.takeIf { it.isNotEmpty() })
                         app.genkan.core.CoreCatalog.choice = playerSettings.coreChoice.first()
                         Log.i(TAG, "Core for $platform: ${app.genkan.core.CoreCatalog.forPlatform(platform)?.id ?: "its emulator app"}")
+                    }
+                    "app.genkan.debug.GRAPHICS" -> {
+                        val rom = intent.getLongExtra("rom", 0)
+                        val ladder = database.library().game(rom)
+                            ?.let { app.genkan.core.CoreCatalog.forPlatform(it.platformSlug) }
+                            ?.let { app.genkan.core.TuningLadders.of(it.tuning) }
+                        val wanted = intent.getStringExtra("graphics")?.takeIf { it.isNotEmpty() }
+                        if (ladder == null || (wanted != null && wanted !in ladder.renderers)) {
+                            Log.w(TAG, "Graphics: no such renderer for rom $rom (${ladder?.renderers})")
+                        } else {
+                            gameGraphics.set(rom, wanted)
+                            Log.i(TAG, "Graphics for rom $rom: ${wanted ?: "automatic"}")
+                        }
                     }
                     "app.genkan.debug.DOWNLOAD" -> {
                         val game = database.library().game(intent.getLongExtra("rom", 0))

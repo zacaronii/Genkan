@@ -65,6 +65,20 @@ class GameDetailsActionsTest {
         assertEquals(1, deletes)
     }
 
+    @Test
+    fun `a game's Graphics button shows its renderer and moves it on`() {
+        var presses = 0
+        compose.setContent {
+            GameDetailsContent(
+                details = FakeData.fullDetails.copy(graphics = GameGraphicsNote(null)),
+                onShowReader = {},
+                onGraphics = { presses++ },
+            )
+        }
+        compose.onNodeWithText("Graphics: Automatic").performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(1, presses)
+    }
+
     private fun fiveButtons() = FakeData.fullDetails.copy(look = GameLook(null, ScreenLook.SHARP))
 
     /** Where [label]'s button really is, top to bottom in pixels: not clipped to the column, as `boundsInRoot` is. */
