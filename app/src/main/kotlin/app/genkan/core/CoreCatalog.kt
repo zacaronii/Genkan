@@ -291,6 +291,9 @@ object CoreCatalog {
             // and touch come in their own change.
             id = "azahar_libretro", displayName = "Azahar", library = "libazahar_libretro_android.so",
             platforms = setOf("3ds"),
+            // OpenGL ES: "Auto" asks the frontend for its preferred context, which answers Vulkan, and
+            // the core is given GL (Vulkan only on a ladder step that asks for it): it can't load then.
+            variables = mapOf("citra_graphics_api" to "OpenGL"),
             // The patch gives the FCRAM as the system RAM: the linear heap's addresses, page for
             // page, from 0x14000000 (Yomikata's 3DS base).
             ramBase = 0x14000000L,
