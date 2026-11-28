@@ -24,9 +24,27 @@ class PlayerChoiceTest {
     }
 
     @Test
+    fun `the 3DS stays with the Azahar app until the built-in core is chosen`() {
+        assertEquals(
+            listOf(PlayerChoice.Option(CoreCatalog.EXTERNAL, "Azahar"), PlayerChoice.Option("azahar_libretro", "Azahar (built in)")),
+            PlayerChoice.options("3ds", debug = false),
+        )
+        assertEquals(CoreCatalog.EXTERNAL, PlayerChoice.current("3ds", emptyMap(), debug = false)!!.value)
+        // Nothing chosen: no built-in core plays it, so the launcher takes the app.
+        assertEquals(null, CoreCatalog.forPlatform("3ds", debug = false).also { CoreCatalog.choice = emptyMap() })
+        assertEquals("azahar_libretro", PlayerChoice.next("3ds", emptyMap(), debug = false)!!.value)
+        try {
+            CoreCatalog.choice = mapOf("3ds" to "azahar_libretro")
+            assertEquals("azahar_libretro", CoreCatalog.forPlatform("3ds", debug = false)!!.id)
+        } finally {
+            CoreCatalog.choice = emptyMap()
+        }
+    }
+
+    @Test
     fun `only consoles with more than one way get a row`() {
-        assertEquals(listOf("ps2"), PlayerChoice.consoles(debug = false).map { it.first })
-        assertEquals(listOf("ps2"), PlayerChoice.consoles(debug = true).map { it.first })
+        assertEquals(listOf("ps2", "3ds"), PlayerChoice.consoles(debug = false).map { it.first })
+        assertEquals(listOf("ps2", "3ds"), PlayerChoice.consoles(debug = true).map { it.first })
         // The Saturn has one way: Beetle Saturn, with no emulator app known.
         assertEquals(listOf("beetle_saturn"), PlayerChoice.options("saturn", debug = false).map { it.value })
     }

@@ -35,3 +35,8 @@
 [submodule "third_party/genesis-plus-gx"]
 	path = third_party/genesis-plus-gx
 	url = https://github.com/libretro/Genesis-Plus-GX
+[submodule "third_party/azahar"]
+	path = third_party/azahar
+	url = https://github.com/azahar-emu/azahar
+	shallow = true
+	update = none

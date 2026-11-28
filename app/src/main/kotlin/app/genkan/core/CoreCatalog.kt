@@ -96,6 +96,11 @@ data class CoreDef(
      * console until a round on the device picks one (see [CoreCatalog.choice]).
      */
     val debugOnly: Boolean = false,
+    /**
+     * Its console is played by its emulator app until the built-in core is chosen in Settings (the
+     * app first among PlayerChoice's options): a core still being tried on the device.
+     */
+    val appFirst: Boolean = false,
 ) {
     /** Whether a file named [name] is one the core plays. */
     fun takes(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in extensions
@@ -281,6 +286,20 @@ object CoreCatalog {
             vulkan = true,
         ),
         CoreDef(
+            // Azahar's libretro core, built from source with Yomikata's patch (patches/azahar). The
+            // 3DS stays with the Azahar app until the owner chooses this in Settings: its two screens
+            // and touch come in their own change.
+            id = "azahar_libretro", displayName = "Azahar", library = "libazahar_libretro_android.so",
+            platforms = setOf("3ds"),
+            // The patch gives the FCRAM as the system RAM: the linear heap's addresses, page for
+            // page, from 0x14000000 (Yomikata's 3DS base).
+            ramBase = 0x14000000L,
+            extensions = setOf("3ds", "cci", "cxi", "3dsx", "app", "elf", "axf"),
+            // OpenGL ES for now: Vulkan is offered only on a ladder step that asks for it, and the
+            // 3DS has no ladder until its round on the Thor.
+            appFirst = true,
+        ),
+        CoreDef(
             id = "dolphin", displayName = "Dolphin", library = "libdolphin_libretro_android.so",
             platforms = setOf("ngc"),
             // Measured on the Thor: a steady 60 fps at the native resolution with the GL renderer
@@ -359,6 +378,8 @@ object CoreCatalog {
         val chosen = choice[platformSlug]
         if (chosen == EXTERNAL) return null
         val candidates = coresFor(platformSlug, debug)
+        // Nothing chosen for a console whose app comes first: the app.
+        if (chosen == null && candidates.firstOrNull()?.appFirst == true) return null
         return candidates.firstOrNull { it.id == chosen } ?: candidates.firstOrNull()
     }
 

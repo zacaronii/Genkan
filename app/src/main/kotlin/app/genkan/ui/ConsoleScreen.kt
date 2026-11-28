@@ -56,6 +56,7 @@ private val ALL_LOOK_CONSOLES: List<Pair<String, String>> = listOf(
     "tg16" to "PC Engine",
     "turbografx-cd" to "PC Engine CD-ROM²",
     "nds" to "Nintendo DS",
+    "3ds" to "Nintendo 3DS",
     "psx" to "PlayStation",
     "saturn" to "Saturn",
     "n64" to "Nintendo 64",

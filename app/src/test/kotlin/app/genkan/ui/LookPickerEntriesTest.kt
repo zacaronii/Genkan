@@ -53,8 +53,8 @@ class LookPickerEntriesTest {
 
     @Test
     fun `a console not in the table gets every look, and no show-all row`() {
-        assertNull(ScreenLook.suiting("3ds"))
-        assertEquals(ScreenLook.entries, looks(LookPickerEntries.of(suits = ScreenLook.suiting("3ds"))).sortedBy { it.ordinal })
+        assertNull(ScreenLook.suiting("pc-made-up"))
+        assertEquals(ScreenLook.entries, looks(LookPickerEntries.of(suits = ScreenLook.suiting("pc-made-up"))).sortedBy { it.ordinal })
         assertFalse(LookPickerEntries.filters(null))
         assertTrue(LookPickerEntries.filters(ScreenLook.suiting("psx")))
     }

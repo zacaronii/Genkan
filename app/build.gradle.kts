@@ -354,6 +354,8 @@ abstract class BuildCmakeCore : DefaultTask() {
      */
     @get:Input abstract val buildTag: Property<String>
     @get:Input abstract val target: Property<String>
+    /** The built library's name without its .so, when the target names it otherwise (Azahar's); empty, the target's. */
+    @get:Input abstract val outputName: Property<String>
     /** The source's own submodules the build doesn't need (Windows' Qt and FFmpeg). */
     @get:Input abstract val skipExternals: ListProperty<String>
     /** When given, the only submodules of the source the build needs (each with its own); else all but [skipExternals]. */
@@ -375,6 +377,7 @@ abstract class BuildCmakeCore : DefaultTask() {
         sysEntries.convention(emptyList())
         sysZipName.convention("")
         buildTag.convention("")
+        outputName.convention("")
     }
 
     private fun git(dir: File, vararg args: String): String = ByteArrayOutputStream().also { out ->
@@ -417,7 +420,8 @@ abstract class BuildCmakeCore : DefaultTask() {
                 )
             }
             exec.exec { commandLine(cmakeBin.resolve("cmake").path, "--build", work.path, "--target", target.get()) }
-            val built = work.walkTopDown().first { it.name == "${target.get()}_android.so" || it.name == "${target.get()}.so" }
+            val name = outputName.get().ifEmpty { target.get() }
+            val built = work.walkTopDown().first { it.name == "${name}_android.so" || it.name == "$name.so" }
             library.parentFile.mkdirs()
             // The host's own prebuilt LLVM: there is one per NDK.
             val strip = ndk.resolve("toolchains/llvm/prebuilt").listFiles()!!.single().resolve("bin/llvm-strip")
@@ -526,6 +530,40 @@ val buildDolphin = tasks.register<BuildCmakeCore>("buildDolphin") {
     libsDir.set(layout.buildDirectory.dir("generated/dolphin/libs"))
     assetsDir.set(layout.buildDirectory.dir("generated/dolphin/assets"))
     // After the app's native configure, which installs the SDK's CMake when it's missing.
+    dependsOn("configureCMakeDebug[arm64-v8a]")
+}
+
+/**
+ * Azahar (GPL-2.0-or-later), the 3DS core, built from its own repository at this commit as its
+ * libretro core (src/citra_libretro), with OpenGL ES and Vulkan, and Genkan's patch from Yomikata
+ * (patches/azahar): the FCRAM as the system RAM, and the memory maps set again as the game's heaps
+ * appear. Only the externals that build uses are fetched. See NOTICE.
+ */
+val azaharCommit = "c5177f309d4f4efac669623dddeb08e2e5262da1"
+
+val buildAzahar = tasks.register<BuildCmakeCore>("buildAzahar") {
+    commit.set(azaharCommit)
+    submoduleDir.set(rootProject.layout.projectDirectory.dir("third_party/azahar"))
+    patches.from(rootProject.fileTree("patches/azahar") { include("*.patch") })
+    libraryName.set("libazahar_libretro_android.so")
+    abi.set("arm64-v8a")
+    // The libretro build switches off what it can't use itself (SDL2, Qt, web services, scripting,
+    // the GDB stub, cubeb, OpenAL, libusb, FFmpeg); setting any of them, even off, is refused.
+    // API 21, as Azahar's own libretro build for Android: its sources assume that level's bionic (strerror_r).
+    cmakeArgs.set(listOf("-DENABLE_LIBRETRO=ON", "-DENABLE_TESTS=OFF", "-DANDROID_PLATFORM=android-21"))
+    target.set("citra_libretro")
+    outputName.set("azahar_libretro")
+    skipExternals.set(
+        listOf(
+            "externals/catch2", "externals/libusb/libusb", "externals/cubeb", "externals/discord-rpc",
+            "externals/sdl2/SDL", "externals/openal-soft", "externals/dllwalker",
+        ),
+    )
+    ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+    cmakeDir.set(androidComponents.sdkComponents.sdkDirectory.map { it.dir("cmake/3.31.6/bin") })
+    cacheDir.set(rootProject.layout.projectDirectory.dir(".gradle/cores"))
+    libsDir.set(layout.buildDirectory.dir("generated/azahar/libs"))
+    assetsDir.set(layout.buildDirectory.dir("generated/azahar/assets"))
     dependsOn("configureCMakeDebug[arm64-v8a]")
 }
 
@@ -829,6 +867,7 @@ androidComponents {
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildGenesisPlusGx, BuildLibretroCore::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::libsDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildFlycast, BuildCmakeCore::libsDir)
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildAzahar, BuildCmakeCore::libsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(buildDolphin, BuildCmakeCore::assetsDir)
         variant.sources.assets?.addGeneratedSourceDirectory(downloadCoreAssets, DownloadPinnedFiles::outputDir)
         variant.sources.assets?.addGeneratedSourceDirectory(noticeAsset, NoticeAsset::outputDir)

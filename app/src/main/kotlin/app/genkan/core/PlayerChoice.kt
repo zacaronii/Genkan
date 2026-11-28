@@ -13,13 +13,18 @@ object PlayerChoice {
     /** The consoles Settings offers a choice for, by platform, in the order it lists them, with their names. */
     val CONSOLES: List<Pair<String, String>> = listOf(
         "ps2" to "PlayStation 2",
+        "3ds" to "Nintendo 3DS",
     )
 
-    /** [platform]'s options, its first core first: the default. [debug]: whether debug-only cores count. */
+    /**
+     * [platform]'s options, the default first: its first core, or its app where that core comes after
+     * the app (CoreDef.appFirst). [debug]: whether debug-only cores count.
+     */
     fun options(platform: String, debug: Boolean = app.genkan.BuildConfig.DEBUG): List<Option> {
-        val cores = CoreCatalog.coresFor(platform, debug).map { Option(it.id, "${it.displayName} (built in)") }
+        val found = CoreCatalog.coresFor(platform, debug)
+        val cores = found.map { Option(it.id, "${it.displayName} (built in)") }
         val app = EmulatorCatalog.candidatesFor(platform).firstOrNull()?.let { Option(CoreCatalog.EXTERNAL, it.displayName) }
-        return cores + listOfNotNull(app)
+        return if (app != null && found.firstOrNull()?.appFirst == true) listOf(app) + cores else cores + listOfNotNull(app)
     }
 
     /** The consoles with more than one option in this build, for Settings' rows. */
