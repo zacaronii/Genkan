@@ -13,6 +13,8 @@ import app.genkan.core.CoreCatalog
 import app.genkan.core.GameFile
 import app.genkan.core.CoreDef
 import app.genkan.core.CoreFirmware
+import app.genkan.core.CoreOptions
+import app.genkan.core.OptionPins
 import app.genkan.core.PlayerSettings
 import app.genkan.core.ScreenLooks
 import app.genkan.download.DownloadEntity
@@ -61,6 +63,7 @@ class GameLauncher @Inject constructor(
     private val screenLooks: ScreenLooks,
     private val tuning: app.genkan.core.GameTuning,
     private val wiiController: app.genkan.core.GameWiiController,
+    private val optionPins: OptionPins,
 ) {
     private val builder = LaunchCommandBuilder(
         externalRoot = Environment.getExternalStorageDirectory().absolutePath,
@@ -154,6 +157,10 @@ class GameLauncher @Inject constructor(
             .putExtra(CoreActivity.EXTRA_LOOK, screenLooks.forLaunch(game.id, game.platformSlug).name)
             .putExtra(CoreActivity.EXTRA_LOW_LATENCY, playerSettings.lowLatency(game.platformSlug))
             .putExtra(CoreActivity.EXTRA_A_ON_RIGHT, playerSettings.aOnRight(game.platformSlug))
+        // The options set for the console and the game, the core's own only.
+        val pins = OptionPins.applied(optionPins.console(game.platformSlug), optionPins.game(game.id))
+            .filterKeys { key -> CoreOptions.option(core.id, key) != null }
+        if (pins.isNotEmpty()) intent.putExtra(CoreActivity.EXTRA_PINS, OptionPins.encode(pins))
         val resolved = tuning.resolve(game.id, core.tuning)
         resolved?.let {
             Log.i(TAG, "Tuning step ${it.step.id} (${it.source.name.lowercase()})")

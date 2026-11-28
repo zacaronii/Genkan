@@ -66,17 +66,45 @@ class GameDetailsActionsTest {
     }
 
     @Test
-    fun `a game's Graphics button shows its renderer and moves it on`() {
+    fun `a game's settings button names a renderer of its own and opens its settings`() {
         var presses = 0
+        val own = app.genkan.core.SettingRow(app.genkan.core.GameSettings.GRAPHICS, "Graphics", "GL", app.genkan.core.SettingSource.GAME)
+        val notOwn = own.copy(value = "Vulkan", source = app.genkan.core.SettingSource.DEFAULT)
+        assertEquals("Game settings (GL)", GameDetailsFormat.settingsLabel(GameSettingsNote(listOf(own))))
+        assertEquals("Game settings", GameDetailsFormat.settingsLabel(GameSettingsNote(listOf(notOwn))))
         compose.setContent {
             GameDetailsContent(
-                details = FakeData.fullDetails.copy(graphics = GameGraphicsNote(null)),
+                details = FakeData.fullDetails.copy(settings = GameSettingsNote(listOf(notOwn))),
                 onShowReader = {},
-                onGraphics = { presses++ },
+                onSettings = { presses++ },
             )
         }
-        compose.onNodeWithText("Graphics: Automatic").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Game settings").performScrollTo().assertIsDisplayed().performClick()
         assertEquals(1, presses)
+    }
+
+    @Test
+    fun `the settings sheet shows where each value comes from, and a press moves that row`() {
+        val pressed = mutableListOf<String>()
+        compose.setContent {
+            GameSettingsSheet(
+                title = "Made-up Summer: settings",
+                rows = listOf(
+                    app.genkan.core.SettingRow(app.genkan.core.GameSettings.GRAPHICS, "Graphics", "GL", app.genkan.core.SettingSource.GAME),
+                    app.genkan.core.SettingRow("pcsx2_upscale_multiplier", "Resolution", "2×", app.genkan.core.SettingSource.CONSOLE),
+                    app.genkan.core.SettingRow("pcsx2_mtvu", "VU1 on its own thread", "On", app.genkan.core.SettingSource.DEFAULT),
+                    app.genkan.core.SettingRow("pcsx2_ee_cycle_rate", "EE speed", "75%", app.genkan.core.SettingSource.LEARNER),
+                ),
+                onPress = { pressed += it },
+                onReset = {},
+                onClose = {},
+            )
+        }
+        listOf("this game", "console", "default", "learned").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        compose.onNodeWithText("Resolution").performClick()
+        assertEquals(listOf("pcsx2_upscale_multiplier"), pressed)
+        // Something set for this game alone: Reset is there.
+        compose.onNodeWithText("Reset").assertIsDisplayed()
     }
 
     private fun fiveButtons() = FakeData.fullDetails.copy(look = GameLook(null, ScreenLook.SHARP))

@@ -70,8 +70,11 @@ private val ALL_LOOK_CONSOLES: List<Pair<String, String>> = listOf(
 /** The consoles this build's built-in player runs. */
 val LOOK_CONSOLES: List<Pair<String, String>> = ALL_LOOK_CONSOLES.filter { it.first in app.genkan.core.CoreCatalog.platforms }
 
-/** A game with graphics of its own (GameGraphics): its name and the renderer as its ladder labels it. */
-data class OwnGraphics(val romId: Long, val title: String, val renderer: String)
+/** A game with settings of its own (GameGraphics, OptionPins): its name and what it sets, said short. */
+data class OwnSettings(val romId: Long, val title: String, val summary: String)
+
+/** One of a console's offered core options (CoreOptions.offered): its value for the console, set there or not. */
+data class ConsoleOption(val key: String, val label: String, val value: String, val set: Boolean)
 
 /**
  * One console's page of settings (Settings › Consoles): its look, its sound, its face buttons, what
@@ -85,6 +88,7 @@ class ConsoleViewModel @Inject constructor(
     private val player: PlayerSettings,
     private val graphics: GameGraphics,
     private val database: LibraryDatabase,
+    private val pins: app.genkan.core.OptionPins,
 ) : ViewModel() {
 
     private val _console = MutableStateFlow(LOOK_CONSOLES.first().first)
@@ -125,25 +129,55 @@ class ConsoleViewModel @Inject constructor(
     }
 
     /**
-     * The console's games with graphics of their own, by name; null for a console whose core has no
-     * choice of renderers.
+     * The console's games with settings of their own (a renderer, core options), by name; null for a
+     * console whose core has nothing a game can set.
      */
-    val ownGraphics: StateFlow<List<OwnGraphics>?> = combine(console, graphics.changes) { platform, _ -> platform }
+    val ownSettings: StateFlow<List<OwnSettings>?> = combine(console, graphics.changes, pins.changes) { platform, _, _ -> platform }
         .mapLatest { platform ->
-            val ladder = CoreCatalog.forPlatform(platform)?.let { TuningLadders.of(it.tuning) }
-            if (ladder == null || ladder.renderers.isEmpty()) return@mapLatest null
+            val core = CoreCatalog.forPlatform(platform) ?: return@mapLatest null
+            val ladder = TuningLadders.of(core.tuning)
+            if (ladder?.renderers.isNullOrEmpty() && app.genkan.core.CoreOptions.of(core.id).isEmpty()) return@mapLatest null
             withContext(Dispatchers.IO) {
-                graphics.all().mapNotNull { (romId, step) ->
+                val chosen = graphics.all()
+                val pinned = pins.games()
+                (chosen.keys + pinned.keys).mapNotNull { romId ->
                     val game = database.library().game(romId)?.takeIf { it.platformSlug == platform } ?: return@mapNotNull null
-                    OwnGraphics(romId, game.name, ladder.step(step)?.label ?: step)
+                    val renderer = chosen[romId]?.let { ladder?.step(it)?.label ?: it }
+                    val options = pinned[romId].orEmpty().map { (key, value) ->
+                        app.genkan.core.CoreOptions.option(core.id, key)?.let { "${it.label} ${it.labelOf(value)}" } ?: "$key $value"
+                    }
+                    OwnSettings(romId, game.name, (listOfNotNull(renderer) + options).joinToString(", "))
                 }.sortedBy { it.title }
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Puts [romId] back on Automatic. */
-    fun resetGraphics(romId: Long) {
-        viewModelScope.launch(Dispatchers.IO) { graphics.set(romId, null) }
+    /** Puts [romId]'s settings back as its console has them: its renderer Automatic, no option of its own. */
+    fun resetSettings(romId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            graphics.set(romId, null)
+            pins.clearGame(romId)
+        }
+    }
+
+    /** The console's offered core options, each with its value for the console's games. */
+    val options: StateFlow<List<ConsoleOption>> = combine(console, pins.changes) { platform, _ -> platform }
+        .mapLatest { platform ->
+            val core = CoreCatalog.forPlatform(platform) ?: return@mapLatest emptyList()
+            val set = withContext(Dispatchers.IO) { pins.console(platform) }
+            app.genkan.core.CoreOptions.offered(core.id).map { option ->
+                val value = set[option.key]
+                ConsoleOption(option.key, option.label, option.labelOf(value ?: core.variables[option.key] ?: option.default), value != null)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Moves one of the console's options to its next value: unset (its default), then each value. */
+    fun pressOption(key: String) {
+        val platform = console.value
+        val core = CoreCatalog.forPlatform(platform) ?: return
+        val option = app.genkan.core.CoreOptions.option(core.id, key) ?: return
+        viewModelScope.launch(Dispatchers.IO) { pins.setConsole(platform, key, option.next(pins.console(platform)[key])) }
     }
 
     /** The looks chosen for consoles; a console that isn't in it has its default. */
@@ -186,7 +220,8 @@ fun ConsoleScreen(viewModel: ConsoleViewModel, state: SetupState, onAction: (Set
     val lowLatencyOff by viewModel.lowLatencyOff.collectAsStateWithLifecycle()
     val faceSwapped by viewModel.faceSwapped.collectAsStateWithLifecycle()
     val coreChoice by viewModel.coreChoice.collectAsStateWithLifecycle()
-    val ownGraphics by viewModel.ownGraphics.collectAsStateWithLifecycle()
+    val ownSettings by viewModel.ownSettings.collectAsStateWithLifecycle()
+    val options by viewModel.options.collectAsStateWithLifecycle()
     // The view model is the activity's: a list left open (Start out of settings) mustn't greet the next visit.
     DisposableEffect(Unit) { onDispose { viewModel.closePicker() } }
     ConsoleContent(
@@ -198,7 +233,8 @@ fun ConsoleScreen(viewModel: ConsoleViewModel, state: SetupState, onAction: (Set
         playsWith = PlayerChoice.current(platform, coreChoice).takeIf { PlayerChoice.options(platform).size > 1 },
         onCyclePlaysWith = viewModel::cycleCore,
         text = consoleText(platform, state), onAction = onAction,
-        ownGraphics = ownGraphics, onResetGraphics = viewModel::resetGraphics,
+        ownSettings = ownSettings, onResetSettings = viewModel::resetSettings,
+        options = options, onPressOption = viewModel::pressOption,
     )
 }
 
@@ -221,9 +257,12 @@ fun ConsoleContent(
     /** Where the console's text comes from, or null for one read only by OCR or its script. */
     text: ConsoleText? = null,
     onAction: (SetupAction) -> Unit = {},
-    /** The console's games with graphics of their own, or null for one with no choice of renderers. */
-    ownGraphics: List<OwnGraphics>? = null,
-    onResetGraphics: (Long) -> Unit = {},
+    /** The console's games with settings of their own, or null for one whose games have nothing to set. */
+    ownSettings: List<OwnSettings>? = null,
+    onResetSettings: (Long) -> Unit = {},
+    /** The console's offered core options (none until measured on the device). */
+    options: List<ConsoleOption> = emptyList(),
+    onPressOption: (String) -> Unit = {},
 ) {
     val name = consoleName(platform)
     if (picking) {
@@ -264,16 +303,24 @@ fun ConsoleContent(
             playsWith?.let { ActionRow("Plays with: ${it.label}", focused = null, onClick = onCyclePlaysWith) }
             text?.let { ActionRow("Text: ${if (it.on) it.from else "OCR"}", focused = null, onClick = { onAction(it.action) }) }
         }
-        ownGraphics?.let { games ->
-            Text("Games with their own graphics", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+        if (options.isNotEmpty()) {
+            Text("Speed and picture", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                options.forEach { option ->
+                    ActionRow("${option.label}: ${option.value}${if (option.set) "" else " (default)"}", focused = null, onClick = { onPressOption(option.key) })
+                }
+            }
+        }
+        ownSettings?.let { games ->
+            Text("Games with their own settings", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
             Text(
-                if (games.isEmpty()) "None: each is Automatic. A game's Graphics, in its details, gives it one." else "Pressed, a game goes back to Automatic.",
+                if (games.isEmpty()) "None: each runs as the console does. A game's settings, in its details, give it its own." else "Pressed, a game goes back to the console's.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant,
             )
             if (games.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    games.forEach { game -> ActionRow("${game.title}: ${game.renderer}  ·  reset", focused = null, onClick = { onResetGraphics(game.romId) }) }
+                    games.forEach { game -> ActionRow("${game.title}: ${game.summary}  ·  reset", focused = null, onClick = { onResetSettings(game.romId) }) }
                 }
             }
         }

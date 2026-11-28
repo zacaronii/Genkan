@@ -117,6 +117,9 @@ import javax.inject.Inject
  *  --ez off true ends it. Whatever this receiver starts is a test play anyway, and any of its broadcasts but the
  *  settings ones (SETTINGS_ONLY) makes what's playing one: Genkan records none of a test play, so nothing of it
  *  reaches RomM or the reading log)
+ *   adb shell am broadcast -a app.genkan.debug.OPTION -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es key pcsx2_upscale_multiplier --es value 2x
+ * (pins one of the core's options for a game, or with --es platform ps2 instead of rom for the console, offered yet
+ *  or not: a round measuring it; no value unpins it)
  *   adb shell am broadcast -a app.genkan.debug.GRAPHICS -n app.genkan/.debug.DictionaryDebugReceiver --el rom ID --es graphics gl
  * (the game's own renderer, as its details' Graphics sets it: one of its ladder's renderers; no graphics: Automatic)
  *   adb shell am broadcast -a app.genkan.debug.CORE -n app.genkan/.debug.DictionaryDebugReceiver --es platform ps2 --es core lrps2
@@ -156,6 +159,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
     @Inject lateinit var gameTuning: app.genkan.core.GameTuning
     @Inject lateinit var gameGraphics: app.genkan.core.GameGraphics
     @Inject lateinit var testMode: app.genkan.play.TestMode
+    @Inject lateinit var optionPins: app.genkan.core.OptionPins
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -194,6 +198,20 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
                         playerSettings.setCoreChoice(platform, core?.takeIf { it.isNotEmpty() })
                         app.genkan.core.CoreCatalog.choice = playerSettings.coreChoice.first()
                         Log.i(TAG, "Core for $platform: ${app.genkan.core.CoreCatalog.forPlatform(platform)?.id ?: "its emulator app"}")
+                    }
+                    "app.genkan.debug.OPTION" -> {
+                        val rom = intent.getLongExtra("rom", 0)
+                        val platform = intent.getStringExtra("platform") ?: database.library().game(rom)?.platformSlug
+                        val core = platform?.let { app.genkan.core.CoreCatalog.forPlatform(it) }
+                        val key = intent.getStringExtra("key").orEmpty()
+                        val value = intent.getStringExtra("value")?.takeIf { it.isNotEmpty() }
+                        val option = core?.let { app.genkan.core.CoreOptions.option(it.id, key) }
+                        when {
+                            option == null -> Log.w(TAG, "Option: ${core?.id ?: "no core"} has no $key")
+                            value != null && option.values.none { it.value == value } -> Log.w(TAG, "Option: $key has no value $value (${option.values.map { it.value }})")
+                            intent.hasExtra("platform") -> optionPins.setConsole(platform!!, key, value).also { Log.i(TAG, "Option for $platform: $key = ${value ?: "unset"}") }
+                            else -> optionPins.setGame(rom, key, value).also { Log.i(TAG, "Option for rom $rom: $key = ${value ?: "unset"}") }
+                        }
                     }
                     "app.genkan.debug.GRAPHICS" -> {
                         val rom = intent.getLongExtra("rom", 0)
@@ -515,6 +533,7 @@ class DictionaryDebugReceiver : BroadcastReceiver() {
             "app.genkan.debug.TEST_MODE",
             "app.genkan.debug.CORE",
             "app.genkan.debug.GRAPHICS",
+            "app.genkan.debug.OPTION",
             "app.genkan.debug.TUNING",
             "app.genkan.debug.TUNING_STEP",
             "app.genkan.debug.HEADPHONES_SKIP_SHIZUKU",

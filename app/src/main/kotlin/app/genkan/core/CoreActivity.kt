@@ -121,6 +121,8 @@ class CoreActivity : ComponentActivity() {
     @Volatile private var wiiController: String? = null
     /** Learns the game's step as it's played (null: off, or no ladder); its kept steps go to [tuningStore]. */
     @Volatile private var learner: TuningLearner? = null
+    /** The core options set for this game or its console (OptionPins), which nothing else changes. */
+    private var pins: Map<String, String> = emptyMap()
     private val heat = HeatCeiling()
     private val tuningStore by lazy { TuningStore(File(filesDir, "tuning")) }
 
@@ -144,7 +146,10 @@ class CoreActivity : ComponentActivity() {
         // Software, which runs hotter (TuningLadders' lrps2).
         vulkan = def.vulkan && ladder?.step(tuningStep)?.vulkan == true && !intent.getBooleanExtra(EXTRA_NO_VULKAN, false)
         val learns = intent.getBooleanExtra(EXTRA_LEARN, false) && ladder?.step(tuningStep)?.vulkan != true
-        if (ladder != null && learns) learner = TuningLearner(ladder, tuningStep!!)
+        // The options the owner set (OptionPins): over the step's, and out of the learner's reach.
+        pins = OptionPins.decode(intent.getStringExtra(EXTRA_PINS))
+        if (pins.isNotEmpty()) Log.i(TAG, "Options set for this game: $pins")
+        if (ladder != null && learns) learner = TuningLearner(ladder.without(pins.keys), tuningStep!!)
         look = ScreenLook.of(intent.getStringExtra(EXTRA_LOOK))
         saveFile = CoreSaves.fileFor(platform, def, rom)
         states = SaveStates(SaveStates.dirFor(File(filesDir, SaveStates.FOLDER), def.id, GameFile.keyFor(romId, rom)), def.id)
@@ -217,7 +222,7 @@ class CoreActivity : ComponentActivity() {
             savesDirectory = CoreSaves.directoryFor(def, File(filesDir, "saves/${def.id}")).apply { mkdirs() }.absolutePath
             val controller = wiiControllerOf(def)
             wiiController = controller[WiiController.OPTION] ?: def.variables[WiiController.OPTION]
-            variables = (def.variables + controller + (tuningStep?.let { TuningLadders.of(def.tuning)?.assignment(it) } ?: emptyMap()))
+            variables = (def.variables + controller + (tuningStep?.let { TuningLadders.of(def.tuning)?.assignment(it) } ?: emptyMap()) + pins)
                 .map { (key, value) -> Variable(key, value) }.toTypedArray()
             portDevices = def.portDevices.toIntArray()
             sticksOnly = def.sticksOnly
@@ -508,7 +513,7 @@ class CoreActivity : ComponentActivity() {
         override fun setTuningStep(step: String): Boolean {
             val moved = moveToStep(step)
             // Set from outside (the catalog's step, a debug build): learning starts again from it.
-            if (moved && learner != null) TuningLadders.of(core.tuning)?.let { learner = TuningLearner(it, tuningStep!!) }
+            if (moved && learner != null) TuningLadders.of(core.tuning)?.let { learner = TuningLearner(it.without(pins.keys), tuningStep!!) }
             return moved
         }
 
@@ -1031,7 +1036,7 @@ class CoreActivity : ComponentActivity() {
         if (next.id == tuningStep) return true
         // Leaving a step the core reads only at start needs a start too.
         if (!next.live || ladder.step(tuningStep)?.live == false || !::retroView.isInitialized) return false
-        retroView.updateVariables(*ladder.assignment(next.id).map { (key, value) -> Variable(key, value) }.toTypedArray())
+        retroView.updateVariables(*(ladder.assignment(next.id) - pins.keys).map { (key, value) -> Variable(key, value) }.toTypedArray())
         Log.i(TAG, "Tuning step ${tuningStep} -> ${next.id}, as the game runs")
         tuningStep = next.id
         return true
@@ -1129,6 +1134,8 @@ class CoreActivity : ComponentActivity() {
         const val EXTRA_LEARN = "learn"
         /** The core's ladder step to start at (see [GameTuning]); absent, its default. */
         const val EXTRA_TUNING_STEP = "tuning_step"
+        /** The core options set for the game and its console (OptionPins.encode); absent, none. */
+        const val EXTRA_PINS = "pins"
         /** The game goes back to GL: its Vulkan context failed (see [restartOnGl]). */
         const val EXTRA_NO_VULKAN = "no_vulkan"
         /** A Wii game's controller (WiiController, see [GameWiiController]); absent, the core's default. */
